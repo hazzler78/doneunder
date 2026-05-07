@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { aiModel, AI_DISCLAIMER } from "@/lib/ai";
 import { logAiInteraction } from "@/lib/audit";
+import { isAiConfigured } from "@/lib/feature-flags";
 
 const requestSchema = z.object({
   feature: z.enum([
@@ -25,6 +26,16 @@ const outputSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    if (!isAiConfigured()) {
+      return NextResponse.json(
+        {
+          error: "AI is temporarily unavailable. Configure XAI_API_KEY to enable this feature.",
+          disclaimer: AI_DISCLAIMER,
+        },
+        { status: 503 },
+      );
+    }
+
     const body = requestSchema.parse(await req.json());
     const systemPrompt =
       "You are an AI assistant specialized in commercial diving recruitment, offshore operations, IMCA/ADCI certifications, saturation hours, and marine project staffing. Keep language concrete, compliant, and safety-first.";

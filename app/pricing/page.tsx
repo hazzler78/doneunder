@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { isStripeConfigured } from "@/lib/feature-flags";
 
 const plans = [
   { name: "Scout", price: "€149/mo", features: ["Search 250 profiles/mo", "3 active job posts", "AI screener chat"] },
@@ -9,9 +10,17 @@ const plans = [
 ];
 
 export default function PricingPage() {
+  const billingEnabled = isStripeConfigured();
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
       <h1 className="mb-8 text-3xl font-bold">Company Pricing</h1>
+      {!billingEnabled && (
+        <p className="mb-6 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+          Billing is temporarily unavailable while Stripe setup is completed. You can still explore
+          the platform.
+        </p>
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         {plans.map((plan) => (
           <Card key={plan.name}>
@@ -29,7 +38,9 @@ export default function PricingPage() {
                 ))}
               </ul>
               <p className="text-xs text-cyan-200">Success fee (8-12% first contract): placeholder logic included.</p>
-              <Button className="w-full">Start Subscription</Button>
+              <Button className="w-full" disabled={!billingEnabled}>
+                {billingEnabled ? "Start Subscription" : "Billing Coming Soon"}
+              </Button>
             </CardContent>
           </Card>
         ))}

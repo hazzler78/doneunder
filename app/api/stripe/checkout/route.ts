@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { isStripeConfigured } from "@/lib/feature-flags";
 
 const planMap: Record<string, string | undefined> = {
   "149": process.env.STRIPE_PRICE_149,
@@ -9,6 +10,13 @@ const planMap: Record<string, string | undefined> = {
 
 export async function POST(req: Request) {
   try {
+    if (!isStripeConfigured()) {
+      return NextResponse.json(
+        { error: "Billing is temporarily unavailable. Please try again later." },
+        { status: 503 },
+      );
+    }
+
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) {
       return NextResponse.json({ error: "Stripe is not configured." }, { status: 500 });

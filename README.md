@@ -39,11 +39,11 @@ copy .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `XAI_API_KEY`
+- `XAI_API_KEY` (optional, required to enable AI features)
 - `XAI_MODEL` (example: `grok-3-mini`)
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_149`, `STRIPE_PRICE_199`, `STRIPE_PRICE_249`
+- `STRIPE_SECRET_KEY` (optional, required to enable billing)
+- `STRIPE_WEBHOOK_SECRET` (optional, required to enable billing)
+- `STRIPE_PRICE_149`, `STRIPE_PRICE_199`, `STRIPE_PRICE_249` (optional, required to enable billing)
 
 1. Run database SQL in Supabase:
 
