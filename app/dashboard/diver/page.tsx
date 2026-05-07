@@ -1,50 +1,85 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { DiverProfileEditor } from "@/components/diver-profile-editor";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default function DiverDashboardPage() {
-  return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-10">
-      <h1 className="text-3xl font-bold">Diver Dashboard (Free Forever)</h1>
-      <div className="grid gap-4 md:grid-cols-2">
+export default async function DiverDashboardPage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: auth } = await supabase.auth.getUser();
+
+  if (!auth.user) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-10">
+        <h1 className="text-3xl font-bold">Diver Dashboard</h1>
         <Card>
           <CardHeader>
-            <CardTitle>Profile and CV Manager</CardTitle>
-            <CardDescription>Upload PDF CV and certification documents.</CardDescription>
+            <CardTitle>Login required</CardTitle>
+            <CardDescription>Sign in as a diver account to edit your profile and CV sections.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button>Upload CV / Certs</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Availability</CardTitle>
-            <CardDescription>Toggle real-time status and mobilization notice.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button>Set Available</Button>
-            <Button variant="outline">Set Deployed</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>AI CV and Profile Builder</CardTitle>
-            <CardDescription>Generate polished profile language for diving markets.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-3">
-            <Button>Generate CV Draft</Button>
-            <Button variant="outline">Optimize Headline</Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Private Diver Forum</CardTitle>
-            <CardDescription>Verified divers only. Jobs, safety, equipment, technical discussion.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="secondary">Open Forum</Button>
-          </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  const [{ data: profile }, { data: experiences }, { data: certifications }, { data: references }] = await Promise.all([
+    supabase
+      .from("diver_profiles")
+      .select(
+        "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id",
+      )
+      .eq("user_id", auth.user.id)
+      .maybeSingle(),
+    supabase
+      .from("diver_experiences")
+      .select("id,company,project_name,location,role_title,date_start,date_end,summary,source,source_ref")
+      .eq("diver_id", auth.user.id)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("diver_certifications")
+      .select("id,name,issue_date,expiry_date,cert_number,issuing_body,source,source_ref")
+      .eq("diver_id", auth.user.id)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("diver_references")
+      .select("id,name,company,phone,email,source,source_ref")
+      .eq("diver_id", auth.user.id)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-10">
+      <h1 className="text-3xl font-bold">Diver Dashboard</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>Editable CV and profile</CardTitle>
+          <CardDescription>
+            Save your profile fields, certifications, references, and project history. This schema is ready for future
+            LinkedIn import mapping.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DiverProfileEditor
+            initialData={{
+              profile: {
+                headline: profile?.headline ?? "",
+                bio: profile?.bio ?? "",
+                location: profile?.location ?? "",
+                mobilization_notice: profile?.mobilization_notice ?? "",
+                availability_status: profile?.availability_status === "deployed" ? "deployed" : "available",
+                sat_hours: profile?.sat_hours ?? 0,
+                dive_hours: profile?.dive_hours ?? 0,
+                headline_source: profile?.headline_source ?? "manual",
+                headline_source_ref: profile?.headline_source_ref ?? undefined,
+                bio_source: profile?.bio_source ?? "manual",
+                bio_source_ref: profile?.bio_source_ref ?? undefined,
+                import_batch_id: profile?.import_batch_id ?? null,
+              },
+              experiences: experiences ?? [],
+              certifications: certifications ?? [],
+              references: references ?? [],
+            }}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
