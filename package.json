@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:gareth": "node --env-file=.env.local scripts/seed-gareth-from-zip.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.62",
@@ -20,10 +21,12 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^1.14.0",
     "next": "^15.5.16",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "stripe": "^22.1.1",
     "tailwind-merge": "^3.5.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

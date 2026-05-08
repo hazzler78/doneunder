@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,15 @@ export default function Home() {
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="relative col-span-full h-52 overflow-hidden rounded-xl border border-border sm:h-64">
+            <Image
+              src="/images/hero-commercial-diver.jpeg"
+              alt="Commercial diver preparing for offshore deployment"
+              fill
+              className="object-cover"
+              priority
+            />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>8+ Demo Divers</CardTitle>
@@ -70,6 +80,30 @@ export default function Home() {
             </CardContent>
           </Card>
         ))}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="relative h-64 overflow-hidden rounded-xl border border-border bg-[#020b16] md:h-80">
+          <Image
+            src="/images/offshore-operation-team.jpeg"
+            alt="Offshore operation team preparing commercial dive equipment"
+            fill
+            className="scale-[1.03] object-cover object-center"
+          />
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Built for Real Offshore Teams</CardTitle>
+            <CardDescription>
+              Visual-first profiles and project-ready credentials designed for fast contractor
+              decisions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Present verified certificates, project history, and mobilization readiness in a format
+            tailored to oil & gas, offshore wind, and deep-sea construction recruitment.
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">

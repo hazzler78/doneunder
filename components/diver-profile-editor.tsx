@@ -20,12 +20,52 @@ type Props = {
   initialData: EditorData;
 };
 
+type AiProcessResponse = {
+  ok: boolean;
+  output: {
+    professional_headline: string;
+    polished_cv_markdown: string;
+    polished_cv_json: {
+      location?: string;
+      mobilization_notice?: string;
+      availability_status?: "available" | "deployed";
+      sat_hours?: number;
+      dive_hours?: number;
+      experiences: DiverExperienceInput[];
+      certifications: DiverCertificationInput[];
+      references: Array<{
+        name: string;
+        company?: string;
+        phone?: string;
+        email?: string;
+      }>;
+    };
+    ambassador_page: {
+      public_headline: string;
+      short_bio: string;
+      key_highlights: string[];
+    };
+  };
+};
+
 function SectionTitle({ title }: { title: string }) {
   return <h2 className="text-lg font-semibold">{title}</h2>;
 }
 
 export function DiverProfileEditor({ initialData }: Props) {
   const [form, setForm] = useState<EditorData>(initialData);
+  const [mainCv, setMainCv] = useState<File | null>(null);
+  const [certFiles, setCertFiles] = useState<File[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingStage, setProcessingStage] = useState<string>("");
+  const [polishedCvMarkdown, setPolishedCvMarkdown] = useState(initialData.profile.polished_cv_markdown ?? "");
+  const [polishedCvJson, setPolishedCvJson] = useState<Record<string, unknown> | null>(initialData.profile.polished_cv_json ?? null);
+  const [ambassadorPublicHeadline, setAmbassadorPublicHeadline] = useState(initialData.profile.ambassador_public_headline ?? "");
+  const [ambassadorShortBio, setAmbassadorShortBio] = useState(initialData.profile.ambassador_short_bio ?? "");
+  const [ambassadorHighlights, setAmbassadorHighlights] = useState<string[]>(
+    initialData.profile.ambassador_key_highlights ?? [],
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -34,13 +74,98 @@ export function DiverProfileEditor({ initialData }: Props) {
     [form.certifications],
   );
 
+  function onCertFilesSelected(fileList: FileList | null) {
+    if (!fileList) return;
+    setCertFiles((prev) => [...prev, ...Array.from(fileList)]);
+  }
+
+  function onCertificateDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    onCertFilesSelected(event.dataTransfer.files);
+  }
+
+  async function onProcessWithAi() {
+    if (!mainCv) {
+      setMessage("Upload a main CV PDF first.");
+      return;
+    }
+    setProcessing(true);
+    setProcessingProgress(10);
+    setProcessingStage("Uploading files...");
+    setMessage(null);
+
+    const payload = new FormData();
+    payload.append("mainCv", mainCv);
+    certFiles.forEach((file) => payload.append("certificates", file));
+
+    const response = await fetch("/api/diver/profile/process-cv", {
+      method: "POST",
+      body: payload,
+    });
+
+    setProcessingProgress(85);
+    setProcessingStage("Applying AI output to your profile...");
+    setProcessing(false);
+    setProcessingProgress(100);
+    setProcessingStage("Done");
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: "Failed to process CV." }));
+      setMessage(data.error ?? "Failed to process CV.");
+      return;
+    }
+
+    const data = (await response.json()) as AiProcessResponse;
+    const profile = data.output.polished_cv_json;
+
+    setForm((prev) => ({
+      profile: {
+        ...prev.profile,
+        headline: data.output.professional_headline,
+        bio: data.output.ambassador_page.short_bio,
+        location: profile.location ?? prev.profile.location,
+        mobilization_notice: profile.mobilization_notice ?? prev.profile.mobilization_notice,
+        availability_status: profile.availability_status ?? prev.profile.availability_status,
+        sat_hours: profile.sat_hours ?? prev.profile.sat_hours,
+        dive_hours: profile.dive_hours ?? prev.profile.dive_hours,
+        headline_source: "ai",
+        bio_source: "ai",
+      },
+      experiences: profile.experiences.map((item) => ({ ...item, source: "ai" })),
+      certifications: profile.certifications.map((item) => ({ ...item, source: "ai" })),
+      references: profile.references.map((item) => ({
+        name: item.name,
+        company: item.company,
+        phone: item.phone ?? "Not provided",
+        email: item.email,
+        source: "ai",
+      })),
+    }));
+
+    setPolishedCvMarkdown(data.output.polished_cv_markdown);
+    setPolishedCvJson(data.output.polished_cv_json as Record<string, unknown>);
+    setAmbassadorPublicHeadline(data.output.ambassador_page.public_headline);
+    setAmbassadorShortBio(data.output.ambassador_page.short_bio);
+    setAmbassadorHighlights(data.output.ambassador_page.key_highlights);
+    setMessage("AI finished. Review the preview, verify details, and click Save profile.");
+  }
+
   async function onSave() {
     setSaving(true);
     setMessage(null);
     const response = await fetch("/api/diver/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        profile: {
+          ...form.profile,
+          polished_cv_markdown: polishedCvMarkdown,
+          polished_cv_json: polishedCvJson,
+          ambassador_public_headline: ambassadorPublicHeadline,
+          ambassador_short_bio: ambassadorShortBio,
+          ambassador_key_highlights: ambassadorHighlights,
+        },
+      }),
     });
     setSaving(false);
     if (!response.ok) {
@@ -52,6 +177,61 @@ export function DiverProfileEditor({ initialData }: Props) {
 
   return (
     <div className="space-y-6">
+      <section className="space-y-3 rounded-lg border p-4">
+        <SectionTitle title="Upload & Improve Your CV" />
+        <p className="text-xs text-amber-300">AI-generated - always verify every credential, date, and contact detail.</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-xs text-muted-foreground">Main CV (PDF)</span>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
+              className="w-full rounded-md border bg-transparent p-2"
+            />
+          </label>
+          <div
+            className="space-y-2 rounded-md border border-dashed p-4 sm:p-3"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={onCertificateDrop}
+          >
+            <p className="text-xs text-muted-foreground">
+              Certificates (PDF/JPG/PNG). Drag-and-drop here or choose files.
+            </p>
+            <input
+              type="file"
+              multiple
+              accept="application/pdf,image/jpeg,image/png"
+              onChange={(event) => onCertFilesSelected(event.target.files)}
+              className="w-full rounded-md border bg-transparent p-2"
+            />
+            {certFiles.length > 0 ? (
+              <div className="space-y-1 text-xs text-cyan-200">
+                {certFiles.map((file, index) => (
+                  <p key={`${file.name}-${index}`}>{file.name}</p>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <Button onClick={onProcessWithAi} disabled={processing} className="w-full sm:w-auto">
+          {processing ? "Processing..." : "Process with AI"}
+        </Button>
+        {processing || processingProgress > 0 ? (
+          <div className="space-y-1">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-cyan-400 transition-all duration-500"
+                style={{ width: `${processingProgress}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {processing ? processingStage || "Processing..." : processingStage}
+            </p>
+          </div>
+        ) : null}
+      </section>
+
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Core Profile" />
         <div className="grid gap-3 md:grid-cols-2">
@@ -148,6 +328,53 @@ export function DiverProfileEditor({ initialData }: Props) {
             />
           </label>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-lg border p-4">
+        <SectionTitle title="CV Preview" />
+        <p className="text-xs text-amber-300">AI-generated - always verify before sharing with employers.</p>
+        <textarea
+          className="min-h-72 w-full rounded-md border bg-transparent p-2 font-mono text-sm"
+          value={polishedCvMarkdown}
+          onChange={(event) => setPolishedCvMarkdown(event.target.value)}
+          placeholder="Your polished CV will appear here after AI processing."
+        />
+      </section>
+
+      <section className="space-y-3 rounded-lg border p-4">
+        <SectionTitle title="Ambassador Page Preview" />
+        <p className="text-xs text-amber-300">This public view may contain AI-generated text. Verify before publishing.</p>
+        <label className="space-y-1">
+          <span className="text-xs text-muted-foreground">Public headline</span>
+          <input
+            className="w-full rounded-md border bg-transparent p-2"
+            value={ambassadorPublicHeadline}
+            onChange={(event) => setAmbassadorPublicHeadline(event.target.value)}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-muted-foreground">Short bio</span>
+          <textarea
+            className="min-h-24 w-full rounded-md border bg-transparent p-2"
+            value={ambassadorShortBio}
+            onChange={(event) => setAmbassadorShortBio(event.target.value)}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs text-muted-foreground">Key highlights (one per line)</span>
+          <textarea
+            className="min-h-20 w-full rounded-md border bg-transparent p-2"
+            value={ambassadorHighlights.join("\n")}
+            onChange={(event) =>
+              setAmbassadorHighlights(
+                event.target.value
+                  .split("\n")
+                  .map((item) => item.trim())
+                  .filter(Boolean),
+              )
+            }
+          />
+        </label>
       </section>
 
       <section className="space-y-3 rounded-lg border p-4">

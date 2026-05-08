@@ -24,7 +24,7 @@ export default async function DiverDashboardPage() {
     supabase
       .from("diver_profiles")
       .select(
-        "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id",
+        "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,polished_cv_markdown,polished_cv_json,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id",
       )
       .eq("user_id", auth.user.id)
       .maybeSingle(),
@@ -67,6 +67,11 @@ export default async function DiverDashboardPage() {
                 availability_status: profile?.availability_status === "deployed" ? "deployed" : "available",
                 sat_hours: profile?.sat_hours ?? 0,
                 dive_hours: profile?.dive_hours ?? 0,
+                polished_cv_markdown: profile?.polished_cv_markdown ?? "",
+                polished_cv_json: profile?.polished_cv_json ?? null,
+                ambassador_public_headline: profile?.ambassador_public_headline ?? "",
+                ambassador_short_bio: profile?.ambassador_short_bio ?? "",
+                ambassador_key_highlights: profile?.ambassador_key_highlights ?? [],
                 headline_source: profile?.headline_source ?? "manual",
                 headline_source_ref: profile?.headline_source_ref ?? undefined,
                 bio_source: profile?.bio_source ?? "manual",

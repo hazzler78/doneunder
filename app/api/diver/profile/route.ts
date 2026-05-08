@@ -46,6 +46,11 @@ const profileSchema = z.object({
   availability_status: z.enum(["available", "deployed"]).default("available"),
   sat_hours: z.number().int().min(0),
   dive_hours: z.number().int().min(0),
+  polished_cv_markdown: z.string().max(40000).optional(),
+  polished_cv_json: z.record(z.string(), z.unknown()).nullable().optional(),
+  ambassador_public_headline: z.string().max(220).optional(),
+  ambassador_short_bio: z.string().max(1200).optional(),
+  ambassador_key_highlights: z.array(z.string().max(180)).max(12).optional(),
   headline_source: sourceSchema.optional(),
   headline_source_ref: z.string().optional(),
   bio_source: sourceSchema.optional(),
@@ -84,7 +89,7 @@ export async function GET() {
     const { data: profile } = await supabase
       .from("diver_profiles")
       .select(
-        "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id",
+        "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,polished_cv_markdown,polished_cv_json,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id",
       )
       .eq("user_id", diverId)
       .maybeSingle();
@@ -116,6 +121,11 @@ export async function GET() {
         availability_status: "available",
         sat_hours: 0,
         dive_hours: 0,
+        polished_cv_markdown: "",
+        polished_cv_json: null,
+        ambassador_public_headline: "",
+        ambassador_short_bio: "",
+        ambassador_key_highlights: [],
         headline_source: "manual",
         bio_source: "manual",
       },
@@ -146,6 +156,11 @@ export async function PUT(req: Request) {
         availability_status: body.availability_status,
         sat_hours: body.sat_hours,
         dive_hours: body.dive_hours,
+        polished_cv_markdown: body.polished_cv_markdown ?? null,
+        polished_cv_json: body.polished_cv_json ?? null,
+        ambassador_public_headline: body.ambassador_public_headline ?? null,
+        ambassador_short_bio: body.ambassador_short_bio ?? null,
+        ambassador_key_highlights: body.ambassador_key_highlights ?? [],
         headline_source: body.headline_source ?? "manual",
         headline_source_ref: body.headline_source_ref ?? null,
         bio_source: body.bio_source ?? "manual",

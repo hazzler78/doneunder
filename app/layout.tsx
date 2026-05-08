@@ -13,10 +13,37 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = "https://doneunder.ai";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "doneunder.ai | Commercial Diving Marketplace",
   description:
     "High-trust B2B marketplace connecting commercial divers and offshore contractors.",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "doneunder.ai",
+    title: "doneunder.ai | Commercial Diving Marketplace",
+    description:
+      "The premium commercial diving talent marketplace — AI-powered matching for saturation divers, underwater welders, NDT specialists, and offshore contractors.",
+    images: [
+      {
+        url: "/og.jpg",
+        width: 1168,
+        height: 784,
+        alt: "doneunder.ai — commercial diving marketplace",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "doneunder.ai | Commercial Diving Marketplace",
+    description:
+      "High-trust B2B marketplace connecting commercial divers and offshore contractors.",
+    images: ["/og.jpg"],
+  },
 };
 
 export default function RootLayout({

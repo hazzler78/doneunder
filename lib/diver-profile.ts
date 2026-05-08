@@ -42,6 +42,11 @@ export type DiverProfilePayload = {
   availability_status: "available" | "deployed";
   sat_hours: number;
   dive_hours: number;
+  polished_cv_markdown?: string;
+  polished_cv_json?: Record<string, unknown> | null;
+  ambassador_public_headline?: string;
+  ambassador_short_bio?: string;
+  ambassador_key_highlights?: string[];
   headline_source?: DataSource;
   headline_source_ref?: string;
   bio_source?: DataSource;
