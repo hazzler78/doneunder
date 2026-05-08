@@ -17,49 +17,48 @@ export default async function DiverCvPage({
   const { username } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("id,full_name")
+  const { data: publicAmbassador } = await supabase
+    .from("public_diver_ambassador")
+    .select(
+      "user_id,full_name,headline,bio,location,mobilization_notice,sat_hours,dive_hours,polished_cv_markdown",
+    )
     .eq("username", username)
-    .eq("role", "diver")
     .maybeSingle();
 
   const fallbackDiver = divers.find((entry) => entry.username === username);
-  if (!user && !fallbackDiver) notFound();
-
-  const { data: profile } = await supabase
-    .from("diver_profiles")
-    .select("polished_cv_markdown,headline,bio,location,mobilization_notice,sat_hours,dive_hours")
-    .eq("user_id", user?.id)
-    .maybeSingle();
+  if (!publicAmbassador && !fallbackDiver) notFound();
 
   const [{ data: experiences }, { data: certifications }, { data: references }] = await Promise.all([
     supabase
       .from("diver_experiences")
       .select("company,project_name,location,role_title,date_start,date_end,summary")
-      .eq("diver_id", user?.id)
+      .eq("diver_id", publicAmbassador?.user_id)
       .order("sort_order", { ascending: true }),
     supabase
       .from("diver_certifications")
       .select("name,issue_date,expiry_date,cert_number,issuing_body")
-      .eq("diver_id", user?.id)
+      .eq("diver_id", publicAmbassador?.user_id)
       .order("sort_order", { ascending: true }),
     supabase
       .from("diver_references")
       .select("name,company,phone,email")
-      .eq("diver_id", user?.id)
+      .eq("diver_id", publicAmbassador?.user_id)
       .order("sort_order", { ascending: true }),
   ]);
 
-  if (!profile && !fallbackDiver) notFound();
-
-  const fullName = user?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
-  const headline = profile?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV";
-  const location = profile?.location || fallbackDiver?.location || "Location not provided";
-  const mobilization = profile?.mobilization_notice || fallbackDiver?.mobilizationNotice || "Mobilization not provided";
-  const summary = profile?.bio || fallbackDiver?.bio || "Professional summary not provided yet.";
-  const satHours = profile?.sat_hours && profile.sat_hours > 0 ? profile.sat_hours.toLocaleString() : "Not declared";
-  const diveHours = profile?.dive_hours && profile.dive_hours > 0 ? profile.dive_hours.toLocaleString() : "Not declared";
+  const fullName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
+  const headline = publicAmbassador?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV";
+  const location = publicAmbassador?.location || fallbackDiver?.location || "Location not provided";
+  const mobilization = publicAmbassador?.mobilization_notice || fallbackDiver?.mobilizationNotice || "Mobilization not provided";
+  const summary = publicAmbassador?.bio || fallbackDiver?.bio || "Professional summary not provided yet.";
+  const satHours =
+    publicAmbassador?.sat_hours && publicAmbassador.sat_hours > 0
+      ? publicAmbassador.sat_hours.toLocaleString()
+      : "Not declared";
+  const diveHours =
+    publicAmbassador?.dive_hours && publicAmbassador.dive_hours > 0
+      ? publicAmbassador.dive_hours.toLocaleString()
+      : "Not declared";
   const hasStructuredCv = (experiences?.length ?? 0) > 0 || (certifications?.length ?? 0) > 0 || (references?.length ?? 0) > 0;
 
   return (
@@ -150,11 +149,11 @@ export default async function DiverCvPage({
         )}
       </section>
 
-      {hasStructuredCv && profile?.polished_cv_markdown ? (
+      {hasStructuredCv && publicAmbassador?.polished_cv_markdown ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">AI Polished CV Draft</h2>
           <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
-            {profile.polished_cv_markdown}
+            {publicAmbassador.polished_cv_markdown}
           </pre>
         </section>
       ) : null}

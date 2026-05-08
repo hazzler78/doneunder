@@ -15,32 +15,26 @@ export default async function AmbassadorPage({
 }) {
   const { username } = await params;
   const supabase = await createSupabaseServerClient();
-  const { data: user } = await supabase
-    .from("users")
-    .select("id,username,full_name")
+  const { data: publicAmbassador } = await supabase
+    .from("public_diver_ambassador")
+    .select(
+      "user_id,username,full_name,headline,bio,sat_hours,dive_hours,location,mobilization_notice,availability_status,polished_cv_markdown,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights",
+    )
     .eq("username", username)
-    .eq("role", "diver")
     .maybeSingle();
   const fallbackDiver = divers.find((entry) => entry.username === username);
-  if (!user && !fallbackDiver) notFound();
+  if (!publicAmbassador && !fallbackDiver) notFound();
 
-  const [{ data: profile }, { data: certifications }] = await Promise.all([
-    supabase
-      .from("diver_profiles")
-      .select(
-        "headline,bio,sat_hours,dive_hours,location,mobilization_notice,availability_status,polished_cv_markdown,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights",
-      )
-      .eq("user_id", user?.id)
-      .maybeSingle(),
+  const [{ data: certifications }] = await Promise.all([
     supabase
       .from("diver_certifications")
       .select("name,expiry_date")
-      .eq("diver_id", user?.id)
+      .eq("diver_id", publicAmbassador?.user_id)
       .order("sort_order", { ascending: true }),
   ]);
 
-  const safeProfile = profile ?? null;
-  const displayName = user?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
+  const safeProfile = publicAmbassador ?? null;
+  const displayName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
   const satHours =
     safeProfile?.sat_hours && safeProfile.sat_hours > 0
       ? safeProfile.sat_hours.toLocaleString()
