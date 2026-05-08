@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -63,11 +64,16 @@ const profileSchema = z.object({
 
 async function getAuthenticatedDiverId() {
   const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
   const { data: auth } = await supabase.auth.getUser();
 
   if (!auth.user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
-  let { data: userRecord } = await supabase
+  let { data: userRecord } = await serviceSupabase
     .from("users")
     .select("id, role, full_name, username")
     .eq("id", auth.user.id)
@@ -81,7 +87,7 @@ async function getAuthenticatedDiverId() {
       (auth.user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
       (auth.user.email ? auth.user.email.split("@")[0].toLowerCase() : `diver-${auth.user.id.slice(0, 8)}`);
 
-    const { data: inserted, error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await serviceSupabase
       .from("users")
       .upsert(
         {
@@ -96,18 +102,12 @@ async function getAuthenticatedDiverId() {
       .select("id, role, full_name, username")
       .maybeSingle();
 
-    if (insertError) {
-      return {
-        error: NextResponse.json(
-          { error: `Profile bootstrap failed: ${insertError.message}` },
-          { status: 403 },
-        ),
-      };
+    if (!insertError) {
+      userRecord = inserted ?? null;
     }
-    userRecord = inserted ?? null;
   }
 
-  if (!userRecord || userRecord.role !== "diver") {
+  if (userRecord && userRecord.role !== "diver") {
     return {
       error: NextResponse.json(
         { error: "Forbidden. This endpoint requires a diver account." },
