@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type {
   DiverCertificationInput,
   DiverExperienceInput,
@@ -59,6 +60,20 @@ function formatCvDate(value?: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
+function isMissingValue(value?: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "not provided" || normalized === "not declared";
+}
+
+function fieldClass(isMissing: boolean, extra?: string) {
+  return cn(
+    "w-full rounded-md border bg-transparent p-2",
+    isMissing && "border-amber-500/70 bg-amber-500/10 text-amber-100",
+    extra,
+  );
 }
 
 function buildPresentationCvMarkdown(form: EditorData, ambassadorShortBio: string, ambassadorHighlights: string[]) {
@@ -145,6 +160,8 @@ export function DiverProfileEditor({ initialData }: Props) {
   const [showFullEditor, setShowFullEditor] = useState(false);
   const mainCvInputRef = useRef<HTMLInputElement | null>(null);
   const certInputRef = useRef<HTMLInputElement | null>(null);
+  const processingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const processingStartRef = useRef<number>(0);
 
   const actionRequiredCerts = useMemo(
     () => form.certifications.filter((cert) => !cert.expiry_date),
@@ -152,17 +169,30 @@ export function DiverProfileEditor({ initialData }: Props) {
   );
   const cvChecklist = useMemo(() => {
     const checks = [
-      { label: "Headline is filled", ok: Boolean(form.profile.headline.trim()) },
-      { label: "Professional summary is filled", ok: Boolean((ambassadorShortBio || form.profile.bio).trim()) },
-      { label: "Location is filled", ok: Boolean(form.profile.location.trim()) },
-      { label: "Mobilization notice is filled", ok: Boolean(form.profile.mobilization_notice.trim()) },
-      { label: "At least 1 experience added", ok: form.experiences.length > 0 },
-      { label: "At least 1 certification added", ok: form.certifications.length > 0 },
+      { label: "Headline is filled", ok: !isMissingValue(form.profile.headline) },
+      { label: "Professional summary is filled", ok: !isMissingValue(ambassadorShortBio || form.profile.bio) },
+      { label: "Location is filled", ok: !isMissingValue(form.profile.location) },
+      { label: "Mobilization notice is filled", ok: !isMissingValue(form.profile.mobilization_notice) },
+      {
+        label: "At least 1 complete experience added",
+        ok: form.experiences.some((exp) => !isMissingValue(exp.company) && !isMissingValue(exp.role_title)),
+      },
+      {
+        label: "At least 1 certification added",
+        ok: form.certifications.some((cert) => !isMissingValue(cert.name)),
+      },
       {
         label: "All certifications have expiry dates",
-        ok: form.certifications.length > 0 && form.certifications.every((cert) => Boolean(cert.expiry_date?.trim())),
+        ok:
+          form.certifications.some((cert) => !isMissingValue(cert.name)) &&
+          form.certifications
+            .filter((cert) => !isMissingValue(cert.name))
+            .every((cert) => Boolean(cert.expiry_date?.trim()) && !isMissingValue(cert.expiry_date)),
       },
-      { label: "At least 1 reference added", ok: form.references.length > 0 },
+      {
+        label: "At least 1 reference with contact added",
+        ok: form.references.some((ref) => !isMissingValue(ref.name) && (!isMissingValue(ref.phone) || !isMissingValue(ref.email))),
+      },
     ];
     const passed = checks.filter((item) => item.ok).length;
     const score = Math.round((passed / checks.length) * 100);
@@ -172,6 +202,85 @@ export function DiverProfileEditor({ initialData }: Props) {
     () => buildPresentationCvMarkdown(form, ambassadorShortBio, ambassadorHighlights),
     [form, ambassadorShortBio, ambassadorHighlights],
   );
+  const missingSummary = useMemo(() => {
+    const missing = [
+      isMissingValue(form.profile.headline) ? "Headline" : null,
+      isMissingValue(form.profile.bio) ? "Professional summary" : null,
+      isMissingValue(form.profile.location) ? "Location" : null,
+      isMissingValue(form.profile.mobilization_notice) ? "Mobilization notice" : null,
+      form.experiences.some((exp) => isMissingValue(exp.company) || isMissingValue(exp.role_title))
+        ? "Experience entries"
+        : null,
+      form.certifications.some((cert) => isMissingValue(cert.name) || isMissingValue(cert.expiry_date))
+        ? "Certification details"
+        : null,
+      form.references.some((ref) => isMissingValue(ref.name) || isMissingValue(ref.phone))
+        ? "Reference details"
+        : null,
+    ].filter((item): item is string => Boolean(item));
+    return missing;
+  }, [form]);
+
+  const missingSectionTargets: Record<string, string> = {
+    Headline: "core-profile",
+    "Professional summary": "core-profile",
+    Location: "core-profile",
+    "Mobilization notice": "core-profile",
+    "Experience entries": "professional-experience",
+    "Certification details": "certifications",
+    "Reference details": "references",
+  };
+
+  useEffect(() => {
+    return () => {
+      if (processingIntervalRef.current) {
+        clearInterval(processingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  function startProcessingProgress() {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+    }
+    processingStartRef.current = Date.now();
+    setProcessingProgress(2);
+    setProcessingStage("Uploading files...");
+
+    processingIntervalRef.current = setInterval(() => {
+      const elapsedSeconds = (Date.now() - processingStartRef.current) / 1000;
+      setProcessingProgress((prev) => {
+        if (prev >= 94) return prev;
+
+        let increment = 0.5;
+        if (elapsedSeconds < 8) increment = 4;
+        else if (elapsedSeconds < 25) increment = 2;
+        else if (elapsedSeconds < 55) increment = 1.1;
+        else if (elapsedSeconds < 80) increment = 0.7;
+
+        return Math.min(94, Number((prev + increment).toFixed(1)));
+      });
+
+      if (elapsedSeconds < 10) {
+        setProcessingStage("Uploading files...");
+      } else if (elapsedSeconds < 30) {
+        setProcessingStage("Extracting CV and certificate text...");
+      } else if (elapsedSeconds < 60) {
+        setProcessingStage("Generating polished CV with AI...");
+      } else {
+        setProcessingStage("Finalizing profile details...");
+      }
+    }, 1000);
+  }
+
+  function finishProcessingProgress() {
+    if (processingIntervalRef.current) {
+      clearInterval(processingIntervalRef.current);
+      processingIntervalRef.current = null;
+    }
+    setProcessingProgress(100);
+    setProcessingStage("Done");
+  }
 
   function applyQuickFixes() {
     setForm((prev) => {
@@ -215,6 +324,14 @@ export function DiverProfileEditor({ initialData }: Props) {
     }
   }
 
+  function jumpToSection(sectionId: string) {
+    setShowFullEditor(true);
+    requestAnimationFrame(() => {
+      const target = document.getElementById(sectionId);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   function onCertFilesSelected(fileList: FileList | null) {
     if (!fileList) return;
     setCertFiles((prev) => [...prev, ...Array.from(fileList)]);
@@ -231,8 +348,7 @@ export function DiverProfileEditor({ initialData }: Props) {
       return;
     }
     setProcessing(true);
-    setProcessingProgress(10);
-    setProcessingStage("Uploading files...");
+    startProcessingProgress();
     setMessage(null);
 
     const payload = new FormData();
@@ -244,11 +360,8 @@ export function DiverProfileEditor({ initialData }: Props) {
       body: payload,
     });
 
-    setProcessingProgress(85);
-    setProcessingStage("Applying AI output to your profile...");
     setProcessing(false);
-    setProcessingProgress(100);
-    setProcessingStage("Done");
+    finishProcessingProgress();
     if (!response.ok) {
       const data = await response.json().catch(() => ({ error: "Failed to process CV." }));
       setMessage(data.error ?? "Failed to process CV.");
@@ -319,7 +432,7 @@ export function DiverProfileEditor({ initialData }: Props) {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3 rounded-lg border p-4">
+      <section id="core-profile" className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Upload & Improve Your CV" />
         <p className="text-xs text-muted-foreground">Upload CV, click Process with AI, then Save profile.</p>
         <div className="grid gap-3 md:grid-cols-2">
@@ -398,11 +511,16 @@ export function DiverProfileEditor({ initialData }: Props) {
         <>
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Core Profile" />
+        {missingSummary.length > 0 ? (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
+            Needs review: {missingSummary.join(", ")}
+          </p>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1">
             <span className="text-xs text-muted-foreground">Headline</span>
             <input
-              className="w-full rounded-md border bg-transparent p-2"
+              className={fieldClass(isMissingValue(form.profile.headline))}
               value={form.profile.headline}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, profile: { ...prev.profile, headline: event.target.value } }))
@@ -412,7 +530,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           <label className="space-y-1">
             <span className="text-xs text-muted-foreground">Location</span>
             <input
-              className="w-full rounded-md border bg-transparent p-2"
+              className={fieldClass(isMissingValue(form.profile.location))}
               value={form.profile.location}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, profile: { ...prev.profile, location: event.target.value } }))
@@ -422,7 +540,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           <label className="space-y-1 md:col-span-2">
             <span className="text-xs text-muted-foreground">Professional Summary</span>
             <textarea
-              className="min-h-28 w-full rounded-md border bg-transparent p-2"
+              className={fieldClass(isMissingValue(form.profile.bio), "min-h-28")}
               value={form.profile.bio}
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, profile: { ...prev.profile, bio: event.target.value } }))
@@ -451,7 +569,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           <label className="space-y-1">
             <span className="text-xs text-muted-foreground">Mobilization Notice</span>
             <input
-              className="w-full rounded-md border bg-transparent p-2"
+              className={fieldClass(isMissingValue(form.profile.mobilization_notice))}
               value={form.profile.mobilization_notice}
               onChange={(event) =>
                 setForm((prev) => ({
@@ -506,6 +624,27 @@ export function DiverProfileEditor({ initialData }: Props) {
               Auto-fill missing basics
             </Button>
           </div>
+          {missingSummary.length > 0 ? (
+            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+              <p className="text-xs text-amber-200">
+                Missing in preview. Click to jump directly to edit:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {missingSummary.map((item) => (
+                  <Button
+                    key={`missing-preview-${item}`}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-500/50 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20"
+                    onClick={() => jumpToSection(missingSectionTargets[item] ?? "core-profile")}
+                  >
+                    Quick edit: {item}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <ul className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
             {cvChecklist.checks.map((item) => (
               <li key={item.label} className={item.ok ? "text-emerald-300" : "text-amber-300"}>
@@ -555,7 +694,7 @@ export function DiverProfileEditor({ initialData }: Props) {
         </details>
       </section>
 
-      <section className="space-y-3 rounded-lg border p-4">
+      <section id="professional-experience" className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Ambassador Page Preview" />
         <p className="text-xs text-amber-300">This public view may contain AI-generated text. Verify before publishing.</p>
         <label className="space-y-1">
@@ -591,7 +730,7 @@ export function DiverProfileEditor({ initialData }: Props) {
         </label>
       </section>
 
-      <section className="space-y-3 rounded-lg border p-4">
+      <section id="certifications" className="space-y-3 rounded-lg border p-4">
         <div className="flex items-center justify-between">
           <SectionTitle title="Professional Experience" />
           <Button
@@ -610,7 +749,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           {form.experiences.map((experience, index) => (
             <div key={experience.id ?? `experience-${index}`} className="grid gap-2 rounded-md border p-3 md:grid-cols-2">
               <input
-                className="rounded-md border bg-transparent p-2"
+                className={fieldClass(isMissingValue(experience.company))}
                 placeholder="Company"
                 value={experience.company}
                 onChange={(event) =>
@@ -622,7 +761,7 @@ export function DiverProfileEditor({ initialData }: Props) {
                 }
               />
               <input
-                className="rounded-md border bg-transparent p-2"
+                className={fieldClass(isMissingValue(experience.role_title))}
                 placeholder="Role"
                 value={experience.role_title}
                 onChange={(event) =>
@@ -698,7 +837,7 @@ export function DiverProfileEditor({ initialData }: Props) {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-lg border p-4">
+      <section id="references" className="space-y-3 rounded-lg border p-4">
         <div className="flex items-center justify-between">
           <SectionTitle title="Certifications" />
           <Button
@@ -717,7 +856,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           {form.certifications.map((certification, index) => (
             <div key={certification.id ?? `cert-${index}`} className="grid gap-2 rounded-md border p-3 md:grid-cols-3">
               <input
-                className="rounded-md border bg-transparent p-2 md:col-span-3"
+                className={fieldClass(isMissingValue(certification.name), "md:col-span-3")}
                 placeholder="Certification name"
                 value={certification.name}
                 onChange={(event) =>
@@ -742,7 +881,7 @@ export function DiverProfileEditor({ initialData }: Props) {
               />
               <input
                 type="date"
-                className="rounded-md border bg-transparent p-2"
+                className={fieldClass(isMissingValue(certification.expiry_date))}
                 value={certification.expiry_date ?? ""}
                 onChange={(event) =>
                   setForm((prev) => {
@@ -794,7 +933,7 @@ export function DiverProfileEditor({ initialData }: Props) {
           {form.references.map((reference, index) => (
             <div key={reference.id ?? `reference-${index}`} className="grid gap-2 rounded-md border p-3 md:grid-cols-2">
               <input
-                className="rounded-md border bg-transparent p-2"
+                className={fieldClass(isMissingValue(reference.name))}
                 placeholder="Name"
                 value={reference.name}
                 onChange={(event) =>
@@ -818,7 +957,7 @@ export function DiverProfileEditor({ initialData }: Props) {
                 }
               />
               <input
-                className="rounded-md border bg-transparent p-2"
+                className={fieldClass(isMissingValue(reference.phone))}
                 placeholder="Phone"
                 value={reference.phone}
                 onChange={(event) =>

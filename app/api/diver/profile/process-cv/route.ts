@@ -12,7 +12,7 @@ const BUCKET_NAME = "diver-documents";
 const MAX_MAIN_CV_MB = 12;
 const MAX_CERT_MB = 8;
 const MAX_CERT_FILES = 10;
-const MAX_SOURCE_TEXT_CHARS = 24000;
+const MAX_SOURCE_TEXT_CHARS = 60000;
 const CHUNK_SIZE = 6000;
 const CHUNK_OVERLAP = 400;
 
@@ -70,6 +70,7 @@ const aiOutputSchema = z.object({
 const cvSystemPrompt = `You are a specialist commercial diving CV and profile writer for doneunder.ai.
 Turn raw CVs and certification documents into a polished, accurate profile for offshore recruiters.
 Return factual outputs only from provided material. Use "Not provided" when unknown.
+Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
 Respond in the exact JSON schema requested.`;
 
 const cvChunkSchema = z.object({
@@ -281,6 +282,8 @@ export async function POST(req: Request) {
     const cvChunks = splitTextIntoChunks(cvText);
     const chunkSummaries: string[] = [];
     const chunkCertMentions: string[] = [];
+    const chunkExperienceMentions: string[] = [];
+    const chunkContactMentions: string[] = [];
 
     for (const [index, chunk] of cvChunks.entries()) {
       const chunkResult = await generateObject({
@@ -292,15 +295,20 @@ export async function POST(req: Request) {
       });
       chunkSummaries.push(chunkResult.object.summary);
       chunkCertMentions.push(...chunkResult.object.certifications_mentioned);
+      chunkExperienceMentions.push(...chunkResult.object.experiences_mentioned);
+      chunkContactMentions.push(...chunkResult.object.contacts_mentioned);
     }
 
     const certText = truncateText(certExtractedTextParts.join("\n\n"), 16000);
     const finalPrompt = [
       `Main CV file: ${mainCvFile.name}`,
-      `CV chunk summaries:\n${chunkSummaries.join("\n- ")}`,
+      `CV chunk summaries:\n- ${chunkSummaries.join("\n- ")}`,
       `Certificate mentions in CV:\n${Array.from(new Set(chunkCertMentions)).join("\n- ") || "None detected"}`,
+      `Experience mentions in CV:\n${Array.from(new Set(chunkExperienceMentions)).join("\n- ") || "None detected"}`,
+      `Contact mentions in CV:\n${Array.from(new Set(chunkContactMentions)).join("\n- ") || "None detected"}`,
+      `Raw extracted CV text (use this for completeness):\n${cvText || "No CV text extracted."}`,
       `Extracted certificate OCR/text:\n${certText || "No certificate OCR/text extracted."}`,
-      "Generate polished markdown CV + structured JSON + ambassador copy.",
+      "Generate polished markdown CV + structured JSON + ambassador copy. Do not omit valid experience entries found in source text.",
     ].join("\n\n");
 
     const aiResult = await generateObject({
