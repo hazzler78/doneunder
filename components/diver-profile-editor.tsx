@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -143,6 +143,8 @@ export function DiverProfileEditor({ initialData }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showFullEditor, setShowFullEditor] = useState(false);
+  const mainCvInputRef = useRef<HTMLInputElement | null>(null);
+  const certInputRef = useRef<HTMLInputElement | null>(null);
 
   const actionRequiredCerts = useMemo(
     () => form.certifications.filter((cert) => !cert.expiry_date),
@@ -319,22 +321,24 @@ export function DiverProfileEditor({ initialData }: Props) {
     <div className="space-y-6">
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Upload & Improve Your CV" />
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full border border-cyan-700/70 bg-cyan-950/60 px-2 py-1 text-cyan-100">
-            Start here
-          </span>
-          <span className="text-muted-foreground">Upload CV, click Process with AI, then Save profile.</span>
-        </div>
+        <p className="text-xs text-muted-foreground">Upload CV, click Process with AI, then Save profile.</p>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1">
+          <div className="space-y-2">
             <span className="text-xs text-muted-foreground">Main CV (PDF)</span>
             <input
+              ref={mainCvInputRef}
               type="file"
               accept="application/pdf"
               onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
-              className="w-full rounded-md border bg-transparent p-2"
+              className="hidden"
             />
-          </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" onClick={() => mainCvInputRef.current?.click()}>
+                Start here
+              </Button>
+              <span className="text-xs text-cyan-200">{mainCv?.name ?? "No CV selected"}</span>
+            </div>
+          </div>
           <div
             className="space-y-2 rounded-md border border-dashed p-4 sm:p-3"
             onDragOver={(event) => event.preventDefault()}
@@ -344,12 +348,16 @@ export function DiverProfileEditor({ initialData }: Props) {
               Certificates (PDF/JPG/PNG). Drag-and-drop here or choose files.
             </p>
             <input
+              ref={certInputRef}
               type="file"
               multiple
               accept="application/pdf,image/jpeg,image/png"
               onChange={(event) => onCertFilesSelected(event.target.files)}
-              className="w-full rounded-md border bg-transparent p-2"
+              className="hidden"
             />
+            <Button type="button" size="sm" variant="outline" onClick={() => certInputRef.current?.click()}>
+              Continue here
+            </Button>
             {certFiles.length > 0 ? (
               <div className="space-y-1 text-xs text-cyan-200">
                 {certFiles.map((file, index) => (
