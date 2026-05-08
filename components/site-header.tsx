@@ -28,9 +28,14 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/diver">
+          <Link href="/register">
             <Button variant="secondary" size="sm">
               Join as Diver
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button variant="outline" size="sm">
+              Login
             </Button>
           </Link>
           <Link href="/dashboard/company">

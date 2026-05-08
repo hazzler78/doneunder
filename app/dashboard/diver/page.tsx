@@ -1,6 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DiverProfileEditor } from "@/components/diver-profile-editor";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 export default async function DiverDashboardPage() {
   const supabase = await createSupabaseServerClient();
@@ -15,6 +17,16 @@ export default async function DiverDashboardPage() {
             <CardTitle>Login required</CardTitle>
             <CardDescription>Sign in as a diver account to edit your profile and CV sections.</CardDescription>
           </CardHeader>
+          <CardContent className="flex gap-2">
+            <Link href="/login">
+              <Button size="sm">Sign in</Button>
+            </Link>
+            <Link href="/register">
+              <Button size="sm" variant="outline">
+                Create account
+              </Button>
+            </Link>
+          </CardContent>
         </Card>
       </div>
     );
