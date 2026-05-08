@@ -142,6 +142,7 @@ export function DiverProfileEditor({ initialData }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showFullEditor, setShowFullEditor] = useState(false);
 
   const actionRequiredCerts = useMemo(
     () => form.certifications.filter((cert) => !cert.expiry_date),
@@ -157,7 +158,7 @@ export function DiverProfileEditor({ initialData }: Props) {
       { label: "At least 1 certification added", ok: form.certifications.length > 0 },
       {
         label: "All certifications have expiry dates",
-        ok: form.certifications.length === 0 || form.certifications.every((cert) => Boolean(cert.expiry_date?.trim())),
+        ok: form.certifications.length > 0 && form.certifications.every((cert) => Boolean(cert.expiry_date?.trim())),
       },
       { label: "At least 1 reference added", ok: form.references.length > 0 },
     ];
@@ -284,6 +285,7 @@ export function DiverProfileEditor({ initialData }: Props) {
     setAmbassadorPublicHeadline(data.output.ambassador_page.public_headline);
     setAmbassadorShortBio(data.output.ambassador_page.short_bio);
     setAmbassadorHighlights(data.output.ambassador_page.key_highlights);
+    setShowFullEditor(true);
     setMessage("AI finished. Review the preview, verify details, and click Save profile.");
   }
 
@@ -317,7 +319,12 @@ export function DiverProfileEditor({ initialData }: Props) {
     <div className="space-y-6">
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Upload & Improve Your CV" />
-        <p className="text-xs text-amber-300">AI-generated - always verify every credential, date, and contact detail.</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-cyan-700/70 bg-cyan-950/60 px-2 py-1 text-cyan-100">
+            Start here
+          </span>
+          <span className="text-muted-foreground">Upload CV, click Process with AI, then Save profile.</span>
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1">
             <span className="text-xs text-muted-foreground">Main CV (PDF)</span>
@@ -355,6 +362,11 @@ export function DiverProfileEditor({ initialData }: Props) {
         <Button onClick={onProcessWithAi} disabled={processing} className="w-full sm:w-auto">
           {processing ? "Processing..." : "Process with AI"}
         </Button>
+        {!showFullEditor ? (
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowFullEditor(true)}>
+            Open editor
+          </Button>
+        ) : null}
         {processing || processingProgress > 0 ? (
           <div className="space-y-1">
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -370,6 +382,8 @@ export function DiverProfileEditor({ initialData }: Props) {
         ) : null}
       </section>
 
+      {showFullEditor ? (
+        <>
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Core Profile" />
         <div className="grid gap-3 md:grid-cols-2">
@@ -826,6 +840,8 @@ export function DiverProfileEditor({ initialData }: Props) {
         </Button>
         {message ? <p className="text-sm text-cyan-200">{message}</p> : null}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
