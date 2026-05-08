@@ -367,7 +367,11 @@ export function DiverProfileEditor({ initialData }: Props) {
             ) : null}
           </div>
         </div>
-        <Button onClick={onProcessWithAi} disabled={processing} className="w-full sm:w-auto">
+        <Button
+          onClick={onProcessWithAi}
+          disabled={processing || !mainCv}
+          className="w-full sm:w-auto disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-400"
+        >
           {processing ? "Processing..." : "Process with AI"}
         </Button>
         {!showFullEditor ? (
