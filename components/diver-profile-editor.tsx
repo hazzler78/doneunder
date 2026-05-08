@@ -141,6 +141,17 @@ function buildPresentationCvMarkdown(form: EditorData, ambassadorShortBio: strin
   return lines.join("\n");
 }
 
+function buildEditorFingerprint(input: {
+  form: EditorData;
+  polishedCvMarkdown: string;
+  polishedCvJson: Record<string, unknown> | null;
+  ambassadorPublicHeadline: string;
+  ambassadorShortBio: string;
+  ambassadorHighlights: string[];
+}) {
+  return JSON.stringify(input);
+}
+
 export function DiverProfileEditor({ initialData }: Props) {
   const [form, setForm] = useState<EditorData>(initialData);
   const [mainCv, setMainCv] = useState<File | null>(null);
@@ -154,6 +165,16 @@ export function DiverProfileEditor({ initialData }: Props) {
   const [ambassadorShortBio, setAmbassadorShortBio] = useState(initialData.profile.ambassador_short_bio ?? "");
   const [ambassadorHighlights, setAmbassadorHighlights] = useState<string[]>(
     initialData.profile.ambassador_key_highlights ?? [],
+  );
+  const [lastSavedFingerprint, setLastSavedFingerprint] = useState(() =>
+    buildEditorFingerprint({
+      form: initialData,
+      polishedCvMarkdown: initialData.profile.polished_cv_markdown ?? "",
+      polishedCvJson: (initialData.profile.polished_cv_json as Record<string, unknown> | null) ?? null,
+      ambassadorPublicHeadline: initialData.profile.ambassador_public_headline ?? "",
+      ambassadorShortBio: initialData.profile.ambassador_short_bio ?? "",
+      ambassadorHighlights: initialData.profile.ambassador_key_highlights ?? [],
+    }),
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -202,6 +223,26 @@ export function DiverProfileEditor({ initialData }: Props) {
     () => buildPresentationCvMarkdown(form, ambassadorShortBio, ambassadorHighlights),
     [form, ambassadorShortBio, ambassadorHighlights],
   );
+  const editorFingerprint = useMemo(
+    () =>
+      buildEditorFingerprint({
+        form,
+        polishedCvMarkdown,
+        polishedCvJson,
+        ambassadorPublicHeadline,
+        ambassadorShortBio,
+        ambassadorHighlights,
+      }),
+    [
+      form,
+      polishedCvMarkdown,
+      polishedCvJson,
+      ambassadorPublicHeadline,
+      ambassadorShortBio,
+      ambassadorHighlights,
+    ],
+  );
+  const hasUnsavedChanges = editorFingerprint !== lastSavedFingerprint;
   const missingSummary = useMemo(() => {
     const missing = [
       isMissingValue(form.profile.headline) ? "Headline" : null,
@@ -238,6 +279,55 @@ export function DiverProfileEditor({ initialData }: Props) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const onDocumentClick = (event: MouseEvent) => {
+      if (!hasUnsavedChanges) return;
+      if (event.defaultPrevented) return;
+      if (event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target === "_blank") return;
+      if (anchor.hasAttribute("download")) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+
+      const destination = new URL(anchor.href, window.location.origin);
+      const current = new URL(window.location.href);
+      const isSamePath =
+        destination.pathname === current.pathname &&
+        destination.search === current.search &&
+        destination.hash === current.hash;
+      if (isSamePath) return;
+
+      const confirmed = window.confirm(
+        "You have unsaved CV changes. Leave this page and lose those edits?",
+      );
+      if (!confirmed) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onDocumentClick, true);
+    };
+  }, [hasUnsavedChanges]);
 
   function startProcessingProgress() {
     if (processingIntervalRef.current) {
@@ -347,6 +437,20 @@ export function DiverProfileEditor({ initialData }: Props) {
       setMessage("Upload a main CV PDF first.");
       return;
     }
+    if (hasUnsavedChanges) {
+      const shouldSaveFirst = window.confirm(
+        "You have unsaved CV edits. Click OK to save your changes first, then continue with AI processing.",
+      );
+      if (!shouldSaveFirst) {
+        setMessage("Processing cancelled. Save profile first to keep your manual changes.");
+        return;
+      }
+      const saveOk = await saveProfile(false);
+      if (!saveOk) {
+        setMessage("Could not save your edits, so AI processing was stopped to protect your changes.");
+        return;
+      }
+    }
     setProcessing(true);
     startProcessingProgress();
     setMessage(null);
@@ -400,11 +504,42 @@ export function DiverProfileEditor({ initialData }: Props) {
     setAmbassadorPublicHeadline(data.output.ambassador_page.public_headline);
     setAmbassadorShortBio(data.output.ambassador_page.short_bio);
     setAmbassadorHighlights(data.output.ambassador_page.key_highlights);
+    const nextFingerprint = buildEditorFingerprint({
+      form: {
+        profile: {
+          ...form.profile,
+          headline: data.output.professional_headline,
+          bio: data.output.ambassador_page.short_bio,
+          location: profile.location ?? form.profile.location,
+          mobilization_notice: profile.mobilization_notice ?? form.profile.mobilization_notice,
+          availability_status: profile.availability_status ?? form.profile.availability_status,
+          sat_hours: profile.sat_hours ?? form.profile.sat_hours,
+          dive_hours: profile.dive_hours ?? form.profile.dive_hours,
+          headline_source: "ai",
+          bio_source: "ai",
+        },
+        experiences: profile.experiences.map((item) => ({ ...item, source: "ai" })),
+        certifications: profile.certifications.map((item) => ({ ...item, source: "ai" })),
+        references: profile.references.map((item) => ({
+          name: item.name,
+          company: item.company,
+          phone: item.phone ?? "Not provided",
+          email: item.email,
+          source: "ai",
+        })),
+      },
+      polishedCvMarkdown: data.output.polished_cv_markdown,
+      polishedCvJson: data.output.polished_cv_json as Record<string, unknown>,
+      ambassadorPublicHeadline: data.output.ambassador_page.public_headline,
+      ambassadorShortBio: data.output.ambassador_page.short_bio,
+      ambassadorHighlights: data.output.ambassador_page.key_highlights,
+    });
+    setLastSavedFingerprint(nextFingerprint);
     setShowFullEditor(true);
     setMessage("AI finished. Review the preview, verify details, and click Save profile.");
   }
 
-  async function onSave() {
+  async function saveProfile(showSuccessMessage: boolean) {
     setSaving(true);
     setMessage(null);
     const response = await fetch("/api/diver/profile", {
@@ -425,9 +560,17 @@ export function DiverProfileEditor({ initialData }: Props) {
     setSaving(false);
     if (!response.ok) {
       setMessage("Save failed. Please check required fields and try again.");
-      return;
+      return false;
     }
-    setMessage("Profile saved.");
+    setLastSavedFingerprint(editorFingerprint);
+    if (showSuccessMessage) {
+      setMessage("Profile saved.");
+    }
+    return true;
+  }
+
+  async function onSave() {
+    await saveProfile(true);
   }
 
   return (
