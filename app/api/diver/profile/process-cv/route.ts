@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { generateObject } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { createWorker } from "tesseract.js";
 import { z } from "zod";
 import { AI_DISCLAIMER, aiModel } from "@/lib/ai";
@@ -101,13 +101,8 @@ function splitTextIntoChunks(input: string, size = CHUNK_SIZE, overlap = CHUNK_O
 }
 
 async function extractPdfText(buffer: Buffer) {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const parsed = await parser.getText();
-    return cleanText(parsed.text || "");
-  } finally {
-    await parser.destroy();
-  }
+  const parsed = await pdfParse(buffer);
+  return cleanText(parsed.text || "");
 }
 
 async function extractImageText(buffer: Buffer) {
@@ -151,13 +146,53 @@ async function getAuthenticatedDiver() {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  const { data: userRecord } = await supabase
+  let { data: userRecord } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, role, full_name, username")
     .eq("id", auth.user.id)
     .maybeSingle();
+
+  if (!userRecord) {
+    const fullName =
+      (auth.user.user_metadata?.full_name as string | undefined)?.trim() ||
+      (auth.user.email ? auth.user.email.split("@")[0] : "Diver");
+    const username =
+      (auth.user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
+      (auth.user.email ? auth.user.email.split("@")[0].toLowerCase() : `diver-${auth.user.id.slice(0, 8)}`);
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: auth.user.id,
+          role: "diver",
+          email: auth.user.email ?? `${auth.user.id}@placeholder.local`,
+          username,
+          full_name: fullName,
+        },
+        { onConflict: "id" },
+      )
+      .select("id, role, full_name, username")
+      .maybeSingle();
+
+    if (insertError) {
+      return {
+        error: NextResponse.json(
+          { error: `Profile bootstrap failed: ${insertError.message}` },
+          { status: 403 },
+        ),
+      };
+    }
+    userRecord = inserted ?? null;
+  }
+
   if (!userRecord || userRecord.role !== "diver") {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    return {
+      error: NextResponse.json(
+        { error: "Forbidden. This action requires a diver account." },
+        { status: 403 },
+      ),
+    };
   }
 
   return { diverId: auth.user.id };

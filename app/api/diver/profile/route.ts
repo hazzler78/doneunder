@@ -67,14 +67,53 @@ async function getAuthenticatedDiverId() {
 
   if (!auth.user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
 
-  const { data: userRecord } = await supabase
+  let { data: userRecord } = await supabase
     .from("users")
-    .select("id, role")
+    .select("id, role, full_name, username")
     .eq("id", auth.user.id)
     .maybeSingle();
 
+  if (!userRecord) {
+    const fullName =
+      (auth.user.user_metadata?.full_name as string | undefined)?.trim() ||
+      (auth.user.email ? auth.user.email.split("@")[0] : "Diver");
+    const username =
+      (auth.user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
+      (auth.user.email ? auth.user.email.split("@")[0].toLowerCase() : `diver-${auth.user.id.slice(0, 8)}`);
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: auth.user.id,
+          role: "diver",
+          email: auth.user.email ?? `${auth.user.id}@placeholder.local`,
+          username,
+          full_name: fullName,
+        },
+        { onConflict: "id" },
+      )
+      .select("id, role, full_name, username")
+      .maybeSingle();
+
+    if (insertError) {
+      return {
+        error: NextResponse.json(
+          { error: `Profile bootstrap failed: ${insertError.message}` },
+          { status: 403 },
+        ),
+      };
+    }
+    userRecord = inserted ?? null;
+  }
+
   if (!userRecord || userRecord.role !== "diver") {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+    return {
+      error: NextResponse.json(
+        { error: "Forbidden. This endpoint requires a diver account." },
+        { status: 403 },
+      ),
+    };
   }
 
   return { diverId: auth.user.id, supabase };
