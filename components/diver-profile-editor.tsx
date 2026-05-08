@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import type {
   DiverCertificationInput,
@@ -52,6 +54,78 @@ function SectionTitle({ title }: { title: string }) {
   return <h2 className="text-lg font-semibold">{title}</h2>;
 }
 
+function formatCvDate(value?: string) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
+function buildPresentationCvMarkdown(form: EditorData, ambassadorShortBio: string, ambassadorHighlights: string[]) {
+  const profile = form.profile;
+  const lines: string[] = [];
+
+  lines.push(`# ${profile.headline || "Commercial Diver CV"}`);
+  lines.push("");
+  lines.push(`**Location:** ${profile.location || "Not provided"}`);
+  lines.push(`**Availability:** ${profile.availability_status === "available" ? "Available" : "Deployed"}`);
+  lines.push(`**Mobilization:** ${profile.mobilization_notice || "Not provided"}`);
+  lines.push(`**Sat Hours:** ${profile.sat_hours > 0 ? profile.sat_hours.toLocaleString() : "Not declared"}`);
+  lines.push(`**Dive Hours:** ${profile.dive_hours > 0 ? profile.dive_hours.toLocaleString() : "Not declared"}`);
+  lines.push("");
+  lines.push("## Professional Summary");
+  lines.push(ambassadorShortBio || profile.bio || "Not provided.");
+  lines.push("");
+
+  if (ambassadorHighlights.length > 0) {
+    lines.push("## Key Highlights");
+    ambassadorHighlights.forEach((item) => lines.push(`- ${item}`));
+    lines.push("");
+  }
+
+  lines.push("## Professional Experience");
+  if (form.experiences.length === 0) {
+    lines.push("- Not provided.");
+  } else {
+    form.experiences.forEach((exp) => {
+      const dateStart = formatCvDate(exp.date_start);
+      const dateEnd = formatCvDate(exp.date_end) ?? "Present";
+      const dateRange = dateStart ? `${dateStart} - ${dateEnd}` : null;
+      const headingParts = [exp.role_title, exp.company].filter(Boolean).join(" | ");
+      lines.push(`- **${headingParts || "Experience"}**`);
+      const meta = [exp.project_name, exp.location, dateRange].filter(Boolean).join(" • ");
+      if (meta) lines.push(`  - ${meta}`);
+      if (exp.summary) lines.push(`  - ${exp.summary}`);
+    });
+  }
+  lines.push("");
+
+  lines.push("## Certifications");
+  if (form.certifications.length === 0) {
+    lines.push("- Not provided.");
+  } else {
+    form.certifications.forEach((cert) => {
+      const issue = formatCvDate(cert.issue_date) || "Not provided";
+      const expiry = formatCvDate(cert.expiry_date) || "Not provided";
+      const certId = cert.cert_number ? ` (#${cert.cert_number})` : "";
+      lines.push(`- **${cert.name}${certId}** — Issued: ${issue}, Expires: ${expiry}`);
+    });
+  }
+  lines.push("");
+
+  lines.push("## References");
+  if (form.references.length === 0) {
+    lines.push("- Available on request.");
+  } else {
+    form.references.forEach((ref) => {
+      const detail = [ref.company, ref.phone, ref.email].filter(Boolean).join(" • ");
+      lines.push(`- **${ref.name}**${detail ? ` — ${detail}` : ""}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
 export function DiverProfileEditor({ initialData }: Props) {
   const [form, setForm] = useState<EditorData>(initialData);
   const [mainCv, setMainCv] = useState<File | null>(null);
@@ -73,6 +147,70 @@ export function DiverProfileEditor({ initialData }: Props) {
     () => form.certifications.filter((cert) => !cert.expiry_date),
     [form.certifications],
   );
+  const cvChecklist = useMemo(() => {
+    const checks = [
+      { label: "Headline is filled", ok: Boolean(form.profile.headline.trim()) },
+      { label: "Professional summary is filled", ok: Boolean((ambassadorShortBio || form.profile.bio).trim()) },
+      { label: "Location is filled", ok: Boolean(form.profile.location.trim()) },
+      { label: "Mobilization notice is filled", ok: Boolean(form.profile.mobilization_notice.trim()) },
+      { label: "At least 1 experience added", ok: form.experiences.length > 0 },
+      { label: "At least 1 certification added", ok: form.certifications.length > 0 },
+      {
+        label: "All certifications have expiry dates",
+        ok: form.certifications.length === 0 || form.certifications.every((cert) => Boolean(cert.expiry_date?.trim())),
+      },
+      { label: "At least 1 reference added", ok: form.references.length > 0 },
+    ];
+    const passed = checks.filter((item) => item.ok).length;
+    const score = Math.round((passed / checks.length) * 100);
+    return { checks, score };
+  }, [form, ambassadorShortBio]);
+  const presentationCvMarkdown = useMemo(
+    () => buildPresentationCvMarkdown(form, ambassadorShortBio, ambassadorHighlights),
+    [form, ambassadorShortBio, ambassadorHighlights],
+  );
+
+  function applyQuickFixes() {
+    setForm((prev) => {
+      const next = { ...prev };
+
+      if (!next.profile.headline.trim()) {
+        next.profile = { ...next.profile, headline: "Commercial Diver | Offshore Projects" };
+      }
+      if (!next.profile.location.trim()) {
+        next.profile = { ...next.profile, location: "Not provided" };
+      }
+      if (!next.profile.mobilization_notice.trim()) {
+        next.profile = { ...next.profile, mobilization_notice: "Available on short notice" };
+      }
+      if (next.experiences.length === 0) {
+        next.experiences = [{ company: "Not provided", role_title: "Commercial Diver", summary: "Project details to be added.", source: "manual" }];
+      }
+      if (next.certifications.length === 0) {
+        next.certifications = [{ name: "Not provided", expiry_date: "2030-12-31", source: "manual" }];
+      } else {
+        next.certifications = next.certifications.map((cert) => ({
+          ...cert,
+          expiry_date: cert.expiry_date?.trim() ? cert.expiry_date : "2030-12-31",
+        }));
+      }
+      if (next.references.length === 0) {
+        next.references = [{ name: "Reference available on request", phone: "Not provided", source: "manual" }];
+      }
+      if (!(ambassadorShortBio || next.profile.bio).trim()) {
+        setAmbassadorShortBio("Experienced commercial diver available for offshore and onshore assignments.");
+      }
+      return next;
+    });
+
+    if (ambassadorHighlights.length === 0) {
+      setAmbassadorHighlights([
+        "Offshore commercial diving experience",
+        "Ready for short-notice mobilization",
+        "Safety-focused project delivery",
+      ]);
+    }
+  }
 
   function onCertFilesSelected(fileList: FileList | null) {
     if (!fileList) return;
@@ -159,7 +297,7 @@ export function DiverProfileEditor({ initialData }: Props) {
         ...form,
         profile: {
           ...form.profile,
-          polished_cv_markdown: polishedCvMarkdown,
+          polished_cv_markdown: presentationCvMarkdown,
           polished_cv_json: polishedCvJson,
           ambassador_public_headline: ambassadorPublicHeadline,
           ambassador_short_bio: ambassadorShortBio,
@@ -332,13 +470,63 @@ export function DiverProfileEditor({ initialData }: Props) {
 
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="CV Preview" />
-        <p className="text-xs text-amber-300">AI-generated - always verify before sharing with employers.</p>
-        <textarea
-          className="min-h-72 w-full rounded-md border bg-transparent p-2 font-mono text-sm"
-          value={polishedCvMarkdown}
-          onChange={(event) => setPolishedCvMarkdown(event.target.value)}
-          placeholder="Your polished CV will appear here after AI processing."
-        />
+        <p className="text-xs text-amber-300">
+          Presentation-ready CV generated from your profile data. Minimal editing needed before saving.
+        </p>
+        <div className="rounded-md border border-cyan-900/60 bg-cyan-950/20 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-cyan-100">CV quality score: {cvChecklist.score}%</p>
+            <Button size="sm" variant="secondary" onClick={applyQuickFixes}>
+              Auto-fill missing basics
+            </Button>
+          </div>
+          <ul className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+            {cvChecklist.checks.map((item) => (
+              <li key={item.label} className={item.ok ? "text-emerald-300" : "text-amber-300"}>
+                {item.ok ? "✓" : "•"} {item.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="max-h-96 overflow-y-auto rounded-md border bg-[#071725] p-4 text-sm">
+          {presentationCvMarkdown.trim() ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h1: ({ children }) => <h1 className="mb-3 mt-5 text-xl font-semibold text-cyan-100">{children}</h1>,
+                h2: ({ children }) => <h2 className="mb-2 mt-4 text-lg font-semibold text-cyan-100">{children}</h2>,
+                h3: ({ children }) => <h3 className="mb-2 mt-3 text-base font-semibold text-cyan-100">{children}</h3>,
+                p: ({ children }) => <p className="mb-3 leading-relaxed text-slate-100">{children}</p>,
+                ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 text-slate-100">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 text-slate-100">{children}</ol>,
+                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-cyan-100">{children}</strong>,
+                em: ({ children }) => <em className="italic text-slate-200">{children}</em>,
+                code: ({ children }) => (
+                  <code className="rounded bg-slate-900/80 px-1 py-0.5 font-mono text-xs text-cyan-200">
+                    {children}
+                  </code>
+                ),
+                img: () => null,
+              }}
+            >
+              {presentationCvMarkdown}
+            </ReactMarkdown>
+          ) : (
+            <p className="text-sm text-muted-foreground">Your polished CV will appear here after AI processing.</p>
+          )}
+        </div>
+        <details className="rounded-md border border-dashed p-3">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            Advanced only: raw AI markdown
+          </summary>
+          <textarea
+            className="mt-3 min-h-72 w-full rounded-md border bg-transparent p-2 font-mono text-sm"
+            value={polishedCvMarkdown}
+            onChange={(event) => setPolishedCvMarkdown(event.target.value)}
+            placeholder="Raw AI markdown appears here."
+          />
+        </details>
       </section>
 
       <section className="space-y-3 rounded-lg border p-4">
