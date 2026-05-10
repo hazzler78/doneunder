@@ -15,10 +15,26 @@ export default async function LoginPage({
       <Card>
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <CardDescription>Access your diver dashboard and CV tools.</CardDescription>
+          <CardDescription>
+            One account for divers and companies. After you sign in, we send you to the right dashboard.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {message ? <p className="text-sm text-amber-300">{message}</p> : null}
+          <div className="grid gap-2 rounded-md border border-border/60 bg-muted/30 p-3 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-cyan-200">New — Diver (free)</p>
+              <Link href="/register" className="text-cyan-300 underline">
+                Create diver account
+              </Link>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-cyan-200">New — Company</p>
+              <Link href="/pricing" className="text-cyan-300 underline">
+                View plans &amp; subscribe
+              </Link>
+            </div>
+          </div>
           <form action={loginAction} className="space-y-3">
             <label className="block space-y-1">
               <span className="text-xs text-muted-foreground">Email</span>
@@ -45,10 +61,7 @@ export default async function LoginPage({
             </Button>
           </form>
           <p className="text-sm text-muted-foreground">
-            New diver?{" "}
-            <Link href="/register" className="text-cyan-300 underline">
-              Create account
-            </Link>
+            Admin access uses the same sign-in; your account must be marked as admin in the system.
           </p>
         </CardContent>
       </Card>

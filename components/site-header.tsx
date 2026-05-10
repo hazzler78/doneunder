@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { Anchor, BriefcaseBusiness, Home, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const links = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
-  { href: "/pricing", label: "Pricing", icon: Anchor },
-  { href: "/how-it-works", label: "How It Works", icon: ShieldCheck },
+  { href: "/", label: "Home" },
+  { href: "/jobs", label: "Jobs" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/how-it-works", label: "How It Works" },
 ];
 
 export function SiteHeader() {
@@ -28,18 +27,8 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/register">
-            <Button variant="secondary" size="sm">
-              Join as Diver
-            </Button>
-          </Link>
           <Link href="/login">
-            <Button variant="outline" size="sm">
-              Login
-            </Button>
-          </Link>
-          <Link href="/dashboard/company">
-            <Button size="sm">For Companies</Button>
+            <Button size="sm">Sign in</Button>
           </Link>
         </div>
       </div>

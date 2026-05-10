@@ -19,12 +19,12 @@ export default function Home() {
             offshore contractors with AI-powered matching and verification-first trust signals.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Link href="/dashboard/diver">
-              <Button size="lg">Join as Diver (Free)</Button>
+            <Link href="/login">
+              <Button size="lg">Get started</Button>
             </Link>
-            <Link href="/dashboard/company">
+            <Link href="/pricing">
               <Button size="lg" variant="outline">
-                For Companies
+                Company plans
               </Button>
             </Link>
           </div>

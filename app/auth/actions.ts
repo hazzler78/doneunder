@@ -23,6 +23,22 @@ export async function loginAction(formData: FormData) {
     redirect(withMessage("/login", error.message));
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.id) {
+    redirect(withMessage("/login", "Signed in, but user session was not established."));
+  }
+
+  const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
+  const role = userRow?.role ?? "diver";
+
+  if (role === "admin") {
+    redirect("/dashboard/admin");
+  }
+  if (role === "company") {
+    redirect("/dashboard/company");
+  }
   redirect("/dashboard/diver");
 }
 
