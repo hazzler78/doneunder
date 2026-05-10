@@ -37,14 +37,18 @@ export default async function LoginPage({
           </div>
           <form action={loginAction} className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">Email</span>
+              <span className="text-xs text-muted-foreground">Email or username</span>
               <input
-                type="email"
+                type="text"
                 name="email"
                 required
+                autoComplete="username"
                 className="w-full rounded-md border bg-transparent p-2"
-                placeholder="you@example.com"
+                placeholder="you@example.com or janediver"
               />
+              <span className="text-xs text-slate-500">
+                Use the same email you registered with, or your public username — not your display name.
+              </span>
             </label>
             <label className="block space-y-1">
               <span className="text-xs text-muted-foreground">Password</span>

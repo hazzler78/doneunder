@@ -9,12 +9,40 @@ function withMessage(path: string, message: string) {
   return `${path}?${query}`;
 }
 
+async function resolveEmailForLogin(identifierRaw: string) {
+  const identifier = identifierRaw.trim();
+  if (!identifier) return null;
+
+  if (identifier.includes("@")) {
+    return identifier.toLowerCase();
+  }
+
+  const normalizedUser = identifier.toLowerCase();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!serviceKey || !serviceUrl) {
+    return null;
+  }
+
+  const admin = createClient(serviceUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data } = await admin.from("users").select("email").eq("username", normalizedUser).maybeSingle();
+  const email = data?.email?.trim().toLowerCase();
+  return email || null;
+}
+
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim();
+  const identifier = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
+  if (!identifier || !password) {
     redirect(withMessage("/login", "Email and password are required."));
+  }
+
+  const email = await resolveEmailForLogin(identifier);
+  if (!email) {
+    redirect(withMessage("/login", "Invalid login credentials."));
   }
 
   const supabase = await createSupabaseServerClient();

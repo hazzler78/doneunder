@@ -39,9 +39,13 @@ export default async function RegisterPage({
                 className="w-full rounded-md border bg-transparent p-2"
                 placeholder="janediver"
               />
+              <span className="text-xs text-slate-500">
+                Public handle for your ambassador page (for example doneunder.ai/janediver). This is separate from sign-in —
+                sign-in uses your email below or this username plus password on the login page.
+              </span>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">Email</span>
+              <span className="text-xs text-muted-foreground">Email (used to sign in)</span>
               <input
                 type="email"
                 name="email"
