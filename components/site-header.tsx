@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { logoutAction } from "@/app/auth/actions";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const links = [
   { href: "/", label: "Home" },
@@ -8,7 +10,24 @@ const links = [
   { href: "/how-it-works", label: "How It Works" },
 ];
 
-export function SiteHeader() {
+function dashboardHrefForRole(role: string | undefined) {
+  if (role === "admin") return "/dashboard/admin";
+  if (role === "company") return "/dashboard/company";
+  return "/dashboard/diver";
+}
+
+export async function SiteHeader() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let dashboardHref = "/dashboard/diver";
+  if (user?.id) {
+    const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
+    dashboardHref = dashboardHrefForRole(userRow?.role);
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-[#061322]/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
@@ -27,9 +46,22 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <Link href="/login">
-            <Button size="sm">Sign in</Button>
-          </Link>
+          {user ? (
+            <>
+              <Link href={dashboardHref}>
+                <Button size="sm">Dashboard</Button>
+              </Link>
+              <form action={logoutAction}>
+                <Button type="submit" variant="outline" size="sm">
+                  Sign out
+                </Button>
+              </form>
+            </>
+          ) : (
+            <Link href="/login">
+              <Button size="sm">Sign in</Button>
+            </Link>
+          )}
         </div>
       </div>
     </header>
