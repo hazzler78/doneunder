@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -73,16 +74,26 @@ export async function registerAction(formData: FormData) {
     redirect(withMessage("/register", "Registration failed. Please try again."));
   }
 
-  const { error: userInsertError } = await supabase.from("users").upsert(
-    {
-      id: data.user.id,
-      role: "diver",
-      email,
-      username,
-      full_name: fullName,
-    },
-    { onConflict: "id" },
-  );
+  const userRow = {
+    id: data.user.id,
+    role: "diver" as const,
+    email,
+    username,
+    full_name: fullName,
+  };
+
+  // Bootstrap `users` with service role: anon session has no INSERT on `users` RLS,
+  // and email-confirm flow may leave no session yet (auth.uid() null).
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const upsertClient =
+    serviceKey && serviceUrl
+      ? createClient(serviceUrl, serviceKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : supabase;
+
+  const { error: userInsertError } = await upsertClient.from("users").upsert(userRow, { onConflict: "id" });
 
   if (userInsertError) {
     redirect(withMessage("/register", userInsertError.message));
