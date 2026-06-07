@@ -6,7 +6,9 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { createWorker } from "tesseract.js";
 import { z } from "zod";
 import { AI_DISCLAIMER, aiModel } from "@/lib/ai";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
+import { aiCvOutputSchema } from "@/lib/diver-profile";
+import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
 const BUCKET_NAME = "diver-documents";
 const MAX_MAIN_CV_MB = 12;
@@ -15,57 +17,6 @@ const MAX_CERT_FILES = 10;
 const MAX_SOURCE_TEXT_CHARS = 60000;
 const CHUNK_SIZE = 6000;
 const CHUNK_OVERLAP = 400;
-
-const aiOutputSchema = z.object({
-  professional_headline: z.string().min(1).max(220),
-  polished_cv_markdown: z.string().min(1),
-  polished_cv_json: z.object({
-    location: z.string().optional(),
-    mobilization_notice: z.string().optional(),
-    availability_status: z.enum(["available", "deployed"]).optional(),
-    sat_hours: z.number().int().min(0).optional(),
-    dive_hours: z.number().int().min(0).optional(),
-    experiences: z
-      .array(
-        z.object({
-          company: z.string().min(1),
-          project_name: z.string().optional(),
-          location: z.string().optional(),
-          role_title: z.string().min(1),
-          date_start: z.string().optional(),
-          date_end: z.string().optional(),
-          summary: z.string().optional(),
-        }),
-      )
-      .default([]),
-    certifications: z
-      .array(
-        z.object({
-          name: z.string().min(1),
-          issue_date: z.string().optional(),
-          expiry_date: z.string().optional(),
-          cert_number: z.string().optional(),
-          issuing_body: z.string().optional(),
-        }),
-      )
-      .default([]),
-    references: z
-      .array(
-        z.object({
-          name: z.string().min(1),
-          company: z.string().optional(),
-          phone: z.string().optional(),
-          email: z.string().optional(),
-        }),
-      )
-      .default([]),
-  }),
-  ambassador_page: z.object({
-    public_headline: z.string().min(1).max(220),
-    short_bio: z.string().min(1).max(1200),
-    key_highlights: z.array(z.string().min(1).max(180)).max(12),
-  }),
-});
 
 const cvSystemPrompt = `You are a specialist commercial diving CV and profile writer for doneunder.ai.
 Turn raw CVs and certification documents into a polished, accurate profile for offshore recruiters.
@@ -133,75 +84,10 @@ function validateFile(file: File, maxMb: number) {
   if (bytesToMb(file.size) > maxMb) throw new Error(`${file.name} exceeds ${maxMb}MB.`);
 }
 
-function normalizeDate(value?: string) {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return trimmed;
-}
-
-async function getAuthenticatedDiver() {
-  const supabase = await createSupabaseServerClient();
-  const serviceSupabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
-  );
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-
-  let { data: userRecord } = await serviceSupabase
-    .from("users")
-    .select("id, role, full_name, username")
-    .eq("id", auth.user.id)
-    .maybeSingle();
-
-  if (!userRecord) {
-    const fullName =
-      (auth.user.user_metadata?.full_name as string | undefined)?.trim() ||
-      (auth.user.email ? auth.user.email.split("@")[0] : "Diver");
-    const username =
-      (auth.user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
-      (auth.user.email ? auth.user.email.split("@")[0].toLowerCase() : `diver-${auth.user.id.slice(0, 8)}`);
-
-    const { data: inserted, error: insertError } = await serviceSupabase
-      .from("users")
-      .upsert(
-        {
-          id: auth.user.id,
-          role: "diver",
-          email: auth.user.email ?? `${auth.user.id}@placeholder.local`,
-          username,
-          full_name: fullName,
-        },
-        { onConflict: "id" },
-      )
-      .select("id, role, full_name, username")
-      .maybeSingle();
-
-    if (!insertError) {
-      userRecord = inserted ?? null;
-    }
-  }
-
-  if (userRecord && userRecord.role !== "diver") {
-    return {
-      error: NextResponse.json(
-        { error: "Forbidden. This action requires a diver account." },
-        { status: 403 },
-      ),
-    };
-  }
-
-  return { diverId: auth.user.id };
-}
-
 export async function POST(req: Request) {
   try {
     ensureEnv();
-    const authResult = await getAuthenticatedDiver();
+    const authResult = await getAuthenticatedDiverContext();
     if ("error" in authResult) return authResult.error;
 
     const formData = await req.formData();
@@ -238,6 +124,7 @@ export async function POST(req: Request) {
 
     const importBatchId = randomUUID();
     const userFolder = `${authResult.diverId}/${importBatchId}`;
+    const diverId = authResult.diverId;
 
     const cvBuffer = Buffer.from(await mainCvFile.arrayBuffer());
     const cvPath = `${userFolder}/main-cv-${Date.now()}.pdf`;
@@ -314,99 +201,18 @@ export async function POST(req: Request) {
     const aiResult = await generateObject({
       model: aiModel,
       system: cvSystemPrompt,
-      schema: aiOutputSchema,
+      schema: aiCvOutputSchema,
       prompt: finalPrompt,
     });
 
     const parsed = aiResult.object;
-    const profile = parsed.polished_cv_json;
     const nowIso = new Date().toISOString();
+    const payload = aiCvOutputToPayload(parsed, { sourceRef: cvPath, importBatchId });
 
-    await serviceSupabase.from("diver_profiles").upsert(
-      {
-        user_id: authResult.diverId,
-        headline: parsed.professional_headline,
-        bio: parsed.ambassador_page.short_bio,
-        location: profile.location ?? "",
-        mobilization_notice: profile.mobilization_notice ?? "",
-        availability_status: profile.availability_status ?? "available",
-        sat_hours: profile.sat_hours ?? 0,
-        dive_hours: profile.dive_hours ?? 0,
-        polished_cv_markdown: parsed.polished_cv_markdown,
-        polished_cv_json: profile,
-        ambassador_public_headline: parsed.ambassador_page.public_headline,
-        ambassador_short_bio: parsed.ambassador_page.short_bio,
-        ambassador_key_highlights: parsed.ambassador_page.key_highlights,
-        headline_source: "ai",
-        headline_source_ref: cvPath,
-        bio_source: "ai",
-        bio_source_ref: cvPath,
-        import_batch_id: importBatchId,
-        updated_at: nowIso,
-      },
-      { onConflict: "user_id" },
-    );
-
-    await Promise.all([
-      serviceSupabase.from("diver_experiences").delete().eq("diver_id", authResult.diverId),
-      serviceSupabase.from("diver_certifications").delete().eq("diver_id", authResult.diverId),
-      serviceSupabase.from("diver_references").delete().eq("diver_id", authResult.diverId),
-    ]);
-
-    if (profile.experiences.length > 0) {
-      await serviceSupabase.from("diver_experiences").insert(
-        profile.experiences.map((item, index) => ({
-          diver_id: authResult.diverId,
-          company: item.company,
-          project_name: item.project_name ?? null,
-          location: item.location ?? null,
-          role_title: item.role_title,
-          date_start: normalizeDate(item.date_start),
-          date_end: normalizeDate(item.date_end),
-          summary: item.summary ?? null,
-          sort_order: index,
-          source: "ai",
-          source_ref: cvPath,
-          import_batch_id: importBatchId,
-          updated_at: nowIso,
-        })),
-      );
-    }
-
-    if (profile.certifications.length > 0) {
-      await serviceSupabase.from("diver_certifications").insert(
-        profile.certifications.map((item, index) => ({
-          diver_id: authResult.diverId,
-          name: item.name,
-          issue_date: normalizeDate(item.issue_date),
-          expiry_date: normalizeDate(item.expiry_date),
-          cert_number: item.cert_number ?? null,
-          issuing_body: item.issuing_body ?? null,
-          sort_order: index,
-          source: "ai",
-          source_ref: cvPath,
-          import_batch_id: importBatchId,
-          updated_at: nowIso,
-        })),
-      );
-    }
-
-    if (profile.references.length > 0) {
-      await serviceSupabase.from("diver_references").insert(
-        profile.references.map((item, index) => ({
-          diver_id: authResult.diverId,
-          name: item.name,
-          company: item.company ?? null,
-          phone: item.phone ?? "Not provided",
-          email: item.email ?? null,
-          sort_order: index,
-          source: "ai",
-          source_ref: cvPath,
-          import_batch_id: importBatchId,
-          updated_at: nowIso,
-        })),
-      );
-    }
+    await saveDiverProfile(serviceSupabase, diverId, payload, {
+      importBatchId,
+      cvLastProcessedAt: nowIso,
+    });
 
     return NextResponse.json({
       ok: true,

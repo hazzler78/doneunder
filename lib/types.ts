@@ -1,6 +1,7 @@
 export type UserRole = "diver" | "company" | "admin";
 
-export type DiverProfile = {
+/** Demo/marketing card data — not the canonical DB profile model (see lib/diver-profile.ts). */
+export type MockDiverCard = {
   id: string;
   username: string;
   fullName: string;

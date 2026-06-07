@@ -546,15 +546,15 @@ export function DiverProfileEditor({ initialData }: Props) {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...form,
-        profile: {
-          ...form.profile,
-          polished_cv_markdown: presentationCvMarkdown,
-          polished_cv_json: polishedCvJson,
-          ambassador_public_headline: ambassadorPublicHeadline,
-          ambassador_short_bio: ambassadorShortBio,
-          ambassador_key_highlights: ambassadorHighlights,
-        },
+        ...form.profile,
+        experiences: form.experiences,
+        certifications: form.certifications,
+        references: form.references,
+        polished_cv_markdown: presentationCvMarkdown,
+        polished_cv_json: polishedCvJson,
+        ambassador_public_headline: ambassadorPublicHeadline,
+        ambassador_short_bio: ambassadorShortBio,
+        ambassador_key_highlights: ambassadorHighlights,
       }),
     });
     setSaving(false);
