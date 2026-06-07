@@ -42,14 +42,25 @@ export async function loginAction(formData: FormData) {
 
   const email = await resolveEmailForLogin(identifier);
   if (!email) {
-    redirect(withMessage("/login", "Invalid login credentials."));
+    redirect(
+      withMessage(
+        "/login",
+        identifier.includes("@")
+          ? "Invalid login credentials."
+          : `No account found for username "${identifier}". Sign in with your email or check spelling.`,
+      ),
+    );
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(withMessage("/login", error.message));
+    const message =
+      error.message === "Invalid login credentials"
+        ? `Invalid login credentials for ${email}. If this is a new address, create an account at /register or ask an admin to bootstrap the user in Supabase Auth.`
+        : error.message;
+    redirect(withMessage("/login", message));
   }
 
   const {

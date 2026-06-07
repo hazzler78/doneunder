@@ -1,10 +1,24 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 
 export async function logAiInteraction(payload: Record<string, unknown>) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) return;
+  try {
+    const supabase = createServiceSupabaseClient();
+    await supabase.from("ai_interactions").insert(payload);
+  } catch {
+    // Audit logging must not break primary flows.
+  }
+}
 
-  const supabase = createClient(url, key, { auth: { autoRefreshToken: false } });
-  await supabase.from("ai_interactions").insert(payload);
+export async function logAgentInteraction(input: {
+  actorId?: string | null;
+  feature: string;
+  input: unknown;
+  output: unknown;
+}) {
+  await logAiInteraction({
+    actor_id: input.actorId ?? null,
+    feature: input.feature,
+    input: typeof input.input === "string" ? input.input : JSON.stringify(input.input),
+    output: input.output,
+  });
 }

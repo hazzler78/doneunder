@@ -44,10 +44,13 @@ copy .env.example .env.local
 - `STRIPE_SECRET_KEY` (optional, required to enable billing)
 - `STRIPE_WEBHOOK_SECRET` (optional, required to enable billing)
 - `STRIPE_PRICE_149`, `STRIPE_PRICE_199`, `STRIPE_PRICE_249` (optional, required to enable billing)
+- `HERMES_AGENT_SECRET` (optional, required for Telegram/Hermes agent API routes)
+
+Hermes agent integration guide: `docs/hermes-diver-profile.md`
 
 1. Run database SQL in Supabase:
 
-- `supabase/migrations/001_init.sql`
+- `supabase/migrations/001_init.sql` through `006_agent_threads.sql`
 - `supabase/seed.sql`
 
 1. Start dev server:

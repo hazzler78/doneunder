@@ -8,3 +8,7 @@ export function checkEnv() {
   const missing = requiredEnv.filter((key) => !process.env[key]);
   return { missing, ok: missing.length === 0 };
 }
+
+export function isHermesAgentConfigured() {
+  return Boolean(process.env.HERMES_AGENT_SECRET?.trim());
+}
