@@ -182,12 +182,57 @@ export function buildPolishedCvMarkdown(payload: DiverProfilePayload): string {
   return lines.join("\n");
 }
 
+function effectiveHeadline(payload: Pick<DiverProfilePayload, "headline" | "ambassador_public_headline">) {
+  return payload.headline.trim() || payload.ambassador_public_headline?.trim() || "";
+}
+
+function effectiveBio(payload: Pick<DiverProfilePayload, "bio" | "ambassador_short_bio">) {
+  return payload.bio.trim() || payload.ambassador_short_bio?.trim() || "";
+}
+
+/** Fills empty core fields from ambassador copy before publish validation. */
+export function normalizeProfileForPublish(current: DiverProfileFull): DiverProfilePayload {
+  const headline = effectiveHeadline({
+    headline: current.profile.headline,
+    ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
+  });
+  const bio = effectiveBio({
+    bio: current.profile.bio,
+    ambassador_short_bio: current.profile.ambassador_short_bio ?? undefined,
+  });
+
+  return {
+    headline,
+    bio,
+    location: current.profile.location,
+    mobilization_notice: current.profile.mobilization_notice,
+    availability_status: current.profile.availability_status,
+    sat_hours: current.profile.sat_hours,
+    dive_hours: current.profile.dive_hours,
+    polished_cv_markdown: current.profile.polished_cv_markdown ?? undefined,
+    polished_cv_json: current.profile.polished_cv_json,
+    ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
+    ambassador_short_bio: current.profile.ambassador_short_bio ?? undefined,
+    ambassador_key_highlights: current.profile.ambassador_key_highlights,
+    headline_source: current.profile.headline_source,
+    headline_source_ref: current.profile.headline_source_ref ?? undefined,
+    bio_source: current.profile.bio_source,
+    bio_source_ref: current.profile.bio_source_ref ?? undefined,
+    import_batch_id: current.profile.import_batch_id,
+    experiences: current.experiences,
+    certifications: current.certifications,
+    references: current.references,
+  };
+}
+
 export function validateDiverProfile(payload: DiverProfilePayload): ProfileValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!payload.headline.trim()) errors.push("Headline is required.");
-  if (!payload.bio.trim()) warnings.push("Bio is empty.");
+  if (!effectiveHeadline(payload)) {
+    errors.push("Headline is required. Add a Headline or Ambassador public headline, then save your profile.");
+  }
+  if (!effectiveBio(payload)) warnings.push("Bio is empty.");
   if (!payload.location.trim()) warnings.push("Location is empty.");
   if (payload.certifications.length === 0) warnings.push("No certifications listed.");
   if (payload.experiences.length === 0) warnings.push("No professional experience listed.");
@@ -394,28 +439,21 @@ export async function patchDiverProfile(
 
 export async function publishDiverProfile(supabase: DbClient, diverId: string) {
   const current = await getDiverProfile(supabase, diverId);
-  const payload: DiverProfilePayload = {
-    headline: current.profile.headline,
-    bio: current.profile.bio,
-    location: current.profile.location,
-    mobilization_notice: current.profile.mobilization_notice,
-    availability_status: current.profile.availability_status,
-    sat_hours: current.profile.sat_hours,
-    dive_hours: current.profile.dive_hours,
-    polished_cv_markdown: current.profile.polished_cv_markdown ?? undefined,
-    polished_cv_json: current.profile.polished_cv_json,
-    ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
-    ambassador_short_bio: current.profile.ambassador_short_bio ?? undefined,
-    ambassador_key_highlights: current.profile.ambassador_key_highlights,
-    headline_source: current.profile.headline_source,
-    headline_source_ref: current.profile.headline_source_ref ?? undefined,
-    bio_source: current.profile.bio_source,
-    bio_source_ref: current.profile.bio_source_ref ?? undefined,
-    import_batch_id: current.profile.import_batch_id,
-    experiences: current.experiences,
-    certifications: current.certifications,
-    references: current.references,
-  };
+
+  const { data: existingRow } = await supabase.from("diver_profiles").select("user_id").eq("user_id", diverId).maybeSingle();
+  if (!existingRow) {
+    return {
+      ok: false as const,
+      validation: {
+        ok: false,
+        errors: ["No saved profile yet. Click Save profile before publishing."],
+        warnings: [],
+      },
+      profile: current,
+    };
+  }
+
+  const payload = normalizeProfileForPublish(current);
 
   const validation = validateDiverProfile(payload);
   if (!validation.ok) {
@@ -423,9 +461,18 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
   }
 
   const nowIso = new Date().toISOString();
+  const syncScalars: Record<string, string> = {};
+  if (!current.profile.headline.trim() && payload.headline) syncScalars.headline = payload.headline;
+  if (!current.profile.bio.trim() && payload.bio) syncScalars.bio = payload.bio;
+
   const { error } = await supabase
     .from("diver_profiles")
-    .update({ profile_status: "published", published_at: nowIso, updated_at: nowIso })
+    .update({
+      profile_status: "published",
+      published_at: nowIso,
+      updated_at: nowIso,
+      ...syncScalars,
+    })
     .eq("user_id", diverId);
 
   if (error) {

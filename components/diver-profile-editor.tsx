@@ -21,6 +21,8 @@ type EditorData = {
 
 type Props = {
   initialData: EditorData;
+  initialProfileStatus?: "draft" | "published";
+  initialPublishedAt?: string | null;
 };
 
 type AiProcessResponse = {
@@ -152,7 +154,11 @@ function buildEditorFingerprint(input: {
   return JSON.stringify(input);
 }
 
-export function DiverProfileEditor({ initialData }: Props) {
+export function DiverProfileEditor({
+  initialData,
+  initialProfileStatus = "draft",
+  initialPublishedAt = null,
+}: Props) {
   const [form, setForm] = useState<EditorData>(initialData);
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certFiles, setCertFiles] = useState<File[]>([]);
@@ -177,8 +183,20 @@ export function DiverProfileEditor({ initialData }: Props) {
     }),
   );
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [profileStatus, setProfileStatus] = useState(initialProfileStatus);
+  const [publishedAt, setPublishedAt] = useState(initialPublishedAt);
   const [message, setMessage] = useState<string | null>(null);
-  const [showFullEditor, setShowFullEditor] = useState(false);
+  const [showFullEditor, setShowFullEditor] = useState(
+    () =>
+      Boolean(
+        initialData.profile.headline.trim() ||
+          initialData.profile.bio.trim() ||
+          initialData.profile.ambassador_public_headline?.trim() ||
+          initialData.experiences.length ||
+          initialData.certifications.length,
+      ),
+  );
   const mainCvInputRef = useRef<HTMLInputElement | null>(null);
   const certInputRef = useRef<HTMLInputElement | null>(null);
   const processingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -571,6 +589,37 @@ export function DiverProfileEditor({ initialData }: Props) {
 
   async function onSave() {
     await saveProfile(true);
+  }
+
+  async function onPublish() {
+    setPublishing(true);
+    setMessage(null);
+
+    const saved = await saveProfile(false);
+    if (!saved) {
+      setPublishing(false);
+      setMessage("Could not publish. Save your profile first and ensure Headline is filled in.");
+      return;
+    }
+
+    const response = await fetch("/api/diver/profile/publish", { method: "POST" });
+    const data = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+      validation?: { errors: string[]; warnings: string[] };
+    };
+
+    setPublishing(false);
+
+    if (!response.ok) {
+      const details = data.validation?.errors?.join(" ") ?? "";
+      setMessage(`${data.error ?? "Publish failed."}${details ? ` ${details}` : ""}`);
+      return;
+    }
+
+    setProfileStatus("published");
+    setPublishedAt(new Date().toISOString());
+    setMessage("Profile published. Your ambassador page is now publicly visible.");
   }
 
   return (
@@ -1128,14 +1177,30 @@ export function DiverProfileEditor({ initialData }: Props) {
         </div>
       </section>
 
-      <div className="flex items-center gap-3">
-        <Button onClick={onSave} disabled={saving}>
-          {saving ? "Saving..." : "Save profile"}
-        </Button>
-        {message ? <p className="text-sm text-cyan-200">{message}</p> : null}
-      </div>
         </>
       ) : null}
+
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border/70 bg-muted/20 p-3">
+        <Button onClick={onSave} disabled={saving || publishing}>
+          {saving ? "Saving..." : "Save profile"}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onPublish}
+          disabled={saving || publishing || profileStatus === "published"}
+        >
+          {profileStatus === "published" ? "Published" : publishing ? "Publishing..." : "Publish profile"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Status: <span className="text-cyan-200">{profileStatus}</span>
+          {publishedAt ? ` • ${new Date(publishedAt).toLocaleString("en-GB")}` : ""}
+        </p>
+        <p className="w-full text-xs text-muted-foreground">
+          Publish saves your latest edits first. You need a Headline (or Ambassador headline) in the editor.
+        </p>
+        {message ? <p className="w-full text-sm text-cyan-200">{message}</p> : null}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DiverProfileEditor } from "@/components/diver-profile-editor";
-import { PublishProfileButton } from "@/components/publish-profile-button";
 import { getDiverProfile } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
@@ -49,9 +48,10 @@ export default async function DiverDashboardPage() {
             {profile.published_at ? ` (published ${new Date(profile.published_at).toLocaleDateString("en-GB")})` : ""}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <PublishProfileButton initialStatus={profile.profile_status} publishedAt={profile.published_at} />
+        <CardContent>
           <DiverProfileEditor
+            initialProfileStatus={profile.profile_status}
+            initialPublishedAt={profile.published_at}
             initialData={{
               profile: {
                 headline: profile.headline,
