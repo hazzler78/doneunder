@@ -144,6 +144,14 @@ Roles: `user`, `assistant`, `system`.
 
 Logged-in users load history via `GET /api/chat/messages`. New turns are persisted automatically by `POST /api/chat`.
 
+Draft profiles can be previewed by the owner before publish:
+
+| URL | Purpose |
+|-----|---------|
+| `/preview` | Ambassador page preview (draft, owner-only) |
+| `/preview/cv` | Full CV preview (draft, owner-only) |
+| `/{username}` | Public ambassador page (published only) |
+
 ## Source of truth
 
 | Data | Canonical location |

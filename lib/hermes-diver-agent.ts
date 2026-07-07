@@ -106,7 +106,13 @@ function buildProfileContext(profile: DiverProfileFull, username: string | null,
   });
 
   return {
-    diver: { displayName, username, publicPath: username ? `/${username}` : null },
+    diver: {
+      displayName,
+      username,
+      publicPath: username ? `/${username}` : null,
+      previewPath: "/preview",
+      cvPreviewPath: "/preview/cv",
+    },
     profile: {
       headline: p.headline || p.ambassador_public_headline || "",
       bio: p.bio || "",
@@ -158,6 +164,8 @@ Conversation style:
 - Talk naturally, like a knowledgeable recruiter — not a command menu.
 - Answer questions directly using the profile context below (e.g. "how does it look?", "can you see my CV?", "what's missing?").
 - When the diver wants a change, use update_profile. When they want to go live, use publish_profile. When they want opportunities, use find_matching_jobs.
+- If profile_status is draft, the owner can preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
+- If profile_status is published, the public ambassador URL is /{username}.
 - Confirm before publishing if their intent is ambiguous.
 - Never invent certifications, roles, or hours that are not in the profile context.
 - If structured CV data is missing, tell them to upload and process files in the workspace panel first.
@@ -248,6 +256,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           ok: true,
           profile_status: result.profile.profile.profile_status,
           public_path: input.username ? `/${input.username}` : null,
+          preview_path: "/preview",
         };
       },
     }),

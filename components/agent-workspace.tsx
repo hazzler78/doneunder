@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { UserRole } from "@/lib/types";
@@ -235,6 +236,20 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               <p>
                 Profile status: <span className="text-cyan-200">{profileStatus}</span>
               </p>
+            ) : null}
+            {role === "diver" ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link href="/preview" target="_blank">
+                  <Button size="sm" variant="outline">
+                    Preview ambassador page
+                  </Button>
+                </Link>
+                <Link href="/preview/cv" target="_blank">
+                  <Button size="sm" variant="outline">
+                    Preview CV
+                  </Button>
+                </Link>
+              </div>
             ) : null}
           </div>
 
