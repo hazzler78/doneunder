@@ -87,22 +87,26 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
-  async function loadChatHistory() {
-    setHistoryLoading(true);
+  async function loadChatHistory(options?: { silent?: boolean }) {
+    if (!options?.silent) {
+      setHistoryLoading(true);
+    }
     try {
       const response = await fetch("/api/chat/messages");
       const data = (await response.json()) as { messages?: StoredChatMessage[] };
       if (!response.ok || !data.messages?.length) {
-        setMessages([
-          {
-            id: "welcome",
-            from: "agent",
-            text:
-              role === "diver"
-                ? "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs."
-                : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
-          },
-        ]);
+        if (!options?.silent) {
+          setMessages([
+            {
+              id: "welcome",
+              from: "agent",
+              text:
+                role === "diver"
+                  ? "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs."
+                  : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
+            },
+          ]);
+        }
         return;
       }
 
@@ -114,15 +118,19 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         })),
       );
     } catch {
-      setMessages([
-        {
-          id: "welcome",
-          from: "agent",
-          text: "Could not load previous chat history. You can still send a new message.",
-        },
-      ]);
+      if (!options?.silent) {
+        setMessages([
+          {
+            id: "welcome",
+            from: "agent",
+            text: "Could not load previous chat history. You can still send a new message.",
+          },
+        ]);
+      }
     } finally {
-      setHistoryLoading(false);
+      if (!options?.silent) {
+        setHistoryLoading(false);
+      }
     }
   }
 
@@ -166,7 +174,6 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: data.reply }]);
       setSuggestions(data.suggestions ?? []);
       if (data.profileStatus) setProfileStatus(data.profileStatus);
-      void loadChatHistory();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -202,7 +209,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       setMainCv(null);
       setCerts([]);
       await loadDocuments();
-      await loadChatHistory();
+      await loadChatHistory({ silent: true });
     } catch {
       setUploadError("Upload request failed.");
     } finally {
@@ -299,15 +306,23 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
             {historyLoading ? (
               <p className="text-sm text-muted-foreground">Loading conversation...</p>
             ) : (
-              messages.map((item) => (
-                <div
-                  key={item.id}
-                  className={item.from === "user" ? "ml-auto max-w-[85%] rounded-md bg-cyan-900/40 p-2 text-sm" : "max-w-[85%] rounded-md border border-border/60 p-2 text-sm"}
-                >
-                  <p className="mb-1 text-xs text-muted-foreground">{item.from === "user" ? "You" : "Hermes"}</p>
-                  <p>{item.text}</p>
-                </div>
-              ))
+              <>
+                {messages.map((item) => (
+                  <div
+                    key={item.id}
+                    className={item.from === "user" ? "ml-auto max-w-[85%] rounded-md bg-cyan-900/40 p-2 text-sm" : "max-w-[85%] rounded-md border border-border/60 p-2 text-sm"}
+                  >
+                    <p className="mb-1 text-xs text-muted-foreground">{item.from === "user" ? "You" : "Hermes"}</p>
+                    <p>{item.text}</p>
+                  </div>
+                ))}
+                {sending ? (
+                  <div className="max-w-[85%] rounded-md border border-border/60 p-2 text-sm text-muted-foreground">
+                    <p className="mb-1 text-xs">Hermes</p>
+                    <p>Thinking...</p>
+                  </div>
+                ) : null}
+              </>
             )}
           </div>
 

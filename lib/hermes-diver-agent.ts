@@ -204,17 +204,26 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       description: "Update diver profile fields after the diver asks for a change.",
       inputSchema: profileUpdateSchema,
       execute: async (patch) => {
-        const withSources = {
-          ...patch,
-          ...(patch.headline ? { headline_source: "ai" as const } : {}),
-          ...(patch.bio || patch.ambassador_short_bio ? { bio_source: "ai" as const } : {}),
-        };
-        state.profile = await patchDiverProfile(input.supabase, input.diverId, withSources);
-        return {
-          ok: true,
-          updated_fields: Object.keys(patch),
-          profile_status: state.profile.profile.profile_status,
-        };
+        try {
+          const withSources = {
+            ...patch,
+            ...(patch.headline ? { headline_source: "ai" as const } : {}),
+            ...(patch.bio || patch.ambassador_short_bio ? { bio_source: "ai" as const } : {}),
+          };
+          state.profile = await patchDiverProfile(input.supabase, input.diverId, withSources);
+          return {
+            ok: true,
+            updated_fields: Object.keys(patch),
+            profile_status: state.profile.profile.profile_status,
+            sat_hours: state.profile.profile.sat_hours,
+            dive_hours: state.profile.profile.dive_hours,
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
       },
     }),
     publish_profile: tool({

@@ -38,6 +38,106 @@ function normalizeOptionalString(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
+function patchTouchesChildRows(patch: DiverProfilePatch) {
+  return patch.experiences !== undefined || patch.certifications !== undefined || patch.references !== undefined;
+}
+
+function normalizeExperienceInput(exp: DiverExperienceInput): DiverExperienceInput {
+  return {
+    ...exp,
+    company: (exp.company ?? "").trim() || "Unknown",
+    role_title: (exp.role_title ?? "").trim() || "Commercial Diver",
+    project_name: exp.project_name?.trim() || undefined,
+    location: exp.location?.trim() || undefined,
+    date_start: exp.date_start ?? undefined,
+    date_end: exp.date_end ?? undefined,
+    summary: exp.summary?.trim() || undefined,
+    source_ref: exp.source_ref ?? undefined,
+  };
+}
+
+function normalizeCertificationInput(cert: DiverCertificationInput): DiverCertificationInput {
+  return {
+    ...cert,
+    name: (cert.name ?? "").trim() || "Certification",
+    issue_date: cert.issue_date ?? undefined,
+    expiry_date: cert.expiry_date ?? undefined,
+    cert_number: cert.cert_number?.trim() || undefined,
+    issuing_body: cert.issuing_body?.trim() || undefined,
+    source_ref: cert.source_ref ?? undefined,
+  };
+}
+
+function normalizeReferenceInput(ref: DiverReferenceInput): DiverReferenceInput {
+  return {
+    ...ref,
+    name: (ref.name ?? "").trim() || "Reference",
+    phone: (ref.phone ?? "").trim() || "Not provided",
+    company: ref.company?.trim() || undefined,
+    email: ref.email?.trim() || undefined,
+    source_ref: ref.source_ref ?? undefined,
+  };
+}
+
+function normalizeProfilePayloadForSave(payload: DiverProfilePayload): DiverProfilePayload {
+  return {
+    ...payload,
+    experiences: payload.experiences.map(normalizeExperienceInput),
+    certifications: payload.certifications.map(normalizeCertificationInput),
+    references: payload.references.map(normalizeReferenceInput),
+  };
+}
+
+async function patchDiverProfileScalars(
+  supabase: DbClient,
+  diverId: string,
+  patch: DiverProfilePatch,
+  current: DiverProfileFull,
+) {
+  const nowIso = new Date().toISOString();
+  const update: Record<string, unknown> = { updated_at: nowIso };
+
+  if (patch.headline !== undefined) update.headline = patch.headline;
+  if (patch.bio !== undefined) update.bio = patch.bio;
+  if (patch.location !== undefined) update.location = patch.location;
+  if (patch.mobilization_notice !== undefined) update.mobilization_notice = patch.mobilization_notice;
+  if (patch.availability_status !== undefined) update.availability_status = patch.availability_status;
+  if (patch.sat_hours !== undefined) update.sat_hours = patch.sat_hours;
+  if (patch.dive_hours !== undefined) update.dive_hours = patch.dive_hours;
+  if (patch.polished_cv_markdown !== undefined) update.polished_cv_markdown = patch.polished_cv_markdown;
+  if (patch.ambassador_public_headline !== undefined) {
+    update.ambassador_public_headline = normalizeOptionalString(patch.ambassador_public_headline);
+  }
+  if (patch.ambassador_short_bio !== undefined) {
+    update.ambassador_short_bio = normalizeOptionalString(patch.ambassador_short_bio);
+  }
+  if (patch.ambassador_key_highlights !== undefined) update.ambassador_key_highlights = patch.ambassador_key_highlights;
+  if (patch.headline_source !== undefined) update.headline_source = patch.headline_source;
+  if (patch.headline_source_ref !== undefined) update.headline_source_ref = patch.headline_source_ref ?? null;
+  if (patch.bio_source !== undefined) update.bio_source = patch.bio_source;
+  if (patch.bio_source_ref !== undefined) update.bio_source_ref = patch.bio_source_ref ?? null;
+  if (patch.import_batch_id !== undefined) update.import_batch_id = patch.import_batch_id;
+
+  if (patch.polished_cv_json !== undefined) {
+    update.polished_cv_json = patch.polished_cv_json;
+  } else if (current.profile.polished_cv_json) {
+    const polishedCvJson = { ...current.profile.polished_cv_json };
+    if (patch.location !== undefined) polishedCvJson.location = patch.location || undefined;
+    if (patch.mobilization_notice !== undefined) {
+      polishedCvJson.mobilization_notice = patch.mobilization_notice || undefined;
+    }
+    if (patch.availability_status !== undefined) polishedCvJson.availability_status = patch.availability_status;
+    if (patch.sat_hours !== undefined) polishedCvJson.sat_hours = patch.sat_hours;
+    if (patch.dive_hours !== undefined) polishedCvJson.dive_hours = patch.dive_hours;
+    update.polished_cv_json = polishedCvJson;
+  }
+
+  const { error } = await supabase.from("diver_profiles").update(update).eq("user_id", diverId);
+  if (error) throw new Error(error.message);
+
+  return getDiverProfile(supabase, diverId);
+}
+
 function normalizeDate(value?: string | null) {
   if (!value) return null;
   const trimmed = value.trim();
@@ -405,7 +505,7 @@ export async function saveDiverProfile(
   rawPayload: DiverProfilePayload,
   meta: SaveProfileMeta = {},
 ) {
-  const payload = diverProfilePayloadSchema.parse(rawPayload);
+  const payload = diverProfilePayloadSchema.parse(normalizeProfilePayloadForSave(rawPayload));
   const nowIso = new Date().toISOString();
   const importBatchId = meta.importBatchId ?? payload.import_batch_id ?? null;
 
@@ -430,6 +530,11 @@ export async function patchDiverProfile(
 ) {
   const patch = diverProfilePatchSchema.parse(rawPatch);
   const current = await getDiverProfile(supabase, diverId);
+
+  if (!patchTouchesChildRows(patch)) {
+    return patchDiverProfileScalars(supabase, diverId, patch, current);
+  }
+
   const merged: DiverProfilePayload = {
     headline: patch.headline ?? current.profile.headline,
     bio: patch.bio ?? current.profile.bio,
@@ -453,7 +558,7 @@ export async function patchDiverProfile(
     references: patch.references ?? current.references,
   };
 
-  return saveDiverProfile(supabase, diverId, merged, meta);
+  return saveDiverProfile(supabase, diverId, normalizeProfilePayloadForSave(merged), meta);
 }
 
 export async function publishDiverProfile(supabase: DbClient, diverId: string) {

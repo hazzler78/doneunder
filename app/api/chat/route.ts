@@ -101,22 +101,35 @@ export async function POST(req: Request) {
     }
 
     const workspaceRole = role === "company" ? "company" : "diver";
-    const thread = await ensureWebThread(service, user.id, workspaceRole);
-    const priorMessages = await listAgentMessages(service, thread.id, { limit: 30 });
-    const history = agentMessagesToChatHistory(priorMessages);
+    let thread: Awaited<ReturnType<typeof ensureWebThread>> | null = null;
+    let history: ReturnType<typeof agentMessagesToChatHistory> = [];
+
+    try {
+      thread = await ensureWebThread(service, user.id, workspaceRole);
+      const priorMessages = await listAgentMessages(service, thread.id, { limit: 30 });
+      history = agentMessagesToChatHistory(priorMessages);
+    } catch (memoryError) {
+      console.error("Agent memory unavailable:", memoryError);
+    }
 
     if (role === "company") {
       const reply =
         "Company workspace is live. Next, I can wire candidate screening and job drafting tools to this chat. For now, ask me for screening criteria and I will keep it scoped to your company session.";
-      await appendAgentTurn(service, {
-        threadId: thread.id,
-        userContent: message,
-        assistantContent: reply,
-      });
+      if (thread) {
+        try {
+          await appendAgentTurn(service, {
+            threadId: thread.id,
+            userContent: message,
+            assistantContent: reply,
+          });
+        } catch (persistError) {
+          console.error("Failed to persist company chat turn:", persistError);
+        }
+      }
       await logAgentInteraction({
         actorId: user.id,
         feature: "web_chat_company_message",
-        input: { message, threadId: thread.id },
+        input: { message, threadId: thread?.id ?? null },
         output: { reply },
       });
       return NextResponse.json({ ok: true, role, reply });
@@ -131,16 +144,22 @@ export async function POST(req: Request) {
       history,
     });
 
-    await appendAgentTurn(service, {
-      threadId: thread.id,
-      userContent: message,
-      assistantContent: agentResult.reply,
-    });
+    if (thread) {
+      try {
+        await appendAgentTurn(service, {
+          threadId: thread.id,
+          userContent: message,
+          assistantContent: agentResult.reply,
+        });
+      } catch (persistError) {
+        console.error("Failed to persist diver chat turn:", persistError);
+      }
+    }
 
     await logAgentInteraction({
       actorId: user.id,
       feature: "web_chat_diver_message",
-      input: { message, threadId: thread.id, historyLength: history.length },
+      input: { message, threadId: thread?.id ?? null, historyLength: history.length },
       output: { reply: agentResult.reply, suggestionsCount: agentResult.suggestions.length },
     });
 
