@@ -182,8 +182,8 @@ function toModelMessages(history: HermesChatMessage[] | undefined, message: stri
 }
 
 export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<HermesDiverTurnResult> {
-  let profile = await getDiverProfile(input.supabase, input.diverId);
-  let suggestions: JobSuggestion[] = [];
+  const profile = await getDiverProfile(input.supabase, input.diverId);
+  const suggestions: JobSuggestion[] = [];
 
   if (!isAiConfigured()) {
     return {
