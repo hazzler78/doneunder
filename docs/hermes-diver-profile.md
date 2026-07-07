@@ -105,10 +105,44 @@ On success, `profile_status` becomes `published` and `/{username}` is publicly v
 ## Suggested Hermes conversation flow
 
 1. **Link session** — `POST /api/agent/threads` when diver identifies themselves (email/username/login code).
-2. **Load context** — `GET /api/agent/diver/{id}/profile` at start of each session.
-3. **Apply edits** — `PATCH` after each confirmed change in chat.
-4. **Review** — share validation warnings with the diver.
-5. **Publish** — `POST .../publish` when diver confirms.
+2. **Load memory** — `GET /api/agent/threads/messages?channel=telegram&external_chat_id=...` for prior conversation turns.
+3. **Load context** — `GET /api/agent/diver/{id}/profile` at start of each session.
+4. **Apply edits** — `PATCH` after each confirmed change in chat.
+5. **Persist turns** — `POST /api/agent/threads/messages` after each user/assistant exchange.
+6. **Review** — share validation warnings with the diver.
+7. **Publish** — `POST .../publish` when diver confirms.
+
+## Conversation memory
+
+Each workspace user (diver or company) has one `agent_threads` row per channel (`web` or `telegram`). Messages are stored in `agent_messages` and loaded on every turn.
+
+### Read messages (Hermes)
+
+```http
+GET /api/agent/threads/messages?channel=telegram&external_chat_id=123456789&limit=40
+Authorization: Bearer <secret>
+```
+
+### Append message (Hermes)
+
+```http
+POST /api/agent/threads/messages
+Authorization: Bearer <secret>
+Content-Type: application/json
+
+{
+  "channel": "telegram",
+  "external_chat_id": "123456789",
+  "role": "user",
+  "content": "How does my profile look?"
+}
+```
+
+Roles: `user`, `assistant`, `system`.
+
+### Web workspace
+
+Logged-in users load history via `GET /api/chat/messages`. New turns are persisted automatically by `POST /api/chat`.
 
 ## Source of truth
 
@@ -128,6 +162,7 @@ Agent calls are logged in `ai_interactions` with features:
 - `hermes_profile_patch`
 - `hermes_profile_publish`
 - `hermes_thread_upsert`
+- `hermes_message_append`
 
 ## Diver self-service (non-agent)
 

@@ -40,6 +40,13 @@ type Message = {
   text: string;
 };
 
+type StoredChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
 const diverStarterPrompts = [
   "How does my profile look?",
   "What should I improve before publishing?",
@@ -54,16 +61,8 @@ const companyStarterPrompts = [
 ];
 
 export function AgentWorkspace({ role, userId, displayName, username }: Props) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      from: "agent",
-      text:
-        role === "diver"
-          ? "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs."
-          : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [suggestions, setSuggestions] = useState<ChatResponse["suggestions"]>([]);
@@ -81,11 +80,51 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   );
 
   useEffect(() => {
+    void loadChatHistory();
     if (role === "diver") {
       void loadDocuments();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
+
+  async function loadChatHistory() {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch("/api/chat/messages");
+      const data = (await response.json()) as { messages?: StoredChatMessage[] };
+      if (!response.ok || !data.messages?.length) {
+        setMessages([
+          {
+            id: "welcome",
+            from: "agent",
+            text:
+              role === "diver"
+                ? "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs."
+                : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
+          },
+        ]);
+        return;
+      }
+
+      setMessages(
+        data.messages.map((item) => ({
+          id: item.id,
+          from: item.role === "user" ? "user" : "agent",
+          text: item.content,
+        })),
+      );
+    } catch {
+      setMessages([
+        {
+          id: "welcome",
+          from: "agent",
+          text: "Could not load previous chat history. You can still send a new message.",
+        },
+      ]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   async function loadDocuments() {
     if (role !== "diver") return;
@@ -109,18 +148,10 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     setInput("");
 
     try {
-      const history = messages
-        .filter((item) => item.id !== "welcome")
-        .slice(-20)
-        .map((item) => ({
-          role: item.from === "user" ? ("user" as const) : ("assistant" as const),
-          content: item.text,
-        }));
-
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history }),
+        body: JSON.stringify({ message: text }),
       });
       const data = (await response.json()) as ChatResponse;
 
@@ -135,6 +166,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: data.reply }]);
       setSuggestions(data.suggestions ?? []);
       if (data.profileStatus) setProfileStatus(data.profileStatus);
+      void loadChatHistory();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -167,21 +199,10 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         setUploadError(`${data.error ?? "Failed to process CV upload."}${detail}`);
         return;
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          from: "agent",
-          text:
-            "CV processed. I updated your structured profile. " +
-            (data.warnings?.length
-              ? `Some OCR parts were skipped: ${data.warnings.join(" ")}`
-              : "Ask me to review highlights or publish."),
-        },
-      ]);
       setMainCv(null);
       setCerts([]);
       await loadDocuments();
+      await loadChatHistory();
     } catch {
       setUploadError("Upload request failed.");
     } finally {
@@ -275,15 +296,19 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           </div>
 
           <div className="flex-1 space-y-2 overflow-y-auto rounded-md border border-border/70 bg-[#051322]/50 p-3">
-            {messages.map((item) => (
-              <div
-                key={item.id}
-                className={item.from === "user" ? "ml-auto max-w-[85%] rounded-md bg-cyan-900/40 p-2 text-sm" : "max-w-[85%] rounded-md border border-border/60 p-2 text-sm"}
-              >
-                <p className="mb-1 text-xs text-muted-foreground">{item.from === "user" ? "You" : "Hermes"}</p>
-                <p>{item.text}</p>
-              </div>
-            ))}
+            {historyLoading ? (
+              <p className="text-sm text-muted-foreground">Loading conversation...</p>
+            ) : (
+              messages.map((item) => (
+                <div
+                  key={item.id}
+                  className={item.from === "user" ? "ml-auto max-w-[85%] rounded-md bg-cyan-900/40 p-2 text-sm" : "max-w-[85%] rounded-md border border-border/60 p-2 text-sm"}
+                >
+                  <p className="mb-1 text-xs text-muted-foreground">{item.from === "user" ? "You" : "Hermes"}</p>
+                  <p>{item.text}</p>
+                </div>
+              ))
+            )}
           </div>
 
           {suggestions && suggestions.length > 0 ? (

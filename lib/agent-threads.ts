@@ -4,7 +4,8 @@ export type AgentChannel = "telegram" | "web";
 
 export type AgentThread = {
   id: string;
-  diver_id: string;
+  user_id: string;
+  diver_id: string | null;
   channel: AgentChannel;
   external_chat_id: string;
   last_message_at: string | null;
@@ -12,10 +13,11 @@ export type AgentThread = {
   created_at: string;
 };
 
-export async function upsertAgentThread(
+export async function upsertWorkspaceThread(
   supabase: SupabaseClient,
   input: {
-    diverId: string;
+    userId: string;
+    role: "diver" | "company";
     channel: AgentChannel;
     externalChatId: string;
     metadata?: Record<string, unknown>;
@@ -26,19 +28,38 @@ export async function upsertAgentThread(
     .from("agent_threads")
     .upsert(
       {
-        diver_id: input.diverId,
+        user_id: input.userId,
+        diver_id: input.role === "diver" ? input.userId : null,
         channel: input.channel,
         external_chat_id: input.externalChatId,
         last_message_at: nowIso,
-        metadata: input.metadata ?? {},
+        metadata: { role: input.role, ...(input.metadata ?? {}) },
       },
       { onConflict: "channel,external_chat_id" },
     )
-    .select("id,diver_id,channel,external_chat_id,last_message_at,metadata,created_at")
+    .select("id,user_id,diver_id,channel,external_chat_id,last_message_at,metadata,created_at")
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   return data as AgentThread;
+}
+
+export async function upsertAgentThread(
+  supabase: SupabaseClient,
+  input: {
+    diverId: string;
+    channel: AgentChannel;
+    externalChatId: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  return upsertWorkspaceThread(supabase, {
+    userId: input.diverId,
+    role: "diver",
+    channel: input.channel,
+    externalChatId: input.externalChatId,
+    metadata: input.metadata,
+  });
 }
 
 export async function resolveDiverIdFromThread(
@@ -76,7 +97,7 @@ export async function getAgentThread(
 ) {
   const { data, error } = await supabase
     .from("agent_threads")
-    .select("id,diver_id,channel,external_chat_id,last_message_at,metadata,created_at")
+    .select("id,user_id,diver_id,channel,external_chat_id,last_message_at,metadata,created_at")
     .eq("channel", channel)
     .eq("external_chat_id", externalChatId)
     .maybeSingle();

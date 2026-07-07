@@ -6,6 +6,8 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { createWorker } from "tesseract.js";
 import { z } from "zod";
 import { AI_DISCLAIMER, aiModel } from "@/lib/ai";
+import { appendAgentMessage } from "@/lib/agent-messages";
+import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
@@ -229,6 +231,28 @@ export async function POST(req: Request) {
     await saveDiverProfile(serviceSupabase, diverId, payload, {
       importBatchId,
       cvLastProcessedAt: nowIso,
+    });
+
+    const thread =
+      (await getAgentThread(serviceSupabase, "web", diverId)) ??
+      (await upsertWorkspaceThread(serviceSupabase, {
+        userId: diverId,
+        role: "diver",
+        channel: "web",
+        externalChatId: diverId,
+      }));
+
+    const cvReply =
+      "CV processed. I updated your structured profile. " +
+      (extractionWarnings.length
+        ? `Some OCR parts were skipped: ${extractionWarnings.join(" ")}`
+        : "Ask me to review highlights or publish.");
+
+    await appendAgentMessage(serviceSupabase, {
+      threadId: thread.id,
+      role: "assistant",
+      content: cvReply,
+      metadata: { source: "process-cv", importBatchId },
     });
 
     return NextResponse.json({

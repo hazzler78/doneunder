@@ -2,23 +2,36 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getAgentThread, upsertAgentThread } from "@/lib/agent-threads";
+import { agentMessagesToChatHistory, appendAgentTurn, listAgentMessages } from "@/lib/agent-messages";
+import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
 import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import type { UserRole } from "@/lib/types";
 
 const chatSchema = z.object({
   message: z.string().min(1).max(2000),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string().max(4000),
-      }),
-    )
-    .max(24)
-    .optional(),
 });
+
+async function ensureWebThread(
+  service: ReturnType<typeof createServiceSupabaseClient>,
+  userId: string,
+  role: "diver" | "company",
+) {
+  const existing = await getAgentThread(service, "web", userId);
+  if (existing) return existing;
+
+  if (role === "diver") {
+    await service.from("diver_profiles").upsert({ user_id: userId }, { onConflict: "user_id" });
+  }
+
+  return upsertWorkspaceThread(service, {
+    userId,
+    role,
+    channel: "web",
+    externalChatId: userId,
+    metadata: { role },
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -87,39 +100,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reply: "Admin chat workspace is not enabled yet." }, { status: 403 });
     }
 
+    const workspaceRole = role === "company" ? "company" : "diver";
+    const thread = await ensureWebThread(service, user.id, workspaceRole);
+    const priorMessages = await listAgentMessages(service, thread.id, { limit: 30 });
+    const history = agentMessagesToChatHistory(priorMessages);
+
     if (role === "company") {
-      const threadId = `company-web-${user.id}`;
       const reply =
         "Company workspace is live. Next, I can wire candidate screening and job drafting tools to this chat. For now, ask me for screening criteria and I will keep it scoped to your company session.";
+      await appendAgentTurn(service, {
+        threadId: thread.id,
+        userContent: message,
+        assistantContent: reply,
+      });
       await logAgentInteraction({
         actorId: user.id,
         feature: "web_chat_company_message",
-        input: { message, threadId },
+        input: { message, threadId: thread.id },
         output: { reply },
       });
       return NextResponse.json({ ok: true, role, reply });
     }
-
-    const { error: ensureProfileError } = await service
-      .from("diver_profiles")
-      .upsert({ user_id: user.id }, { onConflict: "user_id" });
-    if (ensureProfileError) {
-      return NextResponse.json(
-        { ok: false, reply: `Could not initialize diver profile context for chat: ${ensureProfileError.message}` },
-        { status: 500 },
-      );
-    }
-
-    const externalChatId = user.id;
-    const channel = "web" as const;
-    const thread =
-      (await getAgentThread(service, channel, externalChatId)) ??
-      (await upsertAgentThread(service, {
-        diverId: user.id,
-        channel,
-        externalChatId,
-        metadata: { role },
-      }));
 
     const agentResult = await runHermesDiverTurn({
       supabase,
@@ -127,13 +128,19 @@ export async function POST(req: Request) {
       username: userRow?.username ?? null,
       displayName: userRow?.full_name ?? "Diver",
       message,
-      history: body.history,
+      history,
+    });
+
+    await appendAgentTurn(service, {
+      threadId: thread.id,
+      userContent: message,
+      assistantContent: agentResult.reply,
     });
 
     await logAgentInteraction({
       actorId: user.id,
       feature: "web_chat_diver_message",
-      input: { message, threadId: thread.id, historyLength: body.history?.length ?? 0 },
+      input: { message, threadId: thread.id, historyLength: history.length },
       output: { reply: agentResult.reply, suggestionsCount: agentResult.suggestions.length },
     });
 
