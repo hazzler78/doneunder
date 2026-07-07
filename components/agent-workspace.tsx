@@ -153,9 +153,10 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         method: "POST",
         body: form,
       });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { error?: string; detail?: string; warnings?: string[] };
       if (!response.ok) {
-        setUploadError(data.error ?? "Failed to process CV upload.");
+        const detail = data.detail ? ` ${data.detail}` : "";
+        setUploadError(`${data.error ?? "Failed to process CV upload."}${detail}`);
         return;
       }
       setMessages((prev) => [
@@ -163,7 +164,11 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         {
           id: crypto.randomUUID(),
           from: "agent",
-          text: "CV processed. I updated your structured profile. Ask me to review highlights or publish.",
+          text:
+            "CV processed. I updated your structured profile. " +
+            (data.warnings?.length
+              ? `Some OCR parts were skipped: ${data.warnings.join(" ")}`
+              : "Ask me to review highlights or publish."),
         },
       ]);
       setMainCv(null);

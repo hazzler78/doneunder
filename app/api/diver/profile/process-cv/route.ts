@@ -17,6 +17,7 @@ const MAX_CERT_FILES = 10;
 const MAX_SOURCE_TEXT_CHARS = 60000;
 const CHUNK_SIZE = 6000;
 const CHUNK_OVERLAP = 400;
+const IS_VERCEL_RUNTIME = Boolean(process.env.VERCEL);
 
 const cvSystemPrompt = `You are a specialist commercial diving CV and profile writer for doneunder.ai.
 Turn raw CVs and certification documents into a polished, accurate profile for offshore recruiters.
@@ -58,12 +59,18 @@ async function extractPdfText(buffer: Buffer) {
 }
 
 async function extractImageText(buffer: Buffer) {
+  if (IS_VERCEL_RUNTIME) {
+    // Tesseract workers are fragile in serverless runtimes; skip OCR rather than failing the entire flow.
+    return "";
+  }
   const worker = await createWorker("eng");
   try {
     const {
       data: { text },
     } = await worker.recognize(buffer);
     return cleanText(text || "");
+  } catch {
+    return "";
   } finally {
     await worker.terminate();
   }
@@ -138,6 +145,7 @@ export async function POST(req: Request) {
 
     const certUploadResults: { path: string; mimeType: string; name: string; dataUrl: string }[] = [];
     const certExtractedTextParts: string[] = [];
+    const extractionWarnings: string[] = [];
     for (const certFile of certificateFiles) {
       const certBuffer = Buffer.from(await certFile.arrayBuffer());
       const extension = certFile.type === "application/pdf" ? "pdf" : certFile.type === "image/png" ? "png" : "jpg";
@@ -157,11 +165,20 @@ export async function POST(req: Request) {
       });
 
       if (certFile.type === "application/pdf") {
-        const extracted = await extractPdfText(certBuffer);
-        if (extracted) certExtractedTextParts.push(`[${certFile.name}] ${truncateText(extracted, 12000)}`);
+        try {
+          const extracted = await extractPdfText(certBuffer);
+          if (extracted) certExtractedTextParts.push(`[${certFile.name}] ${truncateText(extracted, 12000)}`);
+        } catch {
+          extractionWarnings.push(`Could not parse certificate PDF text for ${certFile.name}.`);
+        }
       } else {
         const extracted = await extractImageText(certBuffer);
         if (extracted) certExtractedTextParts.push(`[${certFile.name}] ${truncateText(extracted, 6000)}`);
+        if (!extracted) {
+          extractionWarnings.push(
+            `Image OCR for ${certFile.name} was skipped in this runtime. Profile extraction continues from CV/PDF text.`,
+          );
+        }
       }
     }
 
@@ -217,6 +234,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       disclaimer: AI_DISCLAIMER,
+      warnings: extractionWarnings,
       importBatchId,
       uploaded: {
         cv: cvPath,
