@@ -91,11 +91,45 @@ export async function POST(req: Request) {
     const message = body.message.trim();
     const messageLower = normalize(message);
 
-    const { data: userRow } = await supabase
+    let { data: userRow } = await supabase
       .from("users")
       .select("id, role, full_name, username")
       .eq("id", user.id)
       .maybeSingle();
+
+    const service = createServiceSupabaseClient();
+    if (!userRow) {
+      const fullName =
+        (user.user_metadata?.full_name as string | undefined)?.trim() ||
+        (user.email ? user.email.split("@")[0] : "Diver");
+      const username =
+        (user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
+        (user.email ? user.email.split("@")[0].toLowerCase() : `diver-${user.id.slice(0, 8)}`);
+
+      const { data: insertedUser, error: upsertUserError } = await service
+        .from("users")
+        .upsert(
+          {
+            id: user.id,
+            role: "diver",
+            email: user.email ?? `${user.id}@placeholder.local`,
+            username,
+            full_name: fullName,
+          },
+          { onConflict: "id" },
+        )
+        .select("id, role, full_name, username")
+        .maybeSingle();
+
+      if (upsertUserError) {
+        return NextResponse.json(
+          { ok: false, reply: `Could not initialize user context for chat: ${upsertUserError.message}` },
+          { status: 500 },
+        );
+      }
+      userRow = insertedUser ?? null;
+    }
+
     const role = (userRow?.role as UserRole | undefined) ?? "diver";
     if (role === "admin") {
       return NextResponse.json({ ok: false, reply: "Admin chat workspace is not enabled yet." }, { status: 403 });
@@ -114,7 +148,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, role, reply });
     }
 
-    const service = createServiceSupabaseClient();
     // Ensure the diver profile row exists before creating a thread mapping.
     // agent_threads.diver_id references diver_profiles(user_id).
     // Use service role here to avoid environment-specific RLS policy drift.
