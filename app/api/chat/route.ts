@@ -38,6 +38,13 @@ function normalize(text: string) {
   return text.toLowerCase().trim();
 }
 
+function isCvVisibilityQuestion(messageLower: string) {
+  const asksAboutSeeing = messageLower.includes("can you see") || messageLower.includes("do you see");
+  const asksAboutCv = messageLower.includes("cv") || messageLower.includes("resume");
+  const asksAboutDocuments = messageLower.includes("document") || messageLower.includes("files");
+  return asksAboutSeeing && (asksAboutCv || asksAboutDocuments);
+}
+
 type Suggestion = {
   id: string;
   title: string;
@@ -187,6 +194,21 @@ export async function POST(req: Request) {
     const hasPatch = Object.keys(patch).length > 0;
     let reply = "";
     let suggestions: Suggestion[] = [];
+
+    if (isCvVisibilityQuestion(messageLower)) {
+      const hasStructuredCv =
+        Boolean(profile.profile.polished_cv_markdown?.trim()) ||
+        Boolean(profile.profile.polished_cv_json) ||
+        profile.experiences.length > 0 ||
+        profile.certifications.length > 0;
+
+      if (hasStructuredCv) {
+        reply = `Yes. I can see your structured CV context (experiences: ${profile.experiences.length}, certifications: ${profile.certifications.length}). I can now update fields, summarize it, or match jobs from it.`;
+      } else {
+        reply =
+          "Not yet. I don't have structured CV data for your profile yet. Upload your main CV PDF and certificates in the left panel, click Process files, then ask again.";
+      }
+    }
 
     if (hasPatch) {
       profile = await patchDiverProfile(supabase, user.id, {
