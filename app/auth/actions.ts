@@ -76,10 +76,7 @@ export async function loginAction(formData: FormData) {
   if (role === "admin") {
     redirect("/dashboard/admin");
   }
-  if (role === "company") {
-    redirect("/dashboard/company");
-  }
-  redirect("/dashboard/diver");
+  redirect("/workspace");
 }
 
 export async function registerAction(formData: FormData) {
@@ -138,7 +135,7 @@ export async function registerAction(formData: FormData) {
     redirect(withMessage("/register", userInsertError.message));
   }
 
-  redirect("/dashboard/diver");
+  redirect("/workspace");
 }
 
 export async function logoutAction() {

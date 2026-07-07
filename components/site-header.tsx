@@ -12,8 +12,7 @@ const links = [
 
 function dashboardHrefForRole(role: string | undefined) {
   if (role === "admin") return "/dashboard/admin";
-  if (role === "company") return "/dashboard/company";
-  return "/dashboard/diver";
+  return "/workspace";
 }
 
 export async function SiteHeader() {
@@ -22,7 +21,7 @@ export async function SiteHeader() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let dashboardHref = "/dashboard/diver";
+  let dashboardHref = "/workspace";
   if (user?.id) {
     const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
     dashboardHref = dashboardHrefForRole(userRow?.role);

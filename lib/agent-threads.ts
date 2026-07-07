@@ -68,3 +68,19 @@ export async function touchAgentThread(
     .eq("channel", channel)
     .eq("external_chat_id", externalChatId);
 }
+
+export async function getAgentThread(
+  supabase: SupabaseClient,
+  channel: AgentChannel,
+  externalChatId: string,
+) {
+  const { data, error } = await supabase
+    .from("agent_threads")
+    .select("id,diver_id,channel,external_chat_id,last_message_at,metadata,created_at")
+    .eq("channel", channel)
+    .eq("external_chat_id", externalChatId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as AgentThread | null) ?? null;
+}
