@@ -41,10 +41,10 @@ type Message = {
 };
 
 const diverStarterPrompts = [
-  "Set my headline to Offshore Commercial Diver and DMT.",
-  "Update my availability to available.",
+  "How does my profile look?",
+  "What should I improve before publishing?",
   "Find jobs that match my certifications.",
-  "Publish my profile now.",
+  "Make my headline stronger for offshore work.",
 ];
 
 const companyStarterPrompts = [
@@ -60,7 +60,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       from: "agent",
       text:
         role === "diver"
-          ? "Welcome. I can update your profile, process CV uploads, and proactively suggest matching jobs."
+          ? "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs."
           : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
     },
   ]);
@@ -109,10 +109,18 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     setInput("");
 
     try {
+      const history = messages
+        .filter((item) => item.id !== "welcome")
+        .slice(-20)
+        .map((item) => ({
+          role: item.from === "user" ? ("user" as const) : ("assistant" as const),
+          content: item.text,
+        }));
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, history }),
       });
       const data = (await response.json()) as ChatResponse;
 
@@ -305,7 +313,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               className="min-h-[56px] flex-1 rounded-md border bg-transparent p-2 text-sm"
-              placeholder="Ask your agent to update profile fields, publish, or match jobs..."
+              placeholder="Talk to Hermes naturally — review my CV, update my headline, find jobs..."
             />
             <Button type="submit" disabled={sending}>
               {sending ? "Sending..." : "Send"}

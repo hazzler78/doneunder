@@ -4,85 +4,21 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAgentThread, upsertAgentThread } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
-import { getDiverProfile, patchDiverProfile, publishDiverProfile } from "@/lib/diver-profile-service";
+import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import type { UserRole } from "@/lib/types";
 
 const chatSchema = z.object({
   message: z.string().min(1).max(2000),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().max(4000),
+      }),
+    )
+    .max(24)
+    .optional(),
 });
-
-function detectPatchIntent(message: string) {
-  const lower = message.toLowerCase();
-  const patch: Record<string, unknown> = {};
-
-  const headlineMatch = message.match(/(?:set\s+my\s+headline\s+to|headline\s*:)\s*(.+)$/i);
-  if (headlineMatch?.[1]) patch.headline = headlineMatch[1].trim();
-
-  const bioMatch = message.match(/(?:set\s+my\s+bio\s+to|bio\s*:)\s*(.+)$/i);
-  if (bioMatch?.[1]) patch.bio = bioMatch[1].trim();
-
-  const locationMatch = message.match(/(?:set\s+my\s+location\s+to|location\s*:)\s*(.+)$/i);
-  if (locationMatch?.[1]) patch.location = locationMatch[1].trim();
-
-  if (lower.includes("availability") && lower.includes("deployed")) {
-    patch.availability_status = "deployed";
-  }
-  if (lower.includes("availability") && lower.includes("available")) {
-    patch.availability_status = "available";
-  }
-
-  return patch;
-}
-
-function normalize(text: string) {
-  return text.toLowerCase().trim();
-}
-
-function isCvVisibilityQuestion(messageLower: string) {
-  const asksAboutSeeing = messageLower.includes("can you see") || messageLower.includes("do you see");
-  const asksAboutCv = messageLower.includes("cv") || messageLower.includes("resume");
-  const asksAboutDocuments = messageLower.includes("document") || messageLower.includes("files");
-  return asksAboutSeeing && (asksAboutCv || asksAboutDocuments);
-}
-
-type Suggestion = {
-  id: string;
-  title: string;
-  location: string;
-  reason: string;
-  score: number;
-};
-
-function scoreJobsForDiver(
-  jobs: Array<{ id: string; title: string; location: string | null; required_certs: string[] | null }>,
-  profile: Awaited<ReturnType<typeof getDiverProfile>>,
-): Suggestion[] {
-  const certNames = new Set(profile.certifications.map((item) => item.name.toLowerCase()));
-  const location = profile.profile.location.toLowerCase();
-
-  return jobs
-    .map((job) => {
-      const required = (job.required_certs ?? []).map((item) => item.toLowerCase());
-      const certHits = required.filter((cert) =>
-        Array.from(certNames).some((name) => name.includes(cert) || cert.includes(name)),
-      ).length;
-      const locationHit =
-        job.location && location ? Number(location.includes(job.location.toLowerCase()) || job.location.toLowerCase().includes(location)) : 0;
-      const score = certHits * 3 + locationHit * 2;
-      return {
-        id: job.id,
-        title: job.title,
-        location: job.location ?? "Unknown",
-        reason:
-          certHits > 0
-            ? `Matches ${certHits} required certifications and location compatibility ${locationHit ? "looks good" : "is neutral"}.`
-            : "No direct cert match yet, but might still fit your profile.",
-        score,
-      };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-}
 
 export async function POST(req: Request) {
   try {
@@ -96,7 +32,6 @@ export async function POST(req: Request) {
 
     const body = chatSchema.parse(await req.json());
     const message = body.message.trim();
-    const messageLower = normalize(message);
 
     let { data: userRow } = await supabase
       .from("users")
@@ -165,9 +100,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, role, reply });
     }
 
-    // Ensure the diver profile row exists before creating a thread mapping.
-    // agent_threads.diver_id references diver_profiles(user_id).
-    // Use service role here to avoid environment-specific RLS policy drift.
     const { error: ensureProfileError } = await service
       .from("diver_profiles")
       .upsert({ user_id: user.id }, { onConflict: "user_id" });
@@ -189,90 +121,28 @@ export async function POST(req: Request) {
         metadata: { role },
       }));
 
-    let profile = await getDiverProfile(supabase, user.id);
-    const patch = detectPatchIntent(message);
-    const hasPatch = Object.keys(patch).length > 0;
-    let reply = "";
-    let suggestions: Suggestion[] = [];
-
-    if (isCvVisibilityQuestion(messageLower)) {
-      const hasStructuredCv =
-        Boolean(profile.profile.polished_cv_markdown?.trim()) ||
-        Boolean(profile.profile.polished_cv_json) ||
-        profile.experiences.length > 0 ||
-        profile.certifications.length > 0;
-
-      if (hasStructuredCv) {
-        reply = `Yes. I can see your structured CV context (experiences: ${profile.experiences.length}, certifications: ${profile.certifications.length}). I can now update fields, summarize it, or match jobs from it.`;
-      } else {
-        reply =
-          "Not yet. I don't have structured CV data for your profile yet. Upload your main CV PDF and certificates in the left panel, click Process files, then ask again.";
-      }
-    }
-
-    if (hasPatch) {
-      profile = await patchDiverProfile(supabase, user.id, {
-        ...patch,
-        headline_source: "ai",
-        bio_source: "ai",
-      });
-      reply = "Updated your profile fields. I kept this change scoped to your diver thread only.";
-    }
-
-    if (messageLower.includes("publish")) {
-      const publishResult = await publishDiverProfile(supabase, user.id);
-      if (!publishResult.ok) {
-        return NextResponse.json({
-          ok: false,
-          role,
-          reply: `I could not publish yet. ${publishResult.validation.errors.join(" ") || "Please review your profile and try again."}`,
-          profileStatus: publishResult.profile.profile.profile_status,
-        });
-      }
-      profile = publishResult.profile;
-      reply = "Published. Your ambassador page is now live.";
-    }
-
-    if (
-      messageLower.includes("job") ||
-      messageLower.includes("match") ||
-      messageLower.includes("proactive") ||
-      hasPatch
-    ) {
-      const { data: jobs } = await supabase
-        .from("jobs")
-        .select("id,title,location,required_certs")
-        .eq("status", "open")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      suggestions = scoreJobsForDiver(jobs ?? [], profile);
-      if (!reply) {
-        reply = suggestions.length
-          ? "I found matching opportunities for your updated profile."
-          : "No strong job matches yet. I can keep monitoring as your profile evolves.";
-      } else if (suggestions.length > 0) {
-        reply += " I also generated fresh job suggestions based on your latest profile.";
-      }
-    }
-
-    if (!reply) {
-      reply =
-        "I can update your profile, publish your ambassador page, and proactively match jobs. Try: 'Set my headline to ...' or 'Find jobs for me'.";
-    }
+    const agentResult = await runHermesDiverTurn({
+      supabase,
+      diverId: user.id,
+      username: userRow?.username ?? null,
+      displayName: userRow?.full_name ?? "Diver",
+      message,
+      history: body.history,
+    });
 
     await logAgentInteraction({
       actorId: user.id,
       feature: "web_chat_diver_message",
-      input: { message, threadId: thread.id, patch },
-      output: { reply, suggestionsCount: suggestions.length },
+      input: { message, threadId: thread.id, historyLength: body.history?.length ?? 0 },
+      output: { reply: agentResult.reply, suggestionsCount: agentResult.suggestions.length },
     });
 
     return NextResponse.json({
       ok: true,
       role,
-      reply,
-      suggestions,
-      profileStatus: profile.profile.profile_status,
+      reply: agentResult.reply,
+      suggestions: agentResult.suggestions,
+      profileStatus: agentResult.profile.profile.profile_status,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -281,6 +151,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    console.error("Chat agent error:", error);
     return NextResponse.json({ ok: false, reply: "Chat agent failed to process your message." }, { status: 500 });
   }
 }
