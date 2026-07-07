@@ -41,7 +41,26 @@ function normalizeOptionalString(value?: string | null) {
 function normalizeDate(value?: string | null) {
   if (!value) return null;
   const trimmed = value.trim();
-  return trimmed || null;
+  if (!trimmed) return null;
+
+  const normalized = trimmed.toLowerCase();
+  if (["present", "current", "ongoing", "to date", "now"].includes(normalized)) {
+    return null;
+  }
+
+  // Accept already normalized values.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
+  if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
+
+  // Best-effort parse for values like "Mar 2024".
+  const parsed = new Date(trimmed);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  // Drop unparseable values instead of breaking the whole profile save.
+  return null;
 }
 
 function mapProfileRow(row: Record<string, unknown> | null): DiverProfileScalars {
