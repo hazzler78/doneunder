@@ -106,20 +106,30 @@ export async function POST(req: Request) {
         (user.user_metadata?.username as string | undefined)?.trim().toLowerCase() ||
         (user.email ? user.email.split("@")[0].toLowerCase() : `diver-${user.id.slice(0, 8)}`);
 
-      const { data: insertedUser, error: upsertUserError } = await service
+      const createUserPayload = (resolvedUsername: string) => ({
+        id: user.id,
+        role: "diver" as const,
+        email: user.email ?? `${user.id}@placeholder.local`,
+        username: resolvedUsername,
+        full_name: fullName,
+      });
+
+      let { data: insertedUser, error: upsertUserError } = await service
         .from("users")
-        .upsert(
-          {
-            id: user.id,
-            role: "diver",
-            email: user.email ?? `${user.id}@placeholder.local`,
-            username,
-            full_name: fullName,
-          },
-          { onConflict: "id" },
-        )
+        .upsert(createUserPayload(username), { onConflict: "id" })
         .select("id, role, full_name, username")
         .maybeSingle();
+
+      if (upsertUserError?.message.includes("users_username_key")) {
+        const fallbackUsername = `diver-${user.id.slice(0, 8)}`;
+        const retry = await service
+          .from("users")
+          .upsert(createUserPayload(fallbackUsername), { onConflict: "id" })
+          .select("id, role, full_name, username")
+          .maybeSingle();
+        insertedUser = retry.data ?? insertedUser;
+        upsertUserError = retry.error ?? null;
+      }
 
       if (upsertUserError) {
         return NextResponse.json(
