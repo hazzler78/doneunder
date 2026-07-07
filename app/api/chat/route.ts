@@ -114,19 +114,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, role, reply });
     }
 
+    const service = createServiceSupabaseClient();
     // Ensure the diver profile row exists before creating a thread mapping.
     // agent_threads.diver_id references diver_profiles(user_id).
-    const { error: ensureProfileError } = await supabase
+    // Use service role here to avoid environment-specific RLS policy drift.
+    const { error: ensureProfileError } = await service
       .from("diver_profiles")
       .upsert({ user_id: user.id }, { onConflict: "user_id" });
     if (ensureProfileError) {
       return NextResponse.json(
-        { ok: false, reply: "Could not initialize diver profile context for chat." },
+        { ok: false, reply: `Could not initialize diver profile context for chat: ${ensureProfileError.message}` },
         { status: 500 },
       );
     }
 
-    const service = createServiceSupabaseClient();
     const externalChatId = user.id;
     const channel = "web" as const;
     const thread =
