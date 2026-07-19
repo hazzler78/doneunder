@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     siteName: "doneunder.ai",
     title: "doneunder.ai | Commercial Diving Marketplace",
     description:
-      "The premium commercial diving talent marketplace — AI-powered matching for commercial divers, underwater welders, NDT specialists, and offshore contractors.",
+      "The premium commercial diving talent marketplace — AI-powered matching connecting commercial divers, underwater welders, NDT specialists with inshore and offshore contractors.",
     images: [
       {
         url: "/og.jpg",

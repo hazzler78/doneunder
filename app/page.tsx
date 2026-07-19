@@ -15,8 +15,9 @@ export default function Home() {
             The premium commercial diving talent marketplace.
           </h1>
           <p className="text-muted-foreground">
-            doneunder.ai connects commercial divers, underwater welders, NDT specialists, and
-            offshore contractors with AI-powered matching and verification-first trust signals.
+            doneunder.ai connects commercial divers, underwater welders, NDT specialists with
+            inshore and offshore contractors using AI-powered matching and verification-first
+            trust signals.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link href="/login">
