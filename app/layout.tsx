@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { Analytics } from "@vercel/analytics/next";
+import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,13 +15,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = "https://doneunder.ai";
+const siteUrl = SITE_URL;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "doneunder.ai | Commercial Diving Marketplace",
   description:
     "High-trust B2B marketplace connecting commercial divers and offshore contractors.",
+  verification: {
+    google: "pESPOJvmn_M3xe5FQ_-PTQwk1sEGpi6gge7dEKP485c",
+  },
   openGraph: {
     type: "website",
     locale: "en_US",

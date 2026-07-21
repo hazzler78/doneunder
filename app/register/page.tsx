@@ -1,7 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { registerAction } from "@/app/auth/actions";
+
+export const metadata: Metadata = {
+  title: "Register | doneunder.ai",
+  robots: { index: false, follow: false },
+};
 
 export default async function RegisterPage({
   searchParams,

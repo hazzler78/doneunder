@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { AgentWorkspace } from "@/components/agent-workspace";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "Workspace | doneunder.ai",
+  robots: { index: false, follow: false },
+};
 
 export default async function WorkspacePage() {
   const supabase = await createSupabaseServerClient();
