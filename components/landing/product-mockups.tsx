@@ -40,11 +40,11 @@ export function HeroProductMockup() {
           </div>
         </div>
 
-        <div className="relative space-y-2.5 p-4">
-          <div className="pointer-events-none absolute inset-x-4 top-4 h-16 overflow-hidden opacity-30">
-            <div className="h-8 w-full bg-gradient-to-b from-primary/30 to-transparent animate-scan" />
+        <div className="relative space-y-2.5 overflow-hidden p-4">
+          <div className="pointer-events-none absolute inset-x-0 top-0 bottom-0 overflow-hidden opacity-40">
+            <div className="absolute inset-x-4 h-24 w-[calc(100%-2rem)] bg-gradient-to-b from-transparent via-primary/35 to-transparent animate-scan" />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="relative flex items-center justify-between">
             <p className="text-xs font-medium text-cyan-100">Top matches</p>
             <p className="text-[11px] text-muted-foreground">Live</p>
           </div>
