@@ -41,9 +41,19 @@ export default function Home() {
       {/* Hero */}
       <section className="relative mx-auto w-full max-w-6xl section-pad pb-16 pt-10 sm:pt-14 md:pb-24 md:pt-16">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="animate-fade-up font-display text-sm font-semibold tracking-[0.18em] text-primary uppercase sm:text-base">
-            doneunder.ai
-          </p>
+          <div className="animate-fade-up flex flex-col items-center gap-3">
+            <Image
+              src="/doneunder_logo.jpg"
+              alt="doneunder.ai logo"
+              width={72}
+              height={72}
+              className="h-[72px] w-[72px] rounded-full object-cover shadow-[0_0_40px_-12px_rgba(30,200,224,0.55)]"
+              priority
+            />
+            <p className="font-display text-sm font-semibold tracking-[0.18em] text-primary uppercase sm:text-base">
+              doneunder.ai
+            </p>
+          </div>
           <h1 className="animate-fade-up-delay-1 mt-4 font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-cyan-50 sm:text-5xl md:text-[3.25rem]">
             Your commercial diving agent. Built for Offshore and Inshore work.
           </h1>

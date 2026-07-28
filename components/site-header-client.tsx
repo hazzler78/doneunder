@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,13 +24,23 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref }: Props) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-[#03070d]/80 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between section-pad py-3.5">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between section-pad py-3">
         <Link
           href="/"
-          className="font-display text-lg font-semibold tracking-tight text-cyan-100 transition hover:text-white"
+          className="flex items-center gap-2.5 transition hover:opacity-90"
           onClick={() => setOpen(false)}
         >
-          doneunder.ai
+          <Image
+            src="/doneunder_logo.jpg"
+            alt="doneunder.ai"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-full object-cover"
+            priority
+          />
+          <span className="font-display text-lg font-semibold tracking-tight text-cyan-100">
+            doneunder.ai
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

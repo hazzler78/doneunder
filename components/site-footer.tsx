@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const footerLinks = [
   { href: "/how-it-works", label: "How it works" },
@@ -12,10 +13,19 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-border/50">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 section-pad py-10 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="font-display text-lg font-semibold tracking-tight text-cyan-100">
-            doneunder.ai
-          </p>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          <Link href="/" className="inline-flex items-center gap-2.5">
+            <Image
+              src="/doneunder_logo.jpg"
+              alt="doneunder.ai"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+            <span className="font-display text-lg font-semibold tracking-tight text-cyan-100">
+              doneunder.ai
+            </span>
+          </Link>
+          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
             Commercial diving talent marketplace — verification-first matching for Offshore and
             Inshore teams.
           </p>
