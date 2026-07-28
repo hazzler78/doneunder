@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Outfit, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { ConditionalSiteFooter } from "@/components/conditional-site-footer";
 import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/site";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
+});
+
+const sourceSans = Source_Sans_3({
+  variable: "--font-sans-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -21,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "doneunder.ai | Commercial Diving Marketplace",
   description:
-    "High-trust B2B marketplace connecting commercial divers and offshore contractors.",
+    "High-trust B2B marketplace connecting commercial divers and offshore contractors with an AI agent that reviews CVs, matches campaigns, and keeps you mobilization-ready.",
   verification: {
     google: "pESPOJvmn_M3xe5FQ_-PTQwk1sEGpi6gge7dEKP485c",
   },
@@ -59,11 +67,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${outfit.variable} ${sourceSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col">
         <SiteHeader />
         <main className="flex-1">{children}</main>
+        <ConditionalSiteFooter />
         <Analytics />
       </body>
     </html>

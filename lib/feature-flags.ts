@@ -9,5 +9,21 @@ export function isStripeConfigured() {
 }
 
 export function isAiConfigured() {
-  return Boolean(process.env.XAI_API_KEY);
+  return Boolean(process.env.XAI_API_KEY && !isPlaceholderSecret(process.env.XAI_API_KEY));
+}
+
+export function isSupabaseConfigured() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  return Boolean(url && anon && !isPlaceholderSecret(url) && !isPlaceholderSecret(anon));
+}
+
+function isPlaceholderSecret(value: string) {
+  const normalized = value.replace(/^["']|["']$/g, "").trim();
+  return (
+    !normalized ||
+    normalized === "[SENSITIVE]" ||
+    normalized.toLowerCase() === "your-key" ||
+    normalized.includes("YOUR_")
+  );
 }

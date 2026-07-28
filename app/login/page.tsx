@@ -1,11 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { loginAction } from "@/app/auth/actions";
 
 export const metadata: Metadata = {
-  title: "Login | doneunder.ai",
+  title: "Sign in | doneunder.ai",
   robots: { index: false, follow: false },
 };
 
@@ -17,64 +16,81 @@ export default async function LoginPage({
   const { message } = await searchParams;
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>
-            One account for divers and companies. After you sign in, we send you to the right dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {message ? <p className="text-sm text-amber-300">{message}</p> : null}
-          <div className="grid gap-2 rounded-md border border-border/60 bg-muted/30 p-3 text-sm sm:grid-cols-2">
-            <div>
-              <p className="text-xs font-medium text-cyan-200">New — Diver (free)</p>
-              <Link href="/register" className="text-cyan-300 underline">
-                Create diver account
-              </Link>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-cyan-200">New — Company</p>
-              <Link href="/pricing" className="text-cyan-300 underline">
-                View plans &amp; subscribe
-              </Link>
-            </div>
-          </div>
-          <form action={loginAction} className="space-y-3">
-            <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">Email or username</span>
-              <input
-                type="text"
-                name="email"
-                required
-                autoComplete="username"
-                className="w-full rounded-md border bg-transparent p-2"
-                placeholder="you@example.com or janediver"
-              />
-              <span className="text-xs text-slate-500">
-                Use the same email you registered with, or your public username — not your display name.
-              </span>
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">Password</span>
-              <input
-                type="password"
-                name="password"
-                required
-                className="w-full rounded-md border bg-transparent p-2"
-                placeholder="********"
-              />
-            </label>
-            <Button type="submit" className="w-full">
-              Sign in
-            </Button>
-          </form>
-          <p className="text-sm text-muted-foreground">
-            Admin access uses the same sign-in; your account must be marked as admin in the system.
+    <div className="mx-auto flex w-full max-w-md flex-col justify-center section-pad py-12 sm:py-16">
+      <div className="mb-8 text-center">
+        <p className="font-display text-sm font-semibold tracking-[0.16em] text-primary uppercase">
+          doneunder.ai
+        </p>
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50">
+          Sign in
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          One account for divers and companies. We route you to the right workspace.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border/60 bg-[#060e18]/90 p-5 sm:p-6">
+        {message ? (
+          <p className="mb-4 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            {message}
           </p>
-        </CardContent>
-      </Card>
+        ) : null}
+
+        <div className="mb-5 grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/register"
+            className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 transition hover:border-primary/30"
+          >
+            <p className="text-xs font-medium text-primary">New — Diver</p>
+            <p className="mt-1 text-sm text-cyan-50">Create free account</p>
+          </Link>
+          <Link
+            href="/pricing"
+            className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 transition hover:border-primary/30"
+          >
+            <p className="text-xs font-medium text-primary">New — Company</p>
+            <p className="mt-1 text-sm text-cyan-50">View plans</p>
+          </Link>
+        </div>
+
+        <form action={loginAction} className="space-y-4">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Email or username</span>
+            <input
+              type="text"
+              name="email"
+              required
+              autoComplete="username"
+              className="w-full rounded-lg border border-border/70 bg-[#03070d] px-3 py-2.5 text-sm text-cyan-50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+              placeholder="you@example.com or janediver"
+            />
+            <span className="block text-xs text-muted-foreground/80">
+              Use your registration email or public username.
+            </span>
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Password</span>
+            <input
+              type="password"
+              name="password"
+              required
+              autoComplete="current-password"
+              className="w-full rounded-lg border border-border/70 bg-[#03070d] px-3 py-2.5 text-sm text-cyan-50 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+              placeholder="••••••••"
+            />
+          </label>
+          <Button type="submit" className="h-11 w-full">
+            Sign in
+          </Button>
+        </form>
+      </div>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        No account yet?{" "}
+        <Link href="/register" className="text-primary hover:underline">
+          Register as a diver
+        </Link>
+      </p>
     </div>
   );
 }

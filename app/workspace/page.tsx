@@ -31,13 +31,11 @@ export default async function WorkspacePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8">
-      <AgentWorkspace
-        role={role}
-        userId={user.id}
-        displayName={userRow?.full_name ?? "User"}
-        username={userRow?.username ?? null}
-      />
-    </div>
+    <AgentWorkspace
+      role={role}
+      userId={user.id}
+      displayName={userRow?.full_name ?? "User"}
+      username={userRow?.username ?? null}
+    />
   );
 }
