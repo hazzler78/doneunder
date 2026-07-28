@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 
     let { data: userRow } = await supabase
       .from("users")
-      .select("id, role, full_name, username")
+      .select("id, role, full_name, username, email")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       let { data: insertedUser, error: upsertUserError } = await service
         .from("users")
         .upsert(createUserPayload(username), { onConflict: "id" })
-        .select("id, role, full_name, username")
+        .select("id, role, full_name, username, email")
         .maybeSingle();
 
       if (upsertUserError?.message.includes("users_username_key")) {
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         const retry = await service
           .from("users")
           .upsert(createUserPayload(fallbackUsername), { onConflict: "id" })
-          .select("id, role, full_name, username")
+          .select("id, role, full_name, username, email")
           .maybeSingle();
         insertedUser = retry.data ?? insertedUser;
         upsertUserError = retry.error ?? null;
@@ -140,6 +140,7 @@ export async function POST(req: Request) {
       diverId: user.id,
       username: userRow?.username ?? null,
       displayName: userRow?.full_name ?? "Diver",
+      userEmail: userRow?.email ?? user.email ?? null,
       message,
       history,
     });

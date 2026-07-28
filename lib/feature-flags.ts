@@ -18,6 +18,15 @@ export function isSupabaseConfigured() {
   return Boolean(url && anon && !isPlaceholderSecret(url) && !isPlaceholderSecret(anon));
 }
 
+export function isEmailConfigured() {
+  return Boolean(
+    process.env.RESEND_API_KEY &&
+      !isPlaceholderSecret(process.env.RESEND_API_KEY) &&
+      process.env.RESEND_FROM_EMAIL &&
+      !isPlaceholderSecret(process.env.RESEND_FROM_EMAIL),
+  );
+}
+
 function isPlaceholderSecret(value: string) {
   const normalized = value.replace(/^["']|["']$/g, "").trim();
   return (

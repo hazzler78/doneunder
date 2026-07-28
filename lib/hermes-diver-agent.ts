@@ -9,7 +9,9 @@ import {
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
 import type { DiverProfileFull } from "@/lib/diver-profile";
-import { isAiConfigured } from "@/lib/feature-flags";
+import { sendEmailAsLoggedInUser } from "@/lib/email";
+import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
+import { logAgentInteraction } from "@/lib/audit";
 
 export type JobSuggestion = {
   id: string;
@@ -29,6 +31,7 @@ export type HermesDiverTurnInput = {
   diverId: string;
   username: string | null;
   displayName: string;
+  userEmail: string | null;
   message: string;
   history?: HermesChatMessage[];
 };
@@ -85,7 +88,12 @@ function scoreJobsForDiver(
     .slice(0, 3);
 }
 
-function buildProfileContext(profile: DiverProfileFull, username: string | null, displayName: string) {
+function buildProfileContext(
+  profile: DiverProfileFull,
+  username: string | null,
+  displayName: string,
+  userEmail: string | null,
+) {
   const p = profile.profile;
   const validation = validateDiverProfile({
     headline: p.headline,
@@ -108,10 +116,17 @@ function buildProfileContext(profile: DiverProfileFull, username: string | null,
   return {
     diver: {
       displayName,
+      email: userEmail,
       username,
       publicPath: username ? `/${username}` : null,
       previewPath: "/preview",
       cvPreviewPath: "/preview/cv",
+    },
+    email_capability: {
+      configured: isEmailConfigured(),
+      sends_as: userEmail
+        ? "Logged-in diver identity (From when domain allows, otherwise Reply-To)"
+        : "Unavailable — account email missing",
     },
     profile: {
       headline: p.headline || p.ambassador_public_headline || "",
@@ -158,12 +173,15 @@ function buildProfileContext(profile: DiverProfileFull, username: string | null,
 function buildSystemPrompt(context: ReturnType<typeof buildProfileContext>) {
   return `You are Hermes, the DoneUnder diver profile agent.
 
-You help commercial divers build, refine, review, and publish their ambassador profile, and find matching offshore jobs. You know IMCA/ADCI certifications, saturation hours, mobilization, and marine project staffing.
+You help commercial divers build, refine, review, and publish their ambassador profile, find matching offshore jobs, and send professional emails on their behalf.
 
 Conversation style:
 - Talk naturally, like a knowledgeable recruiter — not a command menu.
 - Answer questions directly using the profile context below (e.g. "how does it look?", "can you see my CV?", "what's missing?").
 - When the diver wants a change, use update_profile. When they want to go live, use publish_profile. When they want opportunities, use find_matching_jobs.
+- When they want to email a contractor, recruiter, or contact, draft the message first, show them to/subject/body, and only call send_email after they clearly confirm. Always set confirmed=true only after explicit approval.
+- Emails are sent as the logged-in diver (their name + email identity). Never invent a different sender.
+- If email_capability.configured is false, explain that outbound email is not configured yet — do not pretend you sent mail.
 - If profile_status is draft, the owner can preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
 - If profile_status is published, the public ambassador URL is /{username}.
 - Confirm before publishing if their intent is ambiguous.
@@ -202,7 +220,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     };
   }
 
-  const context = buildProfileContext(profile, input.username, input.displayName);
+  const context = buildProfileContext(profile, input.username, input.displayName, input.userEmail);
   const system = buildSystemPrompt(context);
 
   const state = { profile, suggestions };
@@ -274,6 +292,59 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         return {
           count: state.suggestions.length,
           suggestions: state.suggestions,
+        };
+      },
+    }),
+    send_email: tool({
+      description:
+        "Send an email as the logged-in diver after they confirm recipient, subject, and body. Never send without confirmed=true.",
+      inputSchema: z.object({
+        to: z.string().email().describe("Recipient email address"),
+        subject: z.string().min(1).max(200),
+        body: z.string().min(1).max(8000).describe("Plain-text email body written in the diver's voice"),
+        confirmed: z
+          .boolean()
+          .describe("True only after the diver explicitly approved sending this exact email."),
+      }),
+      execute: async ({ to, subject, body, confirmed }) => {
+        if (!confirmed) {
+          return {
+            ok: false,
+            message: "Not sent. Show the draft and wait for the diver to confirm before calling again with confirmed=true.",
+            draft: { to, subject, body },
+          };
+        }
+
+        if (!input.userEmail) {
+          return { ok: false, error: "Logged-in account has no email address on file." };
+        }
+
+        const result = await sendEmailAsLoggedInUser({
+          userEmail: input.userEmail,
+          userDisplayName: input.displayName,
+          to,
+          subject,
+          body,
+        });
+
+        await logAgentInteraction({
+          actorId: input.diverId,
+          feature: "hermes_send_email",
+          input: { to, subject, bodyLength: body.length },
+          output: result,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: result.error };
+        }
+
+        return {
+          ok: true,
+          id: result.id,
+          from: result.from,
+          replyTo: result.replyTo,
+          to,
+          subject,
         };
       },
     }),
