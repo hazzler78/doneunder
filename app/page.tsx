@@ -13,7 +13,7 @@ const pipeline = [
     id: "01",
     key: "find" as const,
     title: "Find the right campaigns early",
-    body: "Hermes watches for offshore and inshore scopes that fit your certifications, location, and mobilization window — not generic job boards.",
+    body: "Hermes watches for Offshore and Inshore scopes that fit your certifications, location, and mobilization window — not generic job boards.",
   },
   {
     id: "02",
@@ -45,11 +45,12 @@ export default function Home() {
             doneunder.ai
           </p>
           <h1 className="animate-fade-up-delay-1 mt-4 font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-cyan-50 sm:text-5xl md:text-[3.25rem]">
-            Your commercial diving agent. Built for real offshore work.
+            Your commercial diving agent. Built for Offshore and Inshore work.
           </h1>
           <p className="animate-fade-up-delay-2 mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Upload your CV. Hermes reviews certifications, finds matching campaigns, and keeps you
-            mobilization-ready — for divers and the contractors who hire them.
+            Upload your CV. Hermes reviews certifications, finds matching Offshore and Inshore
+            campaigns, and keeps you mobilization-ready — for divers and the contractors who hire
+            them.
           </p>
           <div className="animate-fade-up-delay-2 mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
             <Link href="/register" className="w-full sm:w-auto">
@@ -84,8 +85,8 @@ export default function Home() {
               Four stages. One agent. Zero spreadsheets.
             </h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-              From CV upload to short-notice mobilization — Hermes keeps the diving career workflow
-              in one thread.
+              From CV upload to short-notice mobilization across Offshore and Inshore scopes —
+              Hermes keeps the diving career workflow in one thread.
             </p>
           </div>
 
@@ -182,7 +183,7 @@ export default function Home() {
               </li>
               <li className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Built for commercial diving terminology, not generic HR chatbots
+                Built for Offshore and Inshore diving terminology, not generic HR chatbots
               </li>
             </ul>
             <div className="mt-8">
@@ -255,7 +256,7 @@ export default function Home() {
               </h2>
               <p className="mx-auto mt-4 max-w-lg text-muted-foreground">
                 Create a free diver account, upload your CV, and let Hermes start matching you to
-                campaigns that fit.
+                Offshore and Inshore campaigns that fit.
               </p>
               <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
                 <Link href="/register" className="w-full sm:w-auto">

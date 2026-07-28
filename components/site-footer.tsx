@@ -16,8 +16,8 @@ export function SiteFooter() {
             doneunder.ai
           </p>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Commercial diving talent marketplace — verification-first matching for offshore and
-            inshore teams.
+            Commercial diving talent marketplace — verification-first matching for Offshore and
+            Inshore teams.
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">

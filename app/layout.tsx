@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: "doneunder.ai | Commercial Diving Marketplace",
   description:
-    "High-trust B2B marketplace connecting commercial divers and offshore contractors with an AI agent that reviews CVs, matches campaigns, and keeps you mobilization-ready.",
+    "High-trust B2B marketplace connecting commercial divers with Offshore and Inshore contractors — an AI agent that reviews CVs, matches campaigns, and keeps you mobilization-ready.",
   verification: {
     google: "pESPOJvmn_M3xe5FQ_-PTQwk1sEGpi6gge7dEKP485c",
   },
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     siteName: "doneunder.ai",
     title: "doneunder.ai | Commercial Diving Marketplace",
     description:
-      "The premium commercial diving talent marketplace — AI-powered matching connecting commercial divers, underwater welders, NDT specialists with inshore and offshore contractors.",
+      "The premium commercial diving talent marketplace — AI-powered matching connecting commercial divers, underwater welders, and NDT specialists with Offshore and Inshore contractors.",
     images: [
       {
         url: "/og.jpg",
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "doneunder.ai | Commercial Diving Marketplace",
     description:
-      "High-trust B2B marketplace connecting commercial divers and offshore contractors.",
+      "High-trust B2B marketplace connecting commercial divers with Offshore and Inshore contractors.",
     images: ["/og.jpg"],
   },
 };
