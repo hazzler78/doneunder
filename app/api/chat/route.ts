@@ -3,36 +3,16 @@ import { z } from "zod";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { agentMessagesToChatHistory, appendAgentTurn, listAgentMessages } from "@/lib/agent-messages";
-import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
+import { ensureWorkspaceWebThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
 import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
+import { readPendingInbound } from "@/lib/inbound-email";
 import type { UserRole } from "@/lib/types";
 import { claimPreferredUsername } from "@/lib/usernames";
 
 const chatSchema = z.object({
   message: z.string().min(1).max(16000),
 });
-
-async function ensureWebThread(
-  service: ReturnType<typeof createServiceSupabaseClient>,
-  userId: string,
-  role: "diver" | "company",
-) {
-  const existing = await getAgentThread(service, "web", userId);
-  if (existing) return existing;
-
-  if (role === "diver") {
-    await service.from("diver_profiles").upsert({ user_id: userId }, { onConflict: "user_id" });
-  }
-
-  return upsertWorkspaceThread(service, {
-    userId,
-    role,
-    channel: "web",
-    externalChatId: userId,
-    metadata: { role },
-  });
-}
 
 export async function POST(req: Request) {
   try {
@@ -114,11 +94,11 @@ export async function POST(req: Request) {
     }
 
     const workspaceRole = role === "company" ? "company" : "diver";
-    let thread: Awaited<ReturnType<typeof ensureWebThread>> | null = null;
+    let thread: Awaited<ReturnType<typeof ensureWorkspaceWebThread>> | null = null;
     let history: ReturnType<typeof agentMessagesToChatHistory> = [];
 
     try {
-      thread = await ensureWebThread(service, user.id, workspaceRole);
+      thread = await ensureWorkspaceWebThread(service, user.id, workspaceRole);
       const priorMessages = await listAgentMessages(service, thread.id, { limit: 30 });
       history = agentMessagesToChatHistory(priorMessages);
     } catch (memoryError) {
@@ -148,6 +128,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, role, reply });
     }
 
+    const pendingInbound = readPendingInbound(thread?.metadata ?? null);
     const agentResult = await runHermesDiverTurn({
       supabase: service,
       diverId: user.id,
@@ -156,6 +137,7 @@ export async function POST(req: Request) {
       userEmail: userRow?.email ?? user.email ?? null,
       message,
       history,
+      pendingInbound,
     });
 
     if (thread) {
@@ -167,6 +149,19 @@ export async function POST(req: Request) {
         });
       } catch (persistError) {
         console.error("Failed to persist diver chat turn:", persistError);
+      }
+    }
+
+    if (thread && pendingInbound && agentResult.pendingInboundStatus) {
+      try {
+        await mergeAgentThreadMetadata(service, thread.id, {
+          pending_inbound: {
+            ...pendingInbound,
+            status: agentResult.pendingInboundStatus,
+          },
+        });
+      } catch (pendingError) {
+        console.error("Failed to update pending inbound status:", pendingError);
       }
     }
 

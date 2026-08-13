@@ -94,6 +94,16 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   }, [role]);
 
   useEffect(() => {
+    if (role !== "diver") return;
+    const timer = window.setInterval(() => {
+      if (sending) return;
+      void loadChatHistory({ silent: true });
+    }, 10000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, sending]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
@@ -120,13 +130,19 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         return;
       }
 
-      setMessages(
-        data.messages.map((item) => ({
-          id: item.id,
-          from: item.role === "user" ? "user" : "agent",
-          text: item.content,
-        })),
-      );
+      const next = data.messages.map((item) => ({
+        id: item.id,
+        from: (item.role === "user" ? "user" : "agent") as Message["from"],
+        text: item.content,
+      }));
+      setMessages((prev) => {
+        const lastPrev = prev[prev.length - 1];
+        const lastNext = next[next.length - 1];
+        if (prev.length === next.length && lastPrev?.id === lastNext?.id && lastPrev?.text === lastNext?.text) {
+          return prev;
+        }
+        return next;
+      });
     } catch {
       if (!options?.silent) {
         setMessages([
