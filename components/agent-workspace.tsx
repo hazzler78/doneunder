@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { FileText, Paperclip, PanelLeft, Send, X } from "lucide-react";
+import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { logoutAction } from "@/app/auth/actions";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -49,6 +50,13 @@ type StoredChatMessage = {
   created_at: string;
 };
 
+type PendingInboundNotice = {
+  from: string;
+  subject: string;
+  intent: "certificates" | "general";
+  status: "pending";
+};
+
 const diverStarterPrompts = [
   "How does my CV look?",
   "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
@@ -77,6 +85,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   const [certs, setCerts] = useState<File[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [cvUpdatedParts, setCvUpdatedParts] = useState<string[]>([]);
+  const [pendingInbound, setPendingInbound] = useState<PendingInboundNotice | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,7 +122,13 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     }
     try {
       const response = await fetch("/api/chat/messages");
-      const data = (await response.json()) as { messages?: StoredChatMessage[] };
+      const data = (await response.json()) as {
+        messages?: StoredChatMessage[];
+        pendingInbound?: PendingInboundNotice | null;
+      };
+      if (response.ok) {
+        setPendingInbound(data.pendingInbound?.status === "pending" ? data.pendingInbound : null);
+      }
       if (!response.ok || !data.messages?.length) {
         if (!options?.silent) {
           setMessages([
@@ -207,6 +222,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       if (data.cvUpdated) {
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
       }
+      void loadChatHistory({ silent: true });
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -446,11 +462,24 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               </p>
             </div>
           </div>
-          {role === "diver" ? (
-            <span className="hidden rounded-md border border-border/60 px-2 py-1 text-[11px] capitalize text-muted-foreground sm:inline">
-              Profile {profileStatus}
-            </span>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {role === "diver" ? (
+              <span className="hidden rounded-md border border-border/60 px-2 py-1 text-[11px] capitalize text-muted-foreground sm:inline">
+                Profile {profileStatus}
+              </span>
+            ) : null}
+            <Link href="/" className="hidden sm:inline">
+              <Button type="button" size="sm" variant="outline">
+                Close
+              </Button>
+            </Link>
+            <form action={logoutAction}>
+              <Button type="submit" size="sm" variant="ghost" aria-label="Sign out">
+                <LogOut className="h-4 w-4" />
+                <span className="ml-1.5 hidden md:inline">Sign out</span>
+              </Button>
+            </form>
+          </div>
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-5">
@@ -458,6 +487,18 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
             <p className="text-sm text-muted-foreground">Loading conversation…</p>
           ) : (
             <>
+              {pendingInbound ? (
+                <div className="rounded-xl border border-primary/35 bg-primary/10 px-3.5 py-3 text-sm text-cyan-50">
+                  <p className="font-medium">You have a new email</p>
+                  <p className="mt-1 text-cyan-50/90">
+                    From {pendingInbound.from}
+                    {pendingInbound.subject ? ` — ${pendingInbound.subject}` : ""}.
+                    {pendingInbound.intent === "certificates"
+                      ? " They asked for your certificates. Reply yes and I will send them."
+                      : " Reply here if you want me to follow up."}
+                  </p>
+                </div>
+              ) : null}
               {messages.length <= 1 ? (
                 <div className="mb-3 space-y-3">
                   {role === "diver" ? (

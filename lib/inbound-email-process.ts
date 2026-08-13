@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentMessage } from "@/lib/agent-messages";
-import { ensureWorkspaceWebThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
+import { ensureWorkspaceWebThread, getAgentThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
 import { isInboundReceivingAddress, parseEmailAddress, stripQuotes } from "@/lib/email";
 import {
@@ -10,6 +10,7 @@ import {
   detectInboundIntent,
   excerptInboundBody,
   inboundBodyText,
+  readPendingInbound,
   type MatchedDiver,
   type PendingInbound,
 } from "@/lib/inbound-email";
@@ -31,6 +32,13 @@ function getResend() {
   const key = stripQuotes(process.env.RESEND_API_KEY || "");
   if (!key) throw new Error("RESEND_API_KEY is not configured.");
   return new Resend(key);
+}
+
+export async function loadPendingInboundForUser(userId: string): Promise<PendingInbound | null> {
+  const supabase = createServiceSupabaseClient();
+  const thread = await getAgentThread(supabase, "web", userId);
+  const pending = readPendingInbound(thread?.metadata ?? null);
+  return pending?.status === "pending" ? pending : null;
 }
 
 async function alreadyProcessed(emailId: string) {

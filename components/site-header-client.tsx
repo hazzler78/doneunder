@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,14 @@ const links = [
 type Props = {
   isLoggedIn: boolean;
   dashboardHref: string;
+  pendingMail?: { from: string; subject: string } | null;
 };
 
-export function SiteHeaderClient({ isLoggedIn, dashboardHref }: Props) {
+export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Props) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const onWorkspace = pathname === "/workspace";
+  const hasMail = Boolean(pendingMail);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-[#03070d]/80 backdrop-blur-xl">
@@ -58,8 +63,15 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref }: Props) {
         <div className="flex items-center gap-2">
           {isLoggedIn ? (
             <>
-              <Link href={dashboardHref} className="hidden sm:block">
-                <Button size="sm">Open workspace</Button>
+              <Link href={onWorkspace ? "/" : dashboardHref} className="hidden sm:block">
+                <Button size="sm" variant={onWorkspace ? "outline" : "default"}>
+                  {onWorkspace ? "Close workspace" : "Open workspace"}
+                  {hasMail ? (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      Mail
+                    </span>
+                  ) : null}
+                </Button>
               </Link>
               <form action={logoutAction} className="hidden sm:block">
                 <Button type="submit" variant="outline" size="sm">
@@ -82,12 +94,13 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref }: Props) {
 
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 text-cyan-100 md:hidden"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 text-cyan-100 md:hidden"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {hasMail ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" /> : null}
           </button>
         </div>
       </div>
@@ -108,9 +121,14 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref }: Props) {
             <div className="mt-2 flex flex-col gap-2 border-t border-border/40 pt-3">
               {isLoggedIn ? (
                 <>
-                  <Link href={dashboardHref} onClick={() => setOpen(false)}>
-                    <Button className="w-full" size="sm">
-                      Open workspace
+                  {hasMail ? (
+                    <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-cyan-50">
+                      New mail from {pendingMail?.from}. Open workspace to reply.
+                    </p>
+                  ) : null}
+                  <Link href={onWorkspace ? "/" : dashboardHref} onClick={() => setOpen(false)}>
+                    <Button className="w-full" size="sm" variant={onWorkspace ? "outline" : "default"}>
+                      {onWorkspace ? "Close workspace" : "Open workspace"}
                     </Button>
                   </Link>
                   <form action={logoutAction}>
