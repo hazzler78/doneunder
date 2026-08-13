@@ -105,3 +105,52 @@ export async function getAgentThread(
   if (error) throw new Error(error.message);
   return (data as AgentThread | null) ?? null;
 }
+
+export async function ensureWorkspaceWebThread(
+  supabase: SupabaseClient,
+  userId: string,
+  role: "diver" | "company",
+) {
+  const existing = await getAgentThread(supabase, "web", userId);
+  if (existing) return existing;
+
+  if (role === "diver") {
+    await supabase.from("diver_profiles").upsert({ user_id: userId }, { onConflict: "user_id" });
+  }
+
+  return upsertWorkspaceThread(supabase, {
+    userId,
+    role,
+    channel: "web",
+    externalChatId: userId,
+    metadata: { role },
+  });
+}
+
+export async function mergeAgentThreadMetadata(
+  supabase: SupabaseClient,
+  threadId: string,
+  patch: Record<string, unknown>,
+) {
+  const { data: current, error: readError } = await supabase
+    .from("agent_threads")
+    .select("metadata")
+    .eq("id", threadId)
+    .maybeSingle();
+  if (readError) throw new Error(readError.message);
+
+  const metadata = {
+    ...((current?.metadata as Record<string, unknown> | null) ?? {}),
+    ...patch,
+  };
+
+  const { error } = await supabase
+    .from("agent_threads")
+    .update({
+      metadata,
+      last_message_at: new Date().toISOString(),
+    })
+    .eq("id", threadId);
+  if (error) throw new Error(error.message);
+  return metadata;
+}

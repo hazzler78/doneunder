@@ -26,6 +26,10 @@ export function cvPdfFilename(displayName: string) {
   return `${sanitizeFilenamePart(displayName)}-CV.pdf`;
 }
 
+export function certificatesPdfFilename(displayName: string) {
+  return `${sanitizeFilenamePart(displayName)}-Certificates.pdf`;
+}
+
 function wrapWords(text: string, maxChars: number) {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -239,4 +243,36 @@ export function renderCvPdf(lines: PdfLine[]): Buffer {
 
 export function buildDiverCvPdf(profile: DiverProfileFull, displayName: string) {
   return renderCvPdf(buildCvPdfLines(profile, displayName));
+}
+
+export function buildDiverCertificatesPdf(profile: DiverProfileFull, displayName: string) {
+  const lines: PdfLine[] = [
+    { text: displayName.trim() || "Commercial Diver", size: 18, bold: true, gapAfter: 4 },
+    { text: "Certification records", size: 13, bold: true, gapAfter: 12 },
+  ];
+
+  if (profile.certifications.length === 0) {
+    lines.push({
+      text: "No certifications have been listed on this profile yet.",
+      size: 10,
+    });
+  } else {
+    for (const cert of profile.certifications) {
+      lines.push({ text: cert.name, size: 11, bold: true, gapAfter: 2 });
+      lines.push({
+        text: [
+          cert.issuing_body,
+          cert.cert_number ? `#${cert.cert_number}` : null,
+          `Issued: ${formatCvDate(cert.issue_date) ?? "Not provided"}`,
+          `Expires: ${formatCvDate(cert.expiry_date) ?? "Not provided"}`,
+        ]
+          .filter(Boolean)
+          .join(" • "),
+        size: 9,
+        gapAfter: 8,
+      });
+    }
+  }
+
+  return renderCvPdf(lines);
 }

@@ -8,10 +8,13 @@ export type EmailAttachment = {
 };
 
 export type SendUserEmailInput = {
-  /** Logged-in user's email — always used as Reply-To. */
+  /** Logged-in user's email — used for From when the domain is verified. */
   userEmail: string;
   /** Logged-in user's display name. */
   userDisplayName: string;
+  /** Public username — Reply-To becomes `{username}@{inbound domain}` so Hermes can receive replies. */
+  username?: string | null;
+  userId?: string | null;
   to: string;
   subject: string;
   body: string;
@@ -22,18 +25,29 @@ export type SendUserEmailResult =
   | { ok: true; id: string; from: string; replyTo: string; attached: string[] }
   | { ok: false; error: string };
 
-function stripQuotes(value: string) {
+export function stripQuotes(value: string) {
   return value.replace(/^["']|["']$/g, "").trim();
 }
 
-function parseEmailAddress(value: string) {
+export function parseEmailAddress(value: string) {
   const match = value.match(/<([^>]+)>/);
   return (match?.[1] ?? value).trim().toLowerCase();
 }
 
-function emailDomain(email: string) {
+export function emailDomain(email: string) {
   const at = email.lastIndexOf("@");
   return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
+}
+
+export function inboundReceivingDomain() {
+  const configured = stripQuotes(process.env.RESEND_INBOUND_DOMAIN || "inbound.doneunder.ai").toLowerCase();
+  return configured.replace(/^@/, "") || "inbound.doneunder.ai";
+}
+
+export function inboundReplyToAddress(username?: string | null, userId?: string | null) {
+  const raw = (username?.trim() || userId?.replace(/-/g, "").slice(0, 12) || "hermes").toLowerCase();
+  const local = raw.replace(/[^a-z0-9._+-]/g, "") || "hermes";
+  return `${local}@${inboundReceivingDomain()}`;
 }
 
 /**
@@ -41,23 +55,30 @@ function emailDomain(email: string) {
  *
  * - If the user's email domain matches RESEND_FROM_DOMAIN (or the domain of
  *   RESEND_FROM_EMAIL), send as `"Name" <user@domain>`.
- * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>` with
- *   Reply-To set to the user's real address (providers block forging Gmail etc.).
+ * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>`.
+ * - Reply-To is always `{username}@{RESEND_INBOUND_DOMAIN}` so employer replies
+ *   land in Hermes instead of a personal inbox.
  */
-export function resolveSenderIdentity(userEmail: string, userDisplayName: string) {
-  const replyTo = stripQuotes(userEmail).toLowerCase();
-  const displayName = userDisplayName.trim() || replyTo.split("@")[0] || "doneunder user";
+export function resolveSenderIdentity(
+  userEmail: string,
+  userDisplayName: string,
+  username?: string | null,
+  userId?: string | null,
+) {
+  const accountEmail = stripQuotes(userEmail).toLowerCase();
+  const displayName = userDisplayName.trim() || accountEmail.split("@")[0] || "doneunder user";
   const platformFrom = stripQuotes(process.env.RESEND_FROM_EMAIL || "Hermes <onboarding@resend.dev>");
   const platformAddress = parseEmailAddress(platformFrom);
   const allowedDomain =
     stripQuotes(process.env.RESEND_FROM_DOMAIN || "").toLowerCase() || emailDomain(platformAddress);
 
-  const userDomain = emailDomain(replyTo);
+  const userDomain = emailDomain(accountEmail);
   const canSendAsUser = Boolean(allowedDomain && userDomain === allowedDomain);
+  const replyTo = inboundReplyToAddress(username, userId);
 
   if (canSendAsUser) {
     return {
-      from: `${displayName} <${replyTo}>`,
+      from: `${displayName} <${accountEmail}>`,
       replyTo,
       mode: "user" as const,
     };
@@ -89,7 +110,12 @@ export async function sendEmailAsLoggedInUser(
     return { ok: false, error: "to, subject, and body are required." };
   }
 
-  const identity = resolveSenderIdentity(input.userEmail, input.userDisplayName);
+  const identity = resolveSenderIdentity(
+    input.userEmail,
+    input.userDisplayName,
+    input.username,
+    input.userId,
+  );
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
   const attached = (input.attachments ?? [])
     .filter((item) => item.filename && item.content.length > 0)
