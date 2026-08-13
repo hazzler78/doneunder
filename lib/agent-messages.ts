@@ -12,6 +12,13 @@ export type AgentMessage = {
 };
 
 const MESSAGE_COLUMNS = "id,thread_id,role,content,metadata,created_at" as const;
+const MAX_MESSAGE_CHARS = 8000;
+
+function clipMessageContent(content: string) {
+  const trimmed = content.trim();
+  if (trimmed.length <= MAX_MESSAGE_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_MESSAGE_CHARS - 1)}…`;
+}
 
 export async function listAgentMessages(
   supabase: SupabaseClient,
@@ -44,7 +51,7 @@ export async function appendAgentMessage(
     .insert({
       thread_id: input.threadId,
       role: input.role,
-      content: input.content.trim(),
+      content: clipMessageContent(input.content),
       metadata: input.metadata ?? {},
     })
     .select(MESSAGE_COLUMNS)

@@ -6,7 +6,7 @@ import { getAgentThread } from "@/lib/agent-threads";
 import type { UserRole } from "@/lib/types";
 
 const WELCOME_DIVER =
-  "Hi — I'm Hermes. Upload your CV on the left, then just talk to me naturally: review your profile, tweak your headline, or find matching jobs.";
+  "Hi — I'm Hermes. Update your CV just by talking, in English. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save it for you.";
 const WELCOME_COMPANY =
   "Welcome. I can help draft job requests and shortlist matching diver profiles.";
 
@@ -48,7 +48,9 @@ export async function GET() {
       });
     }
 
-    const stored = await listAgentMessages(supabase, thread.id, { limit: 80 });
+    // Read with the service role. agent_threads has no user SELECT policy in
+    // older databases, so nested RLS on agent_messages otherwise returns [].
+    const stored = await listAgentMessages(service, thread.id, { limit: 80 });
     if (stored.length === 0) {
       return NextResponse.json({
         ok: true,

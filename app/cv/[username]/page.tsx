@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { divers } from "@/lib/mock-data";
 
 function formatDate(dateValue?: string | null) {
@@ -28,23 +29,48 @@ export default async function DiverCvPage({
   const fallbackDiver = divers.find((entry) => entry.username === username);
   if (!publicAmbassador && !fallbackDiver) notFound();
 
-  const [{ data: experiences }, { data: certifications }, { data: references }] = await Promise.all([
-    supabase
-      .from("diver_experiences")
-      .select("company,project_name,location,role_title,date_start,date_end,summary")
-      .eq("diver_id", publicAmbassador?.user_id)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("diver_certifications")
-      .select("name,issue_date,expiry_date,cert_number,issuing_body")
-      .eq("diver_id", publicAmbassador?.user_id)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("diver_references")
-      .select("name,company,phone,email")
-      .eq("diver_id", publicAmbassador?.user_id)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [{ data: experiences }, { data: certifications }, { data: references }, { data: profileExtras }] =
+    await Promise.all([
+      supabase
+        .from("diver_experiences")
+        .select("company,project_name,location,role_title,date_start,date_end,summary")
+        .eq("diver_id", publicAmbassador?.user_id)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("diver_certifications")
+        .select("name,issue_date,expiry_date,cert_number,issuing_body")
+        .eq("diver_id", publicAmbassador?.user_id)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("diver_references")
+        .select("name,company,phone,email")
+        .eq("diver_id", publicAmbassador?.user_id)
+        .order("sort_order", { ascending: true }),
+      publicAmbassador?.user_id
+        ? supabase
+            .from("diver_profiles")
+            .select("polished_cv_json,polished_cv_markdown")
+            .eq("user_id", publicAmbassador.user_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+  const polishedJson = polishedCvJsonSchema.safeParse(profileExtras?.polished_cv_json).data;
+  const displayExperiences =
+    (experiences?.length ?? 0) > 0 ? experiences ?? [] : polishedJson?.experiences ?? [];
+  const displayCertifications =
+    (certifications?.length ?? 0) > 0 ? certifications ?? [] : polishedJson?.certifications ?? [];
+  const displayReferences =
+    (references?.length ?? 0) > 0
+      ? references ?? []
+      : (polishedJson?.references ?? []).map((item) => ({
+          name: item.name,
+          company: item.company,
+          phone: item.phone ?? null,
+          email: item.email ?? null,
+        }));
+  const polishedMarkdown =
+    publicAmbassador?.polished_cv_markdown || profileExtras?.polished_cv_markdown || null;
 
   const fullName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
   const headline = publicAmbassador?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV";
@@ -59,7 +85,8 @@ export default async function DiverCvPage({
     publicAmbassador?.dive_hours && publicAmbassador.dive_hours > 0
       ? publicAmbassador.dive_hours.toLocaleString()
       : "Not declared";
-  const hasStructuredCv = (experiences?.length ?? 0) > 0 || (certifications?.length ?? 0) > 0 || (references?.length ?? 0) > 0;
+  const hasStructuredCv =
+    displayExperiences.length > 0 || displayCertifications.length > 0 || displayReferences.length > 0;
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-10 text-sm leading-relaxed print:max-w-none print:px-0 print:py-0">
@@ -84,9 +111,9 @@ export default async function DiverCvPage({
 
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">Professional Experience</h2>
-        {(experiences ?? []).length > 0 ? (
+        {displayExperiences.length > 0 ? (
           <ul className="space-y-2">
-            {(experiences ?? []).map((item, index) => {
+            {displayExperiences.map((item, index) => {
               const start = formatDate(item.date_start);
               const end = formatDate(item.date_end);
               return (
@@ -108,9 +135,9 @@ export default async function DiverCvPage({
 
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">Certifications</h2>
-        {(certifications ?? []).length > 0 ? (
+        {displayCertifications.length > 0 ? (
           <ul className="space-y-2">
-            {(certifications ?? []).map((item, index) => (
+            {displayCertifications.map((item, index) => (
               <li key={`${item.name}-${index}`} className="rounded-md border p-3">
                 <p className="font-semibold">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -122,6 +149,8 @@ export default async function DiverCvPage({
               </li>
             ))}
           </ul>
+        ) : publicAmbassador ? (
+          <p>No certifications listed yet.</p>
         ) : (
           <ul className="list-disc pl-5">
             {(fallbackDiver?.certifications ?? []).map((item) => (
@@ -133,9 +162,9 @@ export default async function DiverCvPage({
 
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">References</h2>
-        {(references ?? []).length > 0 ? (
+        {displayReferences.length > 0 ? (
           <ul className="space-y-2">
-            {(references ?? []).map((item, index) => (
+            {displayReferences.map((item, index) => (
               <li key={`${item.name}-${index}`} className="rounded-md border p-3">
                 <p className="font-semibold">{item.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -149,11 +178,11 @@ export default async function DiverCvPage({
         )}
       </section>
 
-      {hasStructuredCv && publicAmbassador?.polished_cv_markdown ? (
+      {polishedMarkdown && (!hasStructuredCv || polishedMarkdown.length > 80) ? (
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">AI Polished CV Draft</h2>
+          <h2 className="text-xl font-semibold">{hasStructuredCv ? "AI Polished CV Draft" : "CV draft"}</h2>
           <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
-            {publicAmbassador.polished_cv_markdown}
+            {polishedMarkdown}
           </pre>
         </section>
       ) : null}

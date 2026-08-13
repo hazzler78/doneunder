@@ -5,6 +5,7 @@ import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import {
   applyConversationalCvUpdate,
   getDiverProfile,
+  persistMissingChildRowsFromJson,
   publishDiverProfile,
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
@@ -144,6 +145,8 @@ function buildProfileContext(
       certifications: profile.certifications.length,
       references: profile.references.length,
     },
+    polished_cv_markdown_excerpt:
+      profile.experiences.length === 0 ? truncateText(p.polished_cv_markdown, 4000) : undefined,
     experiences: profile.experiences.map((exp) => ({
       id: exp.id,
       role_title: exp.role_title,
@@ -197,6 +200,7 @@ Updating the CV from chat (this is the main way to edit):
 - Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
 - After a successful update_cv, briefly confirm what you saved and invite them to preview /preview/cv.
 - If the profile is empty, invite them to paste CV text here or attach a PDF in the chat. You can build the CV from conversation — do not send them to a form.
+- If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
 
 Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
@@ -227,7 +231,12 @@ function toModelMessages(history: HermesChatMessage[] | undefined, message: stri
 }
 
 export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<HermesDiverTurnResult> {
-  const profile = await getDiverProfile(input.supabase, input.diverId);
+  let profile = await getDiverProfile(input.supabase, input.diverId);
+  try {
+    profile = await persistMissingChildRowsFromJson(input.supabase, input.diverId);
+  } catch (error) {
+    console.error("Failed to restore CV rows from polished JSON:", error);
+  }
   const suggestions: JobSuggestion[] = [];
 
   if (!isAiConfigured()) {

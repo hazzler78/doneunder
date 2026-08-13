@@ -26,6 +26,8 @@ type DbClient = SupabaseClient;
 export type SaveProfileMeta = {
   importBatchId?: string | null;
   cvLastProcessedAt?: string | null;
+  /** When true, empty experience/cert/reference arrays keep existing rows instead of wiping them. */
+  preserveEmptyChildSections?: boolean;
 };
 
 function formatCvDate(value?: string | null) {
@@ -401,6 +403,42 @@ function payloadToProfileRecord(
   };
 }
 
+function hydrateFromPolishedJson(profile: DiverProfileFull): DiverProfileFull {
+  const json = profile.profile.polished_cv_json;
+  if (!json) return profile;
+
+  return {
+    ...profile,
+    experiences:
+      profile.experiences.length > 0
+        ? profile.experiences
+        : (json.experiences ?? []).map((item, index) => ({
+            ...item,
+            id: `json-exp-${index}`,
+            source: "ai" as const,
+          })),
+    certifications:
+      profile.certifications.length > 0
+        ? profile.certifications
+        : (json.certifications ?? []).map((item, index) => ({
+            ...item,
+            id: `json-cert-${index}`,
+            source: "ai" as const,
+          })),
+    references:
+      profile.references.length > 0
+        ? profile.references
+        : (json.references ?? []).map((item, index) => ({
+            name: item.name,
+            company: item.company,
+            phone: item.phone ?? "Not provided",
+            email: item.email,
+            id: `json-ref-${index}`,
+            source: "ai" as const,
+          })),
+  };
+}
+
 async function replaceChildRows(
   supabase: DbClient,
   diverId: string,
@@ -408,11 +446,13 @@ async function replaceChildRows(
   importBatchId: string | null,
   nowIso: string,
 ) {
-  await Promise.all([
+  const deletes = await Promise.all([
     supabase.from("diver_experiences").delete().eq("diver_id", diverId),
     supabase.from("diver_certifications").delete().eq("diver_id", diverId),
     supabase.from("diver_references").delete().eq("diver_id", diverId),
   ]);
+  const deleteError = deletes.find((result) => result.error)?.error;
+  if (deleteError) throw new Error(deleteError.message);
 
   if (payload.experiences.length > 0) {
     const { error } = await supabase.from("diver_experiences").insert(
@@ -474,7 +514,7 @@ async function replaceChildRows(
 }
 
 export async function getDiverProfile(supabase: DbClient, diverId: string): Promise<DiverProfileFull> {
-  const [{ data: profile }, { data: experiences }, { data: certifications }, { data: references }] = await Promise.all([
+  const [profileResult, experienceResult, certificationResult, referenceResult] = await Promise.all([
     supabase.from("diver_profiles").select(DIVER_PROFILE_SCALAR_COLUMNS).eq("user_id", diverId).maybeSingle(),
     supabase
       .from("diver_experiences")
@@ -493,12 +533,99 @@ export async function getDiverProfile(supabase: DbClient, diverId: string): Prom
       .order("sort_order", { ascending: true }),
   ]);
 
-  return {
-    profile: mapProfileRow(profile),
-    experiences: (experiences ?? []) as DiverProfileFull["experiences"],
-    certifications: (certifications ?? []) as DiverProfileFull["certifications"],
-    references: (references ?? []) as DiverProfileFull["references"],
-  };
+  const readError =
+    profileResult.error ?? experienceResult.error ?? certificationResult.error ?? referenceResult.error;
+  if (readError) throw new Error(readError.message);
+
+  return hydrateFromPolishedJson({
+    profile: mapProfileRow(profileResult.data),
+    experiences: (experienceResult.data ?? []) as DiverProfileFull["experiences"],
+    certifications: (certificationResult.data ?? []) as DiverProfileFull["certifications"],
+    references: (referenceResult.data ?? []) as DiverProfileFull["references"],
+  });
+}
+
+/** If structured rows were wiped but polished_cv_json still has jobs/tickets, write them back. */
+export async function persistMissingChildRowsFromJson(supabase: DbClient, diverId: string) {
+  const [experienceResult, certificationResult, referenceResult, profileResult] = await Promise.all([
+    supabase.from("diver_experiences").select("id").eq("diver_id", diverId).limit(1),
+    supabase.from("diver_certifications").select("id").eq("diver_id", diverId).limit(1),
+    supabase.from("diver_references").select("id").eq("diver_id", diverId).limit(1),
+    supabase.from("diver_profiles").select("polished_cv_json").eq("user_id", diverId).maybeSingle(),
+  ]);
+
+  const readError =
+    experienceResult.error ?? certificationResult.error ?? referenceResult.error ?? profileResult.error;
+  if (readError) throw new Error(readError.message);
+
+  const parsedJson = polishedCvJsonSchema.safeParse(profileResult.data?.polished_cv_json).data;
+  if (!parsedJson) return getDiverProfile(supabase, diverId);
+
+  const nowIso = new Date().toISOString();
+  const needsExperiences = (experienceResult.data?.length ?? 0) === 0 && parsedJson.experiences.length > 0;
+  const needsCertifications = (certificationResult.data?.length ?? 0) === 0 && parsedJson.certifications.length > 0;
+  const needsReferences = (referenceResult.data?.length ?? 0) === 0 && parsedJson.references.length > 0;
+
+  if (!needsExperiences && !needsCertifications && !needsReferences) {
+    return getDiverProfile(supabase, diverId);
+  }
+
+  if (needsExperiences) {
+    const { error } = await supabase.from("diver_experiences").insert(
+      parsedJson.experiences.map((item, index) => ({
+        diver_id: diverId,
+        company: (item.company ?? "").trim() || "Unknown",
+        project_name: item.project_name || null,
+        location: item.location || null,
+        role_title: (item.role_title ?? "").trim() || "Commercial Diver",
+        date_start: normalizeDate(item.date_start),
+        date_end: normalizeDate(item.date_end),
+        summary: item.summary || null,
+        sort_order: index,
+        source: "ai",
+        source_ref: "source: polished-cv-json-repair",
+        updated_at: nowIso,
+      })),
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  if (needsCertifications) {
+    const { error } = await supabase.from("diver_certifications").insert(
+      parsedJson.certifications.map((item, index) => ({
+        diver_id: diverId,
+        name: item.name,
+        issue_date: normalizeDate(item.issue_date),
+        expiry_date: normalizeDate(item.expiry_date),
+        cert_number: item.cert_number || null,
+        issuing_body: item.issuing_body || null,
+        sort_order: index,
+        source: "ai",
+        source_ref: "source: polished-cv-json-repair",
+        updated_at: nowIso,
+      })),
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  if (needsReferences) {
+    const { error } = await supabase.from("diver_references").insert(
+      parsedJson.references.map((item, index) => ({
+        diver_id: diverId,
+        name: item.name,
+        company: item.company || null,
+        phone: item.phone ?? "Not provided",
+        email: item.email || null,
+        sort_order: index,
+        source: "ai",
+        source_ref: "source: polished-cv-json-repair",
+        updated_at: nowIso,
+      })),
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  return getDiverProfile(supabase, diverId);
 }
 
 export async function saveDiverProfile(
@@ -510,16 +637,36 @@ export async function saveDiverProfile(
   const payload = diverProfilePayloadSchema.parse(normalizeProfilePayloadForSave(rawPayload));
   const nowIso = new Date().toISOString();
   const importBatchId = meta.importBatchId ?? payload.import_batch_id ?? null;
+  const current = meta.preserveEmptyChildSections ? await getDiverProfile(supabase, diverId) : null;
+  const childPayload = {
+    experiences:
+      meta.preserveEmptyChildSections && payload.experiences.length === 0
+        ? current?.experiences ?? []
+        : payload.experiences,
+    certifications:
+      meta.preserveEmptyChildSections && payload.certifications.length === 0
+        ? current?.certifications ?? []
+        : payload.certifications,
+    references:
+      meta.preserveEmptyChildSections && payload.references.length === 0
+        ? current?.references ?? []
+        : payload.references,
+  };
+  const payloadToStore: DiverProfilePayload = {
+    ...payload,
+    ...childPayload,
+    polished_cv_json: syncPolishedCvJson({ ...payload, ...childPayload }),
+  };
 
   const { error: profileError } = await supabase
     .from("diver_profiles")
-    .upsert(payloadToProfileRecord(diverId, payload, meta, nowIso), { onConflict: "user_id" });
+    .upsert(payloadToProfileRecord(diverId, payloadToStore, meta, nowIso), { onConflict: "user_id" });
 
   if (profileError) {
     throw new Error(profileError.message);
   }
 
-  await replaceChildRows(supabase, diverId, payload, importBatchId, nowIso);
+  await replaceChildRows(supabase, diverId, childPayload, importBatchId, nowIso);
 
   return getDiverProfile(supabase, diverId);
 }
@@ -838,6 +985,15 @@ export async function applyConversationalCvUpdate(
   payload.experiences = experiences;
   payload.certifications = certifications;
   payload.references = references;
+
+  const childSectionChanged =
+    changed.includes("experiences") || changed.includes("certifications") || changed.includes("references");
+
+  if (!childSectionChanged) {
+    const profile = await patchDiverProfileScalars(supabase, diverId, payload, current);
+    return { ok: true, profile, changed, errors };
+  }
+
   payload.polished_cv_json = syncPolishedCvJson(payload);
   payload.polished_cv_markdown = buildPolishedCvMarkdown({
     ...payload,
