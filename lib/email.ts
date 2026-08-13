@@ -1,6 +1,12 @@
 import { Resend } from "resend";
 import { isEmailConfigured } from "@/lib/feature-flags";
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
 export type SendUserEmailInput = {
   /** Logged-in user's email — always used as Reply-To. */
   userEmail: string;
@@ -9,10 +15,11 @@ export type SendUserEmailInput = {
   to: string;
   subject: string;
   body: string;
+  attachments?: EmailAttachment[];
 };
 
 export type SendUserEmailResult =
-  | { ok: true; id: string; from: string; replyTo: string }
+  | { ok: true; id: string; from: string; replyTo: string; attached: string[] }
   | { ok: false; error: string };
 
 function stripQuotes(value: string) {
@@ -84,6 +91,13 @@ export async function sendEmailAsLoggedInUser(
 
   const identity = resolveSenderIdentity(input.userEmail, input.userDisplayName);
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
+  const attached = (input.attachments ?? [])
+    .filter((item) => item.filename && item.content.length > 0)
+    .map((item) => ({
+      filename: item.filename,
+      content: item.content,
+      contentType: item.contentType,
+    }));
 
   const { data, error } = await resend.emails.send({
     from: identity.from,
@@ -91,6 +105,7 @@ export async function sendEmailAsLoggedInUser(
     replyTo: identity.replyTo,
     subject,
     text: body,
+    attachments: attached.length > 0 ? attached : undefined,
   });
 
   if (error) {
@@ -102,5 +117,6 @@ export async function sendEmailAsLoggedInUser(
     id: data?.id ?? "sent",
     from: identity.from,
     replyTo: identity.replyTo,
+    attached: attached.map((item) => item.filename),
   };
 }
