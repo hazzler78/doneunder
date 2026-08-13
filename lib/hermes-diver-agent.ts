@@ -10,7 +10,8 @@ import {
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
-import { sendEmailAsLoggedInUser } from "@/lib/email";
+import { sendEmailAsLoggedInUser, type EmailAttachment } from "@/lib/email";
+import { buildDiverCvPdf, cvPdfFilename } from "@/lib/cv-pdf";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
 import { logAgentInteraction } from "@/lib/audit";
 
@@ -210,6 +211,8 @@ Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
 - find_matching_jobs when they want opportunities.
 - For email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
+- If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
+- Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
 - Emails are sent as the logged-in diver. Never invent a different sender.
 - If email_capability.configured is false, explain that outbound email is not configured yet — do not pretend you sent mail.
 - If profile_status is draft, preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
@@ -281,13 +284,38 @@ function replyClaimsUnsavedCvChange(text: string) {
   return claimsSaved || (mentionsPreview && /\b(added|updated|latest|saved)\b/i.test(text));
 }
 
+function shouldAttachCv(input: { attachCv?: boolean; subject: string; body: string }) {
+  if (input.attachCv === true) return true;
+  const blob = `${input.subject}\n${input.body}`;
+  const mentionsCv = /\b(cv|curriculum vitae)\b/i.test(blob);
+  const claimsAttached = /\b(attached|attachment)\b/i.test(blob);
+  if (input.attachCv === false && !mentionsCv && !claimsAttached) return false;
+  return mentionsCv || claimsAttached;
+}
+
 function buildHermesReply(input: {
   text: string;
   cvUpdated: boolean;
   updatedParts: string[];
   toolFailures: string[];
+  emailSent: boolean;
+  emailAttached: string[];
 }) {
   const text = input.text.trim();
+  if (input.emailSent) {
+    const names = input.emailAttached;
+    if (names.length === 0) {
+      if (/\b(attached|attachment)\b/i.test(text)) {
+        return "I sent the email, but I could not attach a CV file. Ask me to send it again and I will include the PDF.";
+      }
+      return text || "Sent. No file was attached.";
+    }
+    if (text) {
+      return /\b(attached|attachment)\b/i.test(text) ? text : `${text}\n\nAttached: ${names.join(", ")}.`;
+    }
+    return `Sent, with ${names.join(", ")} attached.`;
+  }
+
   if (input.cvUpdated) {
     return (
       text ||
@@ -352,6 +380,8 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     suggestions,
     cvUpdated: false,
     updatedParts: [] as string[],
+    emailSent: false,
+    emailAttached: [] as string[],
   };
 
   const tools = {
@@ -436,21 +466,25 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     send_email: tool({
       description:
-        "Send an email as the logged-in diver after they confirm recipient, subject, and body. Never send without confirmed=true.",
+        "Send an email as the logged-in diver after they confirm recipient, subject, and body. Set attach_cv=true when sending a CV. Never send without confirmed=true.",
       inputSchema: z.object({
         to: z.string().email().describe("Recipient email address"),
         subject: z.string().min(1).max(200),
         body: z.string().min(1).max(8000).describe("Plain-text email body in English, written in the diver's voice"),
+        attach_cv: z
+          .boolean()
+          .optional()
+          .describe("True when the diver wants their CV attached. Required for 'send my CV' requests."),
         confirmed: z
           .boolean()
           .describe("True only after the diver explicitly approved sending this exact email."),
       }),
-      execute: async ({ to, subject, body, confirmed }) => {
+      execute: async ({ to, subject, body, attach_cv: attachCv, confirmed }) => {
         if (!confirmed) {
           return {
             ok: false,
             message: "Not sent. Show the draft and wait for the diver to confirm before calling again with confirmed=true.",
-            draft: { to, subject, body },
+            draft: { to, subject, body, attach_cv: shouldAttachCv({ attachCv, subject, body }) },
           };
         }
 
@@ -458,24 +492,54 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           return { ok: false, error: "Logged-in account has no email address on file." };
         }
 
+        const attachments: EmailAttachment[] = [];
+        const attach = shouldAttachCv({ attachCv, subject, body });
+        if (attach) {
+          try {
+            const filename = cvPdfFilename(input.displayName);
+            const content = buildDiverCvPdf(state.profile, input.displayName);
+            if (content.length < 100 || !content.subarray(0, 5).toString("utf8").startsWith("%PDF")) {
+              return { ok: false, error: "Could not build a CV PDF to attach." };
+            }
+            attachments.push({ filename, content, contentType: "application/pdf" as const });
+          } catch (error) {
+            return { ok: false, error: `Could not attach CV: ${describeToolFailure(error)}` };
+          }
+        }
+
+        let outgoingBody = body;
+        if (attach && input.username && !outgoingBody.includes(`/${input.username}`)) {
+          outgoingBody = `${outgoingBody.trim()}\n\nOnline CV: https://doneunder.ai/cv/${input.username}`;
+        }
+
         const result = await sendEmailAsLoggedInUser({
           userEmail: input.userEmail,
           userDisplayName: input.displayName,
           to,
           subject,
-          body,
+          body: outgoingBody,
+          attachments,
         });
 
         await logAgentInteraction({
           actorId: input.diverId,
           feature: "hermes_send_email",
-          input: { to, subject, bodyLength: body.length },
+          input: {
+            to,
+            subject,
+            bodyLength: outgoingBody.length,
+            attachCv: attach,
+            attached: result.ok ? result.attached : [],
+          },
           output: result,
         });
 
         if (!result.ok) {
           return { ok: false, error: result.error };
         }
+
+        state.emailSent = true;
+        state.emailAttached = result.attached;
 
         return {
           ok: true,
@@ -484,6 +548,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           replyTo: result.replyTo,
           to,
           subject,
+          attached: result.attached,
         };
       },
     }),
@@ -503,6 +568,8 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     cvUpdated: state.cvUpdated,
     updatedParts: state.updatedParts,
     toolFailures,
+    emailSent: state.emailSent,
+    emailAttached: state.emailAttached,
   });
 
   return {
