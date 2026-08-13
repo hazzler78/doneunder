@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { listAgentMessages } from "@/lib/agent-messages";
 import { getAgentThread } from "@/lib/agent-threads";
+import { readPendingInbound } from "@/lib/inbound-email";
 import type { UserRole } from "@/lib/types";
 
 const WELCOME_DIVER =
@@ -33,10 +34,22 @@ export async function GET() {
 
     const service = createServiceSupabaseClient();
     const thread = await getAgentThread(service, "web", user.id);
+    const pending = readPendingInbound(thread?.metadata ?? null);
+    const pendingInbound =
+      pending?.status === "pending"
+        ? {
+            from: pending.from,
+            subject: pending.subject,
+            intent: pending.intent,
+            status: pending.status,
+          }
+        : null;
+
     if (!thread) {
       return NextResponse.json({
         ok: true,
         role,
+        pendingInbound,
         messages: [
           {
             id: "welcome",
@@ -55,6 +68,7 @@ export async function GET() {
       return NextResponse.json({
         ok: true,
         role,
+        pendingInbound,
         messages: [
           {
             id: "welcome",
@@ -69,6 +83,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       role,
+      pendingInbound,
       messages: stored.map((item) => ({
         id: item.id,
         role: item.role === "user" ? "user" : "assistant",
