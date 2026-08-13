@@ -42,20 +42,29 @@ export function emailDomain(email: string) {
 /**
  * Mailbox domain Hermes listens on.
  *
- * Apex MX stays on One.com (`hello@doneunder.ai`). Resend receiving must be a
- * separate Resend domain named `inbound.doneunder.ai`, with MX only on that
- * host. Enabling receiving on apex `doneunder.ai` makes Resend look for root MX
- * (Name @, pending forever) and it will not store mail to the subdomain. Do
- * not add Resend MX on the root, and do not click “I’ve added the record” on
- * the apex domain.
+ * The Resend plan allows one custom domain. That slot is `doneunder.ai` for
+ * sending. Apex MX stays on One.com. `inbound.doneunder.ai` already has the
+ * Resend receiving MX, but cannot be added as a second domain until the plan
+ * allows it.
+ *
+ * Until then, set `RESEND_INBOUND_DOMAIN` to the managed host from Emails →
+ * Receiving → Receiving address (`*.resend.app`). Reply-To becomes
+ * `{username}@{that host}`. When the extra domain is allowed, add
+ * `inbound.doneunder.ai` in eu-west-1 with receiving on and point the env
+ * back at it. Do not enable receiving on the apex and do not put Resend MX on @.
  */
 export function inboundReceivingDomain() {
   const configured = stripQuotes(process.env.RESEND_INBOUND_DOMAIN || "inbound.doneunder.ai").toLowerCase();
   return configured.replace(/^@/, "") || "inbound.doneunder.ai";
 }
 
+export function isManagedResendReceivingDomain(domain: string) {
+  return domain.toLowerCase().endsWith(".resend.app");
+}
+
 export function isInboundReceivingAddress(address: string) {
-  return emailDomain(parseEmailAddress(address)) === inboundReceivingDomain();
+  const domain = emailDomain(parseEmailAddress(address));
+  return domain === inboundReceivingDomain() || isManagedResendReceivingDomain(domain);
 }
 
 export function inboundReplyToAddress(username?: string | null, userId?: string | null) {
