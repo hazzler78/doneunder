@@ -3,7 +3,7 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentMessage } from "@/lib/agent-messages";
 import { ensureWorkspaceWebThread, getAgentThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
-import { inboundReceivingDomain, isInboundReceivingAddress, parseEmailAddress, stripQuotes } from "@/lib/email";
+import { inboundReceivingDomain, isInboundReceivingAddress, isManagedResendReceivingDomain, parseEmailAddress, stripQuotes } from "@/lib/email";
 import {
   buildInboundNotice,
   collectRecipientAddresses,
@@ -359,11 +359,12 @@ export async function inspectInboundReceiving() {
       domain.receiving === "enabled" &&
       inboundDomain.endsWith(`.${domain.name.toLowerCase()}`),
   );
-  const warning = hasMatchingDomain
-    ? null
-    : apexReceiver
-      ? `Resend receiving is enabled on ${apexReceiver.name}, so it waits for apex MX (Name @). Mail to ${inboundDomain} is not stored. Add ${inboundDomain} as its own Resend domain and disable receiving on the apex. Do not put Resend MX on @.`
-      : `No Resend domain matches ${inboundDomain}.`;
+  const warning =
+    hasMatchingDomain || isManagedResendReceivingDomain(inboundDomain)
+      ? null
+      : apexReceiver
+        ? `Resend receiving is enabled on ${apexReceiver.name}, so it waits for apex MX (Name @). Mail to ${inboundDomain} is not stored. Do not put Resend MX on @. Until a second custom domain is allowed, set RESEND_INBOUND_DOMAIN to the managed *.resend.app host from Emails → Receiving → Receiving address.`
+        : `The plan allows one custom domain and it is used for sending. ${inboundDomain} cannot be added yet. Set RESEND_INBOUND_DOMAIN to the managed host from Emails → Receiving → Receiving address (*.resend.app). Keep the inbound MX for later.`;
 
   return {
     ok: true as const,
