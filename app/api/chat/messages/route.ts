@@ -4,7 +4,11 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { listAgentMessages } from "@/lib/agent-messages";
 import { getAgentThread } from "@/lib/agent-threads";
 import { readPendingInbound } from "@/lib/inbound-email";
+import { maybePollReceivedEmails } from "@/lib/inbound-email-process";
 import type { UserRole } from "@/lib/types";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const WELCOME_DIVER =
   "Hi — I'm Hermes. Update your CV just by talking, in English. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save it for you.";
@@ -33,6 +37,7 @@ export async function GET() {
     }
 
     const service = createServiceSupabaseClient();
+    await maybePollReceivedEmails();
     const thread = await getAgentThread(service, "web", user.id);
     const pending = readPendingInbound(thread?.metadata ?? null);
     const pendingInbound =

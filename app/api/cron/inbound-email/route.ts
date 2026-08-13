@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { pollReceivedEmails } from "@/lib/inbound-email-process";
+import { stripQuotes } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function isAuthorizedCron(req: Request) {
-  const secret = process.env.CRON_SECRET?.trim();
   const auth = req.headers.get("authorization");
-  if (secret) return auth === `Bearer ${secret}`;
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
+  const webhookSecret = stripQuotes(process.env.RESEND_WEBHOOK_SECRET || "");
+  if (webhookSecret && auth === `Bearer ${webhookSecret}`) return true;
   const userAgent = req.headers.get("user-agent") ?? "";
   if (userAgent.includes("vercel-cron")) return true;
   if (req.headers.get("x-vercel-cron") === "1") return true;

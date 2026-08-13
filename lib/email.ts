@@ -62,6 +62,14 @@ export function inboundReplyToAddress(username?: string | null, userId?: string 
   return `${local}@${inboundReceivingDomain()}`;
 }
 
+/** Visible reply mailbox so Gmail Reply-To misses still reach Hermes. */
+export function withInboundReplyFooter(body: string, replyTo: string) {
+  const text = body.trim();
+  const needle = replyTo.trim().toLowerCase();
+  if (!needle.includes("@") || text.toLowerCase().includes(needle)) return text;
+  return `${text}\n\n—\nReply to this email, or write to ${replyTo}, and I will see it in my workspace.`;
+}
+
 /**
  * Resolve the From header so mail appears to come from the logged-in person.
  *
@@ -137,12 +145,13 @@ export async function sendEmailAsLoggedInUser(
       contentType: item.contentType,
     }));
 
+  const text = withInboundReplyFooter(body, identity.replyTo);
   const { data, error } = await resend.emails.send({
     from: identity.from,
     to: [to],
     replyTo: identity.replyTo,
     subject,
-    text: body,
+    text,
     attachments: attached.length > 0 ? attached : undefined,
   });
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { processInboundEmail } from "@/lib/inbound-email-process";
-import { stripQuotes } from "@/lib/email";
+import { inboundReceivingDomain, stripQuotes } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,16 @@ function webhookHeaders(req: Request) {
     timestamp: req.headers.get("svix-timestamp") || req.headers.get("webhook-timestamp") || "",
     signature: req.headers.get("svix-signature") || req.headers.get("webhook-signature") || "",
   };
+}
+
+export async function GET() {
+  const webhookSecret = stripQuotes(process.env.RESEND_WEBHOOK_SECRET || "");
+  const apiKey = stripQuotes(process.env.RESEND_API_KEY || "");
+  return NextResponse.json({
+    ok: true,
+    inboundDomain: inboundReceivingDomain(),
+    configured: Boolean(webhookSecret && apiKey),
+  });
 }
 
 export async function POST(req: Request) {
@@ -44,8 +54,17 @@ export async function POST(req: Request) {
   }
 
   if (event.type !== "email.received") {
+    console.info("inbound webhook ignored", event.type);
     return NextResponse.json({ ok: true, ignored: event.type });
   }
+
+  console.info("inbound webhook email.received", {
+    emailId: event.data.email_id,
+    from: event.data.from,
+    to: event.data.to,
+    receivedFor: event.data.received_for,
+    subject: event.data.subject,
+  });
 
   try {
     const result = await processInboundEmail({
