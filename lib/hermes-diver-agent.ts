@@ -9,7 +9,7 @@ import {
   publishDiverProfile,
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
-import { conversationalCvUpdateSchema, type DiverProfileFull } from "@/lib/diver-profile";
+import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser } from "@/lib/email";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
 import { logAgentInteraction } from "@/lib/audit";
@@ -197,10 +197,14 @@ Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
 - They can talk in plain English: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
 - Use add_* for new rows, update_* for existing rows (match by id, company, role, or certificate name), remove_* to delete, and replace_* only when they paste a full CV or clearly want a whole section rewritten.
+- For a new job, always call update_cv with add_experiences. Put company, a short role_title (extract one from the job description if they did not label it), dates, and summary. Do not send them to re-upload a PDF when they already typed the job in chat.
 - Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
-- After a successful update_cv, briefly confirm what you saved and invite them to preview /preview/cv.
+- After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
+- If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
+- validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
 - If the profile is empty, invite them to paste CV text here or attach a PDF in the chat. You can build the CV from conversation — do not send them to a form.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
+- Never invent that a company or role is on the CV unless it appears in the profile context or a successful update_cv result.
 
 Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
@@ -214,6 +218,96 @@ Other tools:
 
 Current profile context (source of truth):
 ${JSON.stringify(context, null, 2)}`;
+}
+
+function describeToolFailure(error: unknown): string {
+  if (error instanceof z.ZodError) return formatProfileZodError(error);
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function outputLooksFailed(output: unknown): string | null {
+  if (!output || typeof output !== "object") return null;
+  const record = output as { ok?: unknown; error?: unknown; errors?: unknown; message?: unknown };
+  if (record.ok !== false) return null;
+  const parts: string[] = [];
+  if (typeof record.error === "string" && record.error.trim()) parts.push(record.error);
+  if (Array.isArray(record.errors)) {
+    parts.push(record.errors.filter((item): item is string => typeof item === "string" && item.trim().length > 0).join("; "));
+  }
+  if (typeof record.message === "string" && record.message.trim()) parts.push(record.message);
+  return parts.filter(Boolean).join(" ") || "update failed";
+}
+
+function collectToolFailures(result: {
+  steps?: Array<{
+    toolCalls?: Array<{ toolName?: string; invalid?: boolean; error?: unknown }>;
+    toolResults?: Array<{ toolName?: string; output?: unknown }>;
+    content?: Array<{ type?: string; toolName?: string; error?: unknown; output?: unknown }>;
+  }>;
+}): string[] {
+  const failures: string[] = [];
+  for (const step of result.steps ?? []) {
+    for (const call of step.toolCalls ?? []) {
+      if (call.invalid || call.error) {
+        failures.push(`${call.toolName ?? "tool"}: ${describeToolFailure(call.error ?? "invalid tool input")}`);
+      }
+    }
+    for (const toolResult of step.toolResults ?? []) {
+      const failed = outputLooksFailed(toolResult.output);
+      if (failed) failures.push(`${toolResult.toolName ?? "tool"}: ${failed}`);
+    }
+    for (const part of step.content ?? []) {
+      if (part.type === "tool-error") {
+        failures.push(`${part.toolName ?? "tool"}: ${describeToolFailure(part.error)}`);
+      }
+      if (part.type === "tool-result") {
+        const failed = outputLooksFailed(part.output);
+        if (failed) failures.push(`${part.toolName ?? "tool"}: ${failed}`);
+      }
+    }
+  }
+  return [...new Set(failures)];
+}
+
+function replyClaimsUnsavedCvChange(text: string) {
+  const lower = text.toLowerCase();
+  const mentionsPreview = lower.includes("/preview/cv");
+  const claimsSaved =
+    /\b(i('ve| have)?|we)\s+(saved|added|updated|processed)\b/i.test(text) ||
+    /\b(saved|added|updated)\b.{0,40}\b(cv|job|role|experience)\b/i.test(text) ||
+    /\b(cv|job|role)\b.{0,40}\b(saved|added|updated)\b/i.test(text) ||
+    /processed your request/i.test(text);
+  return claimsSaved || (mentionsPreview && /\b(added|updated|latest|saved)\b/i.test(text));
+}
+
+function buildHermesReply(input: {
+  text: string;
+  cvUpdated: boolean;
+  updatedParts: string[];
+  toolFailures: string[];
+}) {
+  const text = input.text.trim();
+  if (input.cvUpdated) {
+    return (
+      text ||
+      `I've saved the CV update (${input.updatedParts.join(", ") || "profile"}). You can preview it at /preview/cv.`
+    );
+  }
+
+  const failureDetail = input.toolFailures.slice(0, 3).join(" ");
+  if (failureDetail && (!text || replyClaimsUnsavedCvChange(text))) {
+    return `I could not save that CV change yet (${failureDetail}). Include the company, a role title, dates, and a short description, and I will try again.`;
+  }
+  if (!text) {
+    return "I didn't change your CV yet. Tell me the company, role title, dates, and a short job description, and I'll add it.";
+  }
+  if (replyClaimsUnsavedCvChange(text)) {
+    return failureDetail
+      ? `I could not save that CV change yet (${failureDetail}). Include the company, a role title, dates, and a short description, and I will try again.`
+      : "I haven't saved a CV change yet. The preview still shows your current profile. Tell me the company, role title, dates, and a short description and I'll add the job.";
+  }
+  return text;
 }
 
 function toModelMessages(history: HermesChatMessage[] | undefined, message: string): ModelMessage[] {
@@ -286,12 +380,13 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             dive_hours: result.profile.profile.dive_hours,
             experience_count: result.profile.experiences.length,
             certification_count: result.profile.certifications.length,
-            preview_cv_path: "/preview/cv",
+            companies: result.profile.experiences.slice(0, 8).map((item) => item.company),
+            preview_cv_path: result.ok ? "/preview/cv" : undefined,
           };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: describeToolFailure(error),
           };
         }
       },
@@ -402,9 +497,13 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     stopWhen: stepCountIs(8),
   });
 
-  const reply =
-    result.text.trim() ||
-    "I processed your request. Tell me if you want to adjust anything else on your CV.";
+  const toolFailures = collectToolFailures(result);
+  const reply = buildHermesReply({
+    text: result.text,
+    cvUpdated: state.cvUpdated,
+    updatedParts: state.updatedParts,
+    toolFailures,
+  });
 
   return {
     reply,

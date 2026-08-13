@@ -161,7 +161,12 @@ export async function POST(req: Request) {
       actorId: user.id,
       feature: "web_chat_diver_message",
       input: { message, threadId: thread?.id ?? null, historyLength: history.length },
-      output: { reply: agentResult.reply, suggestionsCount: agentResult.suggestions.length },
+      output: {
+        reply: agentResult.reply,
+        suggestionsCount: agentResult.suggestions.length,
+        cvUpdated: agentResult.cvUpdated,
+        updatedParts: agentResult.updatedParts,
+      },
     });
 
     return NextResponse.json({
