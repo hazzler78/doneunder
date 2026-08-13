@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
-import { getDiverProfile } from "@/lib/diver-profile-service";
+import { getDiverProfile, persistMissingChildRowsFromJson } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types";
@@ -39,7 +39,12 @@ export default async function CvPreviewPage() {
     redirect("/workspace");
   }
 
-  const profile = await getDiverProfile(supabase, user.id);
+  let profile = await getDiverProfile(supabase, user.id);
+  try {
+    profile = await persistMissingChildRowsFromJson(supabase, user.id);
+  } catch (error) {
+    console.error("Failed to restore CV rows from polished JSON:", error);
+  }
   const p = profile.profile;
   const fullName = userRow?.full_name ?? "Commercial Diver";
   const headline = p.ambassador_public_headline || p.headline || "Commercial Diver CV";

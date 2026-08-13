@@ -136,7 +136,7 @@ export async function POST(req: Request) {
     }
 
     const agentResult = await runHermesDiverTurn({
-      supabase,
+      supabase: service,
       diverId: user.id,
       username: userRow?.username ?? null,
       displayName: userRow?.full_name ?? "Diver",

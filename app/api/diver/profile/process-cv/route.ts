@@ -232,6 +232,7 @@ export async function POST(req: Request) {
     await saveDiverProfile(serviceSupabase, diverId, payload, {
       importBatchId,
       cvLastProcessedAt: nowIso,
+      preserveEmptyChildSections: true,
     });
 
     const thread =
