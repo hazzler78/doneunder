@@ -352,13 +352,27 @@ export async function inspectInboundReceiving() {
     });
   }
 
+  const inboundDomain = inboundReceivingDomain();
+  const hasMatchingDomain = domainRows.some((domain) => domain.name.toLowerCase() === inboundDomain);
+  const apexReceiver = domainRows.find(
+    (domain) =>
+      domain.receiving === "enabled" &&
+      inboundDomain.endsWith(`.${domain.name.toLowerCase()}`),
+  );
+  const warning = hasMatchingDomain
+    ? null
+    : apexReceiver
+      ? `Resend receiving is enabled on ${apexReceiver.name}, so it waits for apex MX (Name @). Mail to ${inboundDomain} is not stored. Add ${inboundDomain} as its own Resend domain and disable receiving on the apex. Do not put Resend MX on @.`
+      : `No Resend domain matches ${inboundDomain}.`;
+
   return {
     ok: true as const,
-    inboundDomain: inboundReceivingDomain(),
+    inboundDomain,
     receivedCount: items.length,
     listError: listed.error?.message ?? null,
     latestReceivedAt: items[0]?.created_at ?? null,
     domains: domainRows,
     domainListError: domains.error?.message ?? null,
+    warning,
   };
 }
