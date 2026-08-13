@@ -3,11 +3,7 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentMessage } from "@/lib/agent-messages";
 import { ensureWorkspaceWebThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
-import {
-  inboundReceivingDomain,
-  parseEmailAddress,
-  stripQuotes,
-} from "@/lib/email";
+import { isInboundReceivingAddress, parseEmailAddress, stripQuotes } from "@/lib/email";
 import {
   buildInboundNotice,
   collectRecipientAddresses,
@@ -58,41 +54,10 @@ async function fetchReceivedEmail(emailId: string) {
   return data;
 }
 
-async function matchDiver(input: {
-  from: string;
-  to: string[];
-  received_for: string[];
-}): Promise<MatchedDiver | null> {
-  const supabase = createServiceSupabaseClient();
-  const recipients = collectRecipientAddresses(input);
-  const inboundDomain = inboundReceivingDomain();
-
-  for (const address of recipients) {
-    const at = address.lastIndexOf("@");
-    if (at < 0) continue;
-    const local = address.slice(0, at);
-    const domain = address.slice(at + 1);
-    if (domain !== inboundDomain) continue;
-    const { data } = await supabase
-      .from("users")
-      .select("id, email, username, full_name, role")
-      .eq("username", local)
-      .eq("role", "diver")
-      .maybeSingle();
-    if (data) return data as MatchedDiver;
-  }
-
-  for (const address of recipients) {
-    const { data } = await supabase
-      .from("users")
-      .select("id, email, username, full_name, role")
-      .eq("email", address)
-      .eq("role", "diver")
-      .maybeSingle();
-    if (data) return data as MatchedDiver;
-  }
-
-  const fromAddress = parseEmailAddress(input.from);
+async function matchDiverFromRecentOutbound(
+  supabase: ReturnType<typeof createServiceSupabaseClient>,
+  fromAddress: string,
+): Promise<MatchedDiver | null> {
   const { data: recent } = await supabase
     .from("ai_interactions")
     .select("actor_id, input, created_at")
@@ -119,6 +84,46 @@ async function matchDiver(input: {
   }
 
   return null;
+}
+
+async function matchDiver(input: {
+  from: string;
+  to: string[];
+  received_for: string[];
+}): Promise<MatchedDiver | null> {
+  const supabase = createServiceSupabaseClient();
+  const recipients = collectRecipientAddresses(input);
+  const fromAddress = parseEmailAddress(input.from);
+
+  for (const address of recipients) {
+    if (!isInboundReceivingAddress(address)) continue;
+    const local = address.slice(0, address.lastIndexOf("@"));
+    const { data } = await supabase
+      .from("users")
+      .select("id, email, username, full_name, role")
+      .eq("username", local)
+      .eq("role", "diver")
+      .maybeSingle();
+    if (data) return data as MatchedDiver;
+  }
+
+  // Catch-all inbound addresses such as hello@inbound.doneunder.ai.
+  if (recipients.some((address) => isInboundReceivingAddress(address))) {
+    const viaOutbound = await matchDiverFromRecentOutbound(supabase, fromAddress);
+    if (viaOutbound) return viaOutbound;
+  }
+
+  for (const address of recipients) {
+    const { data } = await supabase
+      .from("users")
+      .select("id, email, username, full_name, role")
+      .eq("email", address)
+      .eq("role", "diver")
+      .maybeSingle();
+    if (data) return data as MatchedDiver;
+  }
+
+  return matchDiverFromRecentOutbound(supabase, fromAddress);
 }
 
 function pendingFromParsed(input: {

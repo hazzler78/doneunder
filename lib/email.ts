@@ -39,9 +39,21 @@ export function emailDomain(email: string) {
   return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
+/**
+ * Mailbox domain Hermes listens on.
+ *
+ * Receiving is enabled on the verified Resend domain `doneunder.ai` (one domain
+ * per plan). The MX record lives only on the `inbound` subdomain so ordinary
+ * @doneunder.ai mail is untouched. Resend may show the apex receiving record as
+ * pending — that is expected; do not add Resend MX on the root.
+ */
 export function inboundReceivingDomain() {
   const configured = stripQuotes(process.env.RESEND_INBOUND_DOMAIN || "inbound.doneunder.ai").toLowerCase();
   return configured.replace(/^@/, "") || "inbound.doneunder.ai";
+}
+
+export function isInboundReceivingAddress(address: string) {
+  return emailDomain(parseEmailAddress(address)) === inboundReceivingDomain();
 }
 
 export function inboundReplyToAddress(username?: string | null, userId?: string | null) {

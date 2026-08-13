@@ -1,4 +1,4 @@
-import { inboundReceivingDomain, parseEmailAddress } from "@/lib/email";
+import { emailDomain, inboundReceivingDomain, parseEmailAddress } from "@/lib/email";
 
 export type InboundIntent = "certificates" | "general";
 export type PendingInboundStatus = "pending" | "sent" | "declined";
@@ -78,8 +78,7 @@ export function recipientMatchesInboundMailbox(address: string, username: string
   const at = parsed.lastIndexOf("@");
   if (at < 0) return false;
   const local = parsed.slice(0, at);
-  const domain = parsed.slice(at + 1);
-  return local === username.toLowerCase() && domain === inboundReceivingDomain();
+  return local === username.toLowerCase() && emailDomain(parsed) === inboundReceivingDomain();
 }
 
 export function readPendingInbound(metadata: Record<string, unknown> | null | undefined): PendingInbound | null {
