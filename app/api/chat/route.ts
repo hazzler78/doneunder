@@ -7,6 +7,7 @@ import { ensureWorkspaceWebThread, mergeAgentThreadMetadata } from "@/lib/agent-
 import { logAgentInteraction } from "@/lib/audit";
 import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import { readPendingInbound } from "@/lib/inbound-email";
+import { maybePollReceivedEmails } from "@/lib/inbound-email-process";
 import type { UserRole } from "@/lib/types";
 import { claimPreferredUsername } from "@/lib/usernames";
 
@@ -94,6 +95,9 @@ export async function POST(req: Request) {
     }
 
     const workspaceRole = role === "company" ? "company" : "diver";
+    if (workspaceRole === "diver") {
+      await maybePollReceivedEmails();
+    }
     let thread: Awaited<ReturnType<typeof ensureWorkspaceWebThread>> | null = null;
     let history: ReturnType<typeof agentMessagesToChatHistory> = [];
 

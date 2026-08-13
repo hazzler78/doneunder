@@ -35,6 +35,7 @@ function getResend() {
 }
 
 export async function loadPendingInboundForUser(userId: string): Promise<PendingInbound | null> {
+  await maybePollReceivedEmails();
   const supabase = createServiceSupabaseClient();
   const thread = await getAgentThread(supabase, "web", userId);
   const pending = readPendingInbound(thread?.metadata ?? null);
@@ -256,4 +257,52 @@ export async function pollReceivedEmails(limit = 20) {
     processed: results.filter((item) => item.ok && !item.reason).length,
     results,
   };
+}
+
+let lastInboundPollAt = 0;
+let inboundPollInFlight: Promise<{
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  processed?: number;
+  error?: string;
+}> | null = null;
+
+/**
+ * Hobby plans cannot run a frequent cron, and Resend webhooks can miss events.
+ * Pull received mail when a signed-in diver opens the site or workspace.
+ */
+export async function maybePollReceivedEmails(minIntervalMs = 45_000) {
+  if (!isEmailConfigured()) {
+    return { ok: false, skipped: true, reason: "email_not_configured" };
+  }
+  if (Date.now() - lastInboundPollAt < minIntervalMs) {
+    return { ok: true, skipped: true, reason: "throttled" };
+  }
+  if (inboundPollInFlight) return inboundPollInFlight;
+
+  inboundPollInFlight = (async () => {
+    lastInboundPollAt = Date.now();
+    try {
+      const result = await pollReceivedEmails(20);
+      console.info("inbound poll", {
+        ok: result.ok,
+        processed: result.processed,
+        error: "error" in result ? result.error : undefined,
+        results: "results" in result ? result.results : undefined,
+      });
+      return result;
+    } catch (error) {
+      console.error("inbound poll failed:", error);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "poll_failed",
+        processed: 0,
+      };
+    } finally {
+      inboundPollInFlight = null;
+    }
+  })();
+
+  return inboundPollInFlight;
 }
