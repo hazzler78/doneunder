@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     const body = requestSchema.parse(await req.json());
     const systemPrompt =
-      "You are an AI assistant specialized in commercial diving recruitment, offshore operations, IMCA/ADCI certifications, saturation hours, and marine project staffing. Keep language concrete, compliant, and safety-first.";
+      "You are an AI assistant specialized in commercial diving recruitment, offshore operations, IMCA/ADCI certifications, saturation hours, and marine project staffing. Keep language concrete, compliant, and safety-first. Always write in English. If the input is in another language, translate it into clear professional English.";
 
     const result = await generateObject({
       model: aiModel,

@@ -179,13 +179,14 @@ export default function Home() {
               Talk to Hermes like a dedicated diving recruiter.
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Review your profile, tighten your headline, upload certificates, and ask for matching
-              campaigns — in one mobile-friendly chat thread after you sign in.
+            Review your profile, tighten your headline, upload certificates, and ask for matching
+            campaigns — or just tell Hermes what to change on your CV. The whole thread stays in
+            English.
             </p>
             <ul className="mt-6 space-y-3 text-sm text-cyan-50/90">
               <li className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                Thread-scoped to your account — isolated context per diver or company
+                Thread-scoped to your account — update your CV by talking, not filling forms
               </li>
               <li className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />

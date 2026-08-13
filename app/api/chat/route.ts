@@ -9,7 +9,7 @@ import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import type { UserRole } from "@/lib/types";
 
 const chatSchema = z.object({
-  message: z.string().min(1).max(2000),
+  message: z.string().min(1).max(16000),
 });
 
 async function ensureWebThread(
@@ -170,6 +170,8 @@ export async function POST(req: Request) {
       reply: agentResult.reply,
       suggestions: agentResult.suggestions,
       profileStatus: agentResult.profile.profile.profile_status,
+      cvUpdated: agentResult.cvUpdated,
+      updatedParts: agentResult.updatedParts,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
