@@ -18,6 +18,7 @@ import {
   diverProfilePatchSchema,
   diverProfilePayloadSchema,
   emptyDiverProfileScalars,
+  formatProfileZodError,
   polishedCvJsonSchema,
 } from "@/lib/diver-profile";
 
@@ -628,13 +629,60 @@ export async function persistMissingChildRowsFromJson(supabase: DbClient, diverI
   return getDiverProfile(supabase, diverId);
 }
 
+function parseProfilePayload(rawPayload: DiverProfilePayload): DiverProfilePayload {
+  const parsed = diverProfilePayloadSchema.safeParse(normalizeProfilePayloadForSave(rawPayload));
+  if (!parsed.success) {
+    throw new Error(`Profile data could not be saved (${formatProfileZodError(parsed.error)})`);
+  }
+  return parsed.data;
+}
+
+async function insertExperienceRows(
+  supabase: DbClient,
+  diverId: string,
+  incoming: DiverExperienceInput[],
+  importBatchId: string | null,
+  nowIso: string,
+) {
+  if (incoming.length === 0) return;
+
+  const { data: existing, error: readError } = await supabase
+    .from("diver_experiences")
+    .select("sort_order")
+    .eq("diver_id", diverId)
+    .order("sort_order", { ascending: true });
+  if (readError) throw new Error(readError.message);
+
+  const minOrder = Math.min(0, ...(existing ?? []).map((row) => Number(row.sort_order ?? 0)));
+  const startOrder = minOrder - incoming.length;
+
+  const { error } = await supabase.from("diver_experiences").insert(
+    incoming.map((item, index) => ({
+      diver_id: diverId,
+      company: item.company,
+      project_name: item.project_name || null,
+      location: item.location || null,
+      role_title: item.role_title,
+      date_start: normalizeDate(item.date_start),
+      date_end: normalizeDate(item.date_end),
+      summary: item.summary || null,
+      sort_order: startOrder + index,
+      source: item.source ?? "ai",
+      source_ref: item.source_ref || null,
+      import_batch_id: importBatchId,
+      updated_at: nowIso,
+    })),
+  );
+  if (error) throw new Error(error.message);
+}
+
 export async function saveDiverProfile(
   supabase: DbClient,
   diverId: string,
   rawPayload: DiverProfilePayload,
   meta: SaveProfileMeta = {},
 ) {
-  const payload = diverProfilePayloadSchema.parse(normalizeProfilePayloadForSave(rawPayload));
+  const payload = parseProfilePayload(rawPayload);
   const nowIso = new Date().toISOString();
   const importBatchId = meta.importBatchId ?? payload.import_batch_id ?? null;
   const current = meta.preserveEmptyChildSections ? await getDiverProfile(supabase, diverId) : null;
@@ -788,9 +836,9 @@ function toSaveablePayload(current: DiverProfileFull): DiverProfilePayload {
     bio_source: current.profile.bio_source,
     bio_source_ref: current.profile.bio_source_ref ?? undefined,
     import_batch_id: current.profile.import_batch_id,
-    experiences: current.experiences,
-    certifications: current.certifications,
-    references: current.references,
+    experiences: current.experiences.map(normalizeExperienceInput),
+    certifications: current.certifications.map(normalizeCertificationInput),
+    references: current.references.map(normalizeReferenceInput),
   };
 }
 
@@ -810,7 +858,16 @@ export async function applyConversationalCvUpdate(
   rawUpdate: ConversationalCvUpdate,
   meta: { sourceRef?: string } = {},
 ): Promise<ConversationalCvUpdateResult> {
-  const update = conversationalCvUpdateSchema.parse(rawUpdate);
+  const parsedUpdate = conversationalCvUpdateSchema.safeParse(rawUpdate);
+  if (!parsedUpdate.success) {
+    return {
+      ok: false,
+      profile: await getDiverProfile(supabase, diverId),
+      changed: [],
+      errors: [formatProfileZodError(parsedUpdate.error)],
+    };
+  }
+  const update = parsedUpdate.data;
   const current = await getDiverProfile(supabase, diverId);
   const sourceRef = meta.sourceRef ?? "source: web-chat";
   const changed: string[] = [];
@@ -999,6 +1056,35 @@ export async function applyConversationalCvUpdate(
     ...payload,
     polished_cv_json: payload.polished_cv_json,
   });
+
+  const onlyAppendExperiences =
+    Boolean(update.add_experiences?.length) &&
+    !update.replace_experiences?.length &&
+    !update.update_experiences?.length &&
+    !update.remove_experiences?.length &&
+    !update.replace_certifications?.length &&
+    !update.update_certifications?.length &&
+    !update.remove_certifications?.length &&
+    !update.add_certifications?.length &&
+    !update.replace_references?.length &&
+    !update.update_references?.length &&
+    !update.remove_references?.length &&
+    !update.add_references?.length;
+
+  if (onlyAppendExperiences) {
+    const incoming = experiences
+      .slice(0, update.add_experiences!.length)
+      .map((item) => normalizeExperienceInput(item));
+    await insertExperienceRows(
+      supabase,
+      diverId,
+      incoming,
+      payload.import_batch_id ?? null,
+      new Date().toISOString(),
+    );
+    const profile = await patchDiverProfileScalars(supabase, diverId, payload, current);
+    return { ok: true, profile, changed, errors };
+  }
 
   const profile = await saveDiverProfile(supabase, diverId, normalizeProfilePayloadForSave(payload));
   return { ok: true, profile, changed, errors };

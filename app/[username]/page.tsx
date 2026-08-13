@@ -8,7 +8,8 @@ export default async function AmbassadorPage({
 }: {
   params: Promise<{ username: string }>;
 }) {
-  const { username } = await params;
+  const { username: rawUsername } = await params;
+  const username = rawUsername.trim().toLowerCase();
   const supabase = await createSupabaseServerClient();
   const { data: publicAmbassador } = await supabase
     .from("public_diver_ambassador")
@@ -17,7 +18,10 @@ export default async function AmbassadorPage({
     )
     .eq("username", username)
     .maybeSingle();
-  const fallbackDiver = divers.find((entry) => entry.username === username);
+  const { data: registeredDiver } = publicAmbassador
+    ? { data: null }
+    : await supabase.from("users").select("id").eq("username", username).eq("role", "diver").maybeSingle();
+  const fallbackDiver = registeredDiver ? undefined : divers.find((entry) => entry.username === username);
   if (!publicAmbassador && !fallbackDiver) notFound();
 
   const [{ data: certifications }] = await Promise.all([

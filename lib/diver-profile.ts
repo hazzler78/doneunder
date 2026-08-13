@@ -11,38 +11,67 @@ export type AvailabilityStatus = (typeof AVAILABILITY_STATUSES)[number];
 
 export const sourceSchema = z.enum(DATA_SOURCES);
 
+/** Postgres JSON / PostgREST sends `null` for empty optional columns; Zod optional() only allows undefined. */
+const optionalText = z.preprocess((value) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}, z.string().optional());
+
+const optionalSource = z.preprocess((value) => {
+  if (value === "ai" || value === "linkedin" || value === "manual") return value;
+  return undefined;
+}, sourceSchema.optional());
+
+function textWithDefault(fallback: string) {
+  return z.preprocess((value) => {
+    if (typeof value !== "string") return fallback;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : fallback;
+  }, z.string().min(1));
+}
+
+export function formatProfileZodError(error: z.ZodError) {
+  return error.issues
+    .map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "payload";
+      return `${path}: ${issue.message}`;
+    })
+    .join("; ");
+}
+
 export const experienceInputSchema = z.object({
   id: z.string().uuid().optional(),
-  company: z.string().min(1),
-  project_name: z.string().optional(),
-  location: z.string().optional(),
-  role_title: z.string().min(1),
-  date_start: z.string().optional(),
-  date_end: z.string().optional(),
-  summary: z.string().optional(),
-  source: sourceSchema.optional(),
-  source_ref: z.string().optional(),
+  company: textWithDefault("Unknown"),
+  project_name: optionalText,
+  location: optionalText,
+  role_title: textWithDefault("Commercial Diver"),
+  date_start: optionalText,
+  date_end: optionalText,
+  summary: optionalText,
+  source: optionalSource,
+  source_ref: optionalText,
 });
 
 export const certificationInputSchema = z.object({
   id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  issue_date: z.string().optional(),
-  expiry_date: z.string().optional(),
-  cert_number: z.string().optional(),
-  issuing_body: z.string().optional(),
-  source: sourceSchema.optional(),
-  source_ref: z.string().optional(),
+  name: textWithDefault("Certification"),
+  issue_date: optionalText,
+  expiry_date: optionalText,
+  cert_number: optionalText,
+  issuing_body: optionalText,
+  source: optionalSource,
+  source_ref: optionalText,
 });
 
 export const referenceInputSchema = z.object({
   id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  company: z.string().optional(),
-  phone: z.string().min(1),
-  email: z.string().optional(),
-  source: sourceSchema.optional(),
-  source_ref: z.string().optional(),
+  name: textWithDefault("Reference"),
+  company: optionalText,
+  phone: textWithDefault("Not provided"),
+  email: optionalText,
+  source: optionalSource,
+  source_ref: optionalText,
 });
 
 export const polishedCvJsonSchema = z.object({
@@ -147,7 +176,9 @@ export const conversationalCvUpdateSchema = z
       .array(experienceBodySchema)
       .max(20)
       .optional()
-      .describe("New jobs to prepend on the CV. Most recent first. English summaries."),
+      .describe(
+        "New jobs to prepend on the CV. Most recent first. English summaries. Include company and a role_title when possible; if the diver only gave a job description, put that in summary and use a short role_title such as Diver Medic Technician.",
+      ),
     update_experiences: z
       .array(
         z.object({

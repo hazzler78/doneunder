@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { claimPreferredUsername } from "@/lib/usernames";
 
 export type AuthenticatedDiverContext = {
   diverId: string;
@@ -56,6 +57,19 @@ export async function getAuthenticatedDiverContext(): Promise<AuthResult> {
 
     if (!insertError) {
       userRecord = inserted ?? null;
+    }
+  }
+
+  if (userRecord) {
+    const claimed = await claimPreferredUsername(serviceSupabase, {
+      userId: auth.user.id,
+      email: auth.user.email,
+      currentUsername: userRecord.username,
+      metadataUsername:
+        typeof auth.user.user_metadata?.username === "string" ? auth.user.user_metadata.username : null,
+    });
+    if (claimed && claimed !== userRecord.username) {
+      userRecord = { ...userRecord, username: claimed };
     }
   }
 

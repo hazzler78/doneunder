@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { claimPreferredUsername } from "@/lib/usernames";
 
 function withMessage(path: string, message: string) {
   const query = new URLSearchParams({ message }).toString();
@@ -68,6 +69,27 @@ export async function loginAction(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user?.id) {
     redirect(withMessage("/login", "Signed in, but user session was not established."));
+  }
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (serviceKey && serviceUrl) {
+    const admin = createClient(serviceUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { data: existing } = await admin
+      .from("users")
+      .select("username, email, role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if ((existing?.role ?? "diver") === "diver") {
+      await claimPreferredUsername(admin, {
+        userId: user.id,
+        email: existing?.email ?? user.email,
+        currentUsername: existing?.username,
+        metadataUsername: typeof user.user_metadata?.username === "string" ? user.user_metadata.username : null,
+      });
+    }
   }
 
   const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();

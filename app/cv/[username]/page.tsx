@@ -15,7 +15,8 @@ export default async function DiverCvPage({
 }: {
   params: Promise<{ username: string }>;
 }) {
-  const { username } = await params;
+  const { username: rawUsername } = await params;
+  const username = rawUsername.trim().toLowerCase();
   const supabase = await createSupabaseServerClient();
 
   const { data: publicAmbassador } = await supabase
@@ -26,7 +27,10 @@ export default async function DiverCvPage({
     .eq("username", username)
     .maybeSingle();
 
-  const fallbackDiver = divers.find((entry) => entry.username === username);
+  const { data: registeredDiver } = publicAmbassador
+    ? { data: null }
+    : await supabase.from("users").select("id").eq("username", username).eq("role", "diver").maybeSingle();
+  const fallbackDiver = registeredDiver ? undefined : divers.find((entry) => entry.username === username);
   if (!publicAmbassador && !fallbackDiver) notFound();
 
   const [{ data: experiences }, { data: certifications }, { data: references }, { data: profileExtras }] =

@@ -7,6 +7,7 @@ import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
 import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import type { UserRole } from "@/lib/types";
+import { claimPreferredUsername } from "@/lib/usernames";
 
 const chatSchema = z.object({
   message: z.string().min(1).max(16000),
@@ -95,6 +96,18 @@ export async function POST(req: Request) {
       userRow = insertedUser ?? null;
     }
 
+    if (userRow && ((userRow.role as UserRole | undefined) ?? "diver") === "diver") {
+      const claimed = await claimPreferredUsername(service, {
+        userId: user.id,
+        email: userRow.email ?? user.email,
+        currentUsername: userRow.username,
+        metadataUsername: typeof user.user_metadata?.username === "string" ? user.user_metadata.username : null,
+      });
+      if (claimed && claimed !== userRow.username) {
+        userRow = { ...userRow, username: claimed };
+      }
+    }
+
     const role = (userRow?.role as UserRole | undefined) ?? "diver";
     if (role === "admin") {
       return NextResponse.json({ ok: false, reply: "Admin chat workspace is not enabled yet." }, { status: 403 });
@@ -161,7 +174,12 @@ export async function POST(req: Request) {
       actorId: user.id,
       feature: "web_chat_diver_message",
       input: { message, threadId: thread?.id ?? null, historyLength: history.length },
-      output: { reply: agentResult.reply, suggestionsCount: agentResult.suggestions.length },
+      output: {
+        reply: agentResult.reply,
+        suggestionsCount: agentResult.suggestions.length,
+        cvUpdated: agentResult.cvUpdated,
+        updatedParts: agentResult.updatedParts,
+      },
     });
 
     return NextResponse.json({
