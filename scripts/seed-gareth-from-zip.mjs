@@ -329,7 +329,7 @@ async function run() {
       id: garethId,
       role: "diver",
       email: "gareth@demo.doneunder.ai",
-      username: "gareth",
+      username: "gareth-demo",
       full_name: "Gareth Darrin Middleton",
     },
     { onConflict: "id" },
