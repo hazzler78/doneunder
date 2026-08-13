@@ -3,7 +3,7 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentMessage } from "@/lib/agent-messages";
 import { ensureWorkspaceWebThread, getAgentThread, mergeAgentThreadMetadata } from "@/lib/agent-threads";
 import { logAgentInteraction } from "@/lib/audit";
-import { isInboundReceivingAddress, parseEmailAddress, stripQuotes } from "@/lib/email";
+import { inboundReceivingDomain, isInboundReceivingAddress, parseEmailAddress, stripQuotes } from "@/lib/email";
 import {
   buildInboundNotice,
   collectRecipientAddresses,
@@ -234,7 +234,7 @@ export async function pollReceivedEmails(limit = 20) {
   const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
   const results: Array<{ emailId: string; ok: boolean; reason?: string }> = [];
 
-  for (const item of data.data ?? []) {
+  for (const item of receivingListItems(data)) {
     const created = item.created_at ? Date.parse(item.created_at) : Date.now();
     if (Number.isFinite(created) && created < cutoff) continue;
     const processed = await processInboundEmail({
@@ -305,4 +305,60 @@ export async function maybePollReceivedEmails(minIntervalMs = 45_000) {
   })();
 
   return inboundPollInFlight;
+}
+
+function receivingListItems(data: unknown): Array<{
+  id: string;
+  from?: string;
+  to?: string[];
+  received_for?: string[];
+  subject?: string;
+  created_at?: string;
+}> {
+  if (Array.isArray(data)) return data as ReturnType<typeof receivingListItems>;
+  if (data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data)) {
+    return (data as { data: ReturnType<typeof receivingListItems> }).data;
+  }
+  return [];
+}
+
+export async function inspectInboundReceiving() {
+  if (!isEmailConfigured()) {
+    return { ok: false as const, error: "email_not_configured" };
+  }
+
+  const resend = getResend();
+  const listed = await resend.emails.receiving.list({ limit: 20 });
+  const items = receivingListItems(listed.data);
+  const domains = await resend.domains.list({ limit: 10 });
+  const domainRows = [];
+
+  for (const domain of domains.data?.data ?? []) {
+    const detail = await resend.domains.get(domain.id);
+    const records = (detail.data?.records ?? [])
+      .filter((record) => record.record === "Receiving")
+      .map((record) => ({
+        name: record.name,
+        value: record.value,
+        status: record.status,
+        priority: "priority" in record ? record.priority : null,
+      }));
+    domainRows.push({
+      name: domain.name,
+      region: domain.region,
+      status: domain.status,
+      receiving: domain.capabilities?.receiving ?? null,
+      receivingRecords: records,
+    });
+  }
+
+  return {
+    ok: true as const,
+    inboundDomain: inboundReceivingDomain(),
+    receivedCount: items.length,
+    listError: listed.error?.message ?? null,
+    latestReceivedAt: items[0]?.created_at ?? null,
+    domains: domainRows,
+    domainListError: domains.error?.message ?? null,
+  };
 }

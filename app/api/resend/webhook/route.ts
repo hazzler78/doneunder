@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { processInboundEmail } from "@/lib/inbound-email-process";
+import { inspectInboundReceiving, maybePollReceivedEmails, processInboundEmail } from "@/lib/inbound-email-process";
 import { inboundReceivingDomain, stripQuotes } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -18,11 +18,37 @@ function webhookHeaders(req: Request) {
 export async function GET() {
   const webhookSecret = stripQuotes(process.env.RESEND_WEBHOOK_SECRET || "");
   const apiKey = stripQuotes(process.env.RESEND_API_KEY || "");
-  return NextResponse.json({
-    ok: true,
-    inboundDomain: inboundReceivingDomain(),
-    configured: Boolean(webhookSecret && apiKey),
-  });
+  const configured = Boolean(webhookSecret && apiKey);
+  if (!configured) {
+    return NextResponse.json({
+      ok: false,
+      inboundDomain: inboundReceivingDomain(),
+      configured: false,
+    });
+  }
+
+  try {
+    const poll = await maybePollReceivedEmails(0);
+    const receiving = await inspectInboundReceiving();
+    return NextResponse.json({
+      ok: receiving.ok,
+      inboundDomain: inboundReceivingDomain(),
+      configured: true,
+      poll,
+      receiving,
+    });
+  } catch (error) {
+    console.error("Inbound health check failed:", error);
+    return NextResponse.json(
+      {
+        ok: false,
+        inboundDomain: inboundReceivingDomain(),
+        configured: true,
+        error: error instanceof Error ? error.message : "health_failed",
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(req: Request) {
