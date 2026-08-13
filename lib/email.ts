@@ -42,10 +42,12 @@ export function emailDomain(email: string) {
 /**
  * Mailbox domain Hermes listens on.
  *
- * Receiving is enabled on the verified Resend domain `doneunder.ai` (one domain
- * per plan). The MX record lives only on the `inbound` subdomain so ordinary
- * @doneunder.ai mail is untouched. Resend may show the apex receiving record as
- * pending — that is expected; do not add Resend MX on the root.
+ * Apex MX stays on One.com (`hello@doneunder.ai`). Resend receiving must be a
+ * separate Resend domain named `inbound.doneunder.ai`, with MX only on that
+ * host. Enabling receiving on apex `doneunder.ai` makes Resend look for root MX
+ * (Name @, pending forever) and it will not store mail to the subdomain. Do
+ * not add Resend MX on the root, and do not click “I’ve added the record” on
+ * the apex domain.
  */
 export function inboundReceivingDomain() {
   const configured = stripQuotes(process.env.RESEND_INBOUND_DOMAIN || "inbound.doneunder.ai").toLowerCase();
