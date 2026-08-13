@@ -7,7 +7,7 @@ const steps = [
     id: "01",
     key: "find" as const,
     title: "Create your profile",
-    body: "Divers upload CV and certificates. Hermes structures credentials for contractor-ready review.",
+    body: "Divers talk to Hermes in English. Add jobs, tickets, and hours in the chat — or paste a CV and Hermes structures it.",
   },
   {
     id: "02",

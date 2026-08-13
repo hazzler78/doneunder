@@ -5,8 +5,8 @@ import { NextResponse } from "next/server";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { createWorker } from "tesseract.js";
 import { z } from "zod";
-import { AI_DISCLAIMER, aiModel } from "@/lib/ai";
-import { appendAgentMessage } from "@/lib/agent-messages";
+import { AI_DISCLAIMER, ENGLISH_ONLY_INSTRUCTION, aiModel } from "@/lib/ai";
+import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
@@ -23,9 +23,10 @@ const IS_VERCEL_RUNTIME = Boolean(process.env.VERCEL);
 
 const cvSystemPrompt = `You are a specialist commercial diving CV and profile writer for doneunder.ai.
 Turn raw CVs and certification documents into a polished, accurate profile for offshore recruiters.
+${ENGLISH_ONLY_INSTRUCTION}
 Return factual outputs only from provided material. Use "Not provided" when unknown.
 Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
-Respond in the exact JSON schema requested.`;
+Respond in the exact JSON schema requested. Every string field must be English.`;
 
 const cvChunkSchema = z.object({
   summary: z.string().min(1),
@@ -196,7 +197,7 @@ export async function POST(req: Request) {
         model: aiModel,
         schema: cvChunkSchema,
         system:
-          "You extract normalized, factual profile data from commercial diving CV fragments. Return concise output and no hallucinations.",
+          "You extract normalized, factual profile data from commercial diving CV fragments. Return concise English output and no hallucinations. Translate non-English source text into English.",
         prompt: `Chunk ${index + 1}/${cvChunks.length} from CV "${mainCvFile.name}":\n${chunk}`,
       });
       chunkSummaries.push(chunkResult.object.summary);
@@ -214,7 +215,7 @@ export async function POST(req: Request) {
       `Contact mentions in CV:\n${Array.from(new Set(chunkContactMentions)).join("\n- ") || "None detected"}`,
       `Raw extracted CV text (use this for completeness):\n${cvText || "No CV text extracted."}`,
       `Extracted certificate OCR/text:\n${certText || "No certificate OCR/text extracted."}`,
-      "Generate polished markdown CV + structured JSON + ambassador copy. Do not omit valid experience entries found in source text.",
+      "Generate polished English markdown CV + structured JSON + ambassador copy. Translate any non-English source into English. Do not omit valid experience entries found in source text.",
     ].join("\n\n");
 
     const aiResult = await generateObject({
@@ -243,15 +244,16 @@ export async function POST(req: Request) {
       }));
 
     const cvReply =
-      "CV processed. I updated your structured profile. " +
+      "CV processed in English. I updated your structured profile. " +
       (extractionWarnings.length
-        ? `Some OCR parts were skipped: ${extractionWarnings.join(" ")}`
-        : "Ask me to review highlights or publish.");
+        ? `Some OCR parts were skipped: ${extractionWarnings.join(" ")} `
+        : "") +
+      "Tell me in this chat what to change next — jobs, hours, tickets, or your summary.";
 
-    await appendAgentMessage(serviceSupabase, {
+    await appendAgentTurn(serviceSupabase, {
       threadId: thread.id,
-      role: "assistant",
-      content: cvReply,
+      userContent: `Please process this CV PDF: ${mainCvFile.name}`,
+      assistantContent: cvReply,
       metadata: { source: "process-cv", importBatchId },
     });
 

@@ -29,7 +29,7 @@ export function HeroProductMockup() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
-            {["Review profile", "Find matches", "Publish page"].map((label) => (
+            {["Update my CV", "Find matches", "Publish page"].map((label) => (
               <span
                 key={label}
                 className="rounded-md border border-border/70 bg-muted/40 px-2.5 py-1 text-[11px] text-cyan-100/80"
@@ -157,11 +157,11 @@ export function AgentChatMockup() {
       </div>
       <div className="space-y-3 p-4">
         <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-[#0d3a4a] px-3.5 py-2.5 text-sm text-cyan-50">
-          Can you tighten my headline for offshore wind?
+          Add a 2024 North Sea IRM campaign to my CV and rewrite the summary in English.
         </div>
         <div className="max-w-[90%] rounded-2xl rounded-bl-md border border-border/60 bg-[#061018] px-3.5 py-2.5 text-sm text-cyan-50/95">
-          Done. New headline emphasizes NDT + monopile inspection. Want me to publish your ambassador
-          page next?
+          Saved. I added the IRM campaign and rewrote your summary in English. Want me to preview
+          the CV next?
         </div>
         <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
           <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Suggestion</p>

@@ -7,12 +7,14 @@ import {
   type DiverCertificationInput,
   type DiverExperienceInput,
   type DiverProfileFull,
+  type ConversationalCvUpdate,
   type DiverProfilePatch,
   type DiverProfilePayload,
   type DiverProfileScalars,
   type DiverReferenceInput,
   type PolishedCvJson,
   type ProfileValidationResult,
+  conversationalCvUpdateSchema,
   diverProfilePatchSchema,
   diverProfilePayloadSchema,
   emptyDiverProfileScalars,
@@ -535,6 +537,9 @@ export async function patchDiverProfile(
     return patchDiverProfileScalars(supabase, diverId, patch, current);
   }
 
+  const childRowsChanged = patchTouchesChildRows(patch);
+  const rebuildCvDocument = childRowsChanged && patch.polished_cv_markdown === undefined;
+
   const merged: DiverProfilePayload = {
     headline: patch.headline ?? current.profile.headline,
     bio: patch.bio ?? current.profile.bio,
@@ -543,8 +548,10 @@ export async function patchDiverProfile(
     availability_status: patch.availability_status ?? current.profile.availability_status,
     sat_hours: patch.sat_hours ?? current.profile.sat_hours,
     dive_hours: patch.dive_hours ?? current.profile.dive_hours,
-    polished_cv_markdown: patch.polished_cv_markdown ?? current.profile.polished_cv_markdown ?? undefined,
-    polished_cv_json: patch.polished_cv_json ?? current.profile.polished_cv_json,
+    polished_cv_markdown: rebuildCvDocument
+      ? undefined
+      : (patch.polished_cv_markdown ?? current.profile.polished_cv_markdown ?? undefined),
+    polished_cv_json: patch.polished_cv_json ?? (rebuildCvDocument ? undefined : current.profile.polished_cv_json),
     ambassador_public_headline: patch.ambassador_public_headline ?? current.profile.ambassador_public_headline ?? undefined,
     ambassador_short_bio: patch.ambassador_short_bio ?? current.profile.ambassador_short_bio ?? undefined,
     ambassador_key_highlights: patch.ambassador_key_highlights ?? current.profile.ambassador_key_highlights,
@@ -559,6 +566,286 @@ export async function patchDiverProfile(
   };
 
   return saveDiverProfile(supabase, diverId, normalizeProfilePayloadForSave(merged), meta);
+}
+
+function includesLoose(haystack: string, needle: string) {
+  const left = haystack.trim().toLowerCase();
+  const right = needle.trim().toLowerCase();
+  if (!left || !right) return false;
+  return left.includes(right) || right.includes(left);
+}
+
+function findExperienceIndex(
+  items: DiverExperienceInput[],
+  match: { id?: string; company?: string; role_title?: string },
+) {
+  if (match.id) {
+    const byId = items.findIndex((item) => item.id === match.id);
+    if (byId >= 0) return byId;
+  }
+  return items.findIndex((item) => {
+    const companyHit = match.company ? includesLoose(item.company, match.company) : true;
+    const roleHit = match.role_title ? includesLoose(item.role_title, match.role_title) : true;
+    return companyHit && roleHit;
+  });
+}
+
+function findCertificationIndex(
+  items: DiverCertificationInput[],
+  match: { id?: string; name?: string },
+) {
+  if (match.id) {
+    const byId = items.findIndex((item) => item.id === match.id);
+    if (byId >= 0) return byId;
+  }
+  if (!match.name) return -1;
+  return items.findIndex((item) => includesLoose(item.name, match.name!));
+}
+
+function findReferenceIndex(
+  items: DiverReferenceInput[],
+  match: { id?: string; name?: string; company?: string },
+) {
+  if (match.id) {
+    const byId = items.findIndex((item) => item.id === match.id);
+    if (byId >= 0) return byId;
+  }
+  return items.findIndex((item) => {
+    const nameHit = match.name ? includesLoose(item.name, match.name) : true;
+    const companyHit = match.company ? includesLoose(item.company ?? "", match.company) : true;
+    return nameHit && companyHit;
+  });
+}
+
+function describeMatch(match: Record<string, string | undefined>) {
+  return Object.entries(match)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(", ");
+}
+
+function toSaveablePayload(current: DiverProfileFull): DiverProfilePayload {
+  return {
+    headline: current.profile.headline,
+    bio: current.profile.bio,
+    location: current.profile.location,
+    mobilization_notice: current.profile.mobilization_notice,
+    availability_status: current.profile.availability_status,
+    sat_hours: current.profile.sat_hours,
+    dive_hours: current.profile.dive_hours,
+    ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
+    ambassador_short_bio: current.profile.ambassador_short_bio ?? undefined,
+    ambassador_key_highlights: current.profile.ambassador_key_highlights,
+    headline_source: current.profile.headline_source,
+    headline_source_ref: current.profile.headline_source_ref ?? undefined,
+    bio_source: current.profile.bio_source,
+    bio_source_ref: current.profile.bio_source_ref ?? undefined,
+    import_batch_id: current.profile.import_batch_id,
+    experiences: current.experiences,
+    certifications: current.certifications,
+    references: current.references,
+  };
+}
+
+export type ConversationalCvUpdateResult = {
+  ok: boolean;
+  profile: DiverProfileFull;
+  changed: string[];
+  errors: string[];
+};
+
+/**
+ * Apply add/update/remove CV edits from chat, then rebuild the polished CV document.
+ */
+export async function applyConversationalCvUpdate(
+  supabase: DbClient,
+  diverId: string,
+  rawUpdate: ConversationalCvUpdate,
+  meta: { sourceRef?: string } = {},
+): Promise<ConversationalCvUpdateResult> {
+  const update = conversationalCvUpdateSchema.parse(rawUpdate);
+  const current = await getDiverProfile(supabase, diverId);
+  const sourceRef = meta.sourceRef ?? "source: web-chat";
+  const changed: string[] = [];
+  const errors: string[] = [];
+
+  const payload = toSaveablePayload(current);
+  let experiences: DiverExperienceInput[] = [...payload.experiences];
+  let certifications: DiverCertificationInput[] = [...payload.certifications];
+  let references: DiverReferenceInput[] = [...payload.references];
+
+  const scalarKeys = [
+    "headline",
+    "bio",
+    "location",
+    "mobilization_notice",
+    "availability_status",
+    "sat_hours",
+    "dive_hours",
+    "ambassador_public_headline",
+    "ambassador_short_bio",
+    "ambassador_key_highlights",
+  ] as const;
+
+  for (const key of scalarKeys) {
+    if (update[key] !== undefined) {
+      (payload as Record<string, unknown>)[key] = update[key];
+      changed.push(key);
+    }
+  }
+
+  if (update.headline !== undefined) {
+    payload.headline_source = "ai";
+    payload.headline_source_ref = sourceRef;
+  }
+  if (update.bio !== undefined || update.ambassador_short_bio !== undefined) {
+    payload.bio_source = "ai";
+    payload.bio_source_ref = sourceRef;
+  }
+
+  if (update.replace_experiences?.length) {
+    experiences = update.replace_experiences.map((item) => ({
+      ...item,
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    changed.push("experiences");
+  }
+  if (update.replace_certifications?.length) {
+    certifications = update.replace_certifications.map((item) => ({
+      ...item,
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    changed.push("certifications");
+  }
+  if (update.replace_references?.length) {
+    references = update.replace_references.map((item) => ({
+      ...item,
+      phone: item.phone?.trim() || "Not provided",
+      name: item.name ?? "Reference",
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    changed.push("references");
+  }
+
+  for (const match of update.remove_experiences ?? []) {
+    const index = findExperienceIndex(experiences, match);
+    if (index < 0) {
+      errors.push(`Could not find experience to remove (${describeMatch(match)}).`);
+      continue;
+    }
+    experiences.splice(index, 1);
+    if (!changed.includes("experiences")) changed.push("experiences");
+  }
+  for (const match of update.remove_certifications ?? []) {
+    const index = findCertificationIndex(certifications, match);
+    if (index < 0) {
+      errors.push(`Could not find certification to remove (${describeMatch(match)}).`);
+      continue;
+    }
+    certifications.splice(index, 1);
+    if (!changed.includes("certifications")) changed.push("certifications");
+  }
+  for (const match of update.remove_references ?? []) {
+    const index = findReferenceIndex(references, match);
+    if (index < 0) {
+      errors.push(`Could not find reference to remove (${describeMatch(match)}).`);
+      continue;
+    }
+    references.splice(index, 1);
+    if (!changed.includes("references")) changed.push("references");
+  }
+
+  for (const item of update.update_experiences ?? []) {
+    const index = findExperienceIndex(experiences, item.match);
+    if (index < 0) {
+      errors.push(`Could not find experience to update (${describeMatch(item.match)}).`);
+      continue;
+    }
+    experiences[index] = {
+      ...experiences[index],
+      ...item.patch,
+      source: "ai",
+      source_ref: sourceRef,
+    };
+    if (!changed.includes("experiences")) changed.push("experiences");
+  }
+  for (const item of update.update_certifications ?? []) {
+    const index = findCertificationIndex(certifications, item.match);
+    if (index < 0) {
+      errors.push(`Could not find certification to update (${describeMatch(item.match)}).`);
+      continue;
+    }
+    certifications[index] = {
+      ...certifications[index],
+      ...item.patch,
+      source: "ai",
+      source_ref: sourceRef,
+    };
+    if (!changed.includes("certifications")) changed.push("certifications");
+  }
+  for (const item of update.update_references ?? []) {
+    const index = findReferenceIndex(references, item.match);
+    if (index < 0) {
+      errors.push(`Could not find reference to update (${describeMatch(item.match)}).`);
+      continue;
+    }
+    references[index] = {
+      ...references[index],
+      ...item.patch,
+      source: "ai",
+      source_ref: sourceRef,
+    };
+    if (!changed.includes("references")) changed.push("references");
+  }
+
+  if (update.add_experiences?.length) {
+    const incoming = update.add_experiences.map((item) => ({
+      ...item,
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    experiences = [...incoming, ...experiences];
+    if (!changed.includes("experiences")) changed.push("experiences");
+  }
+  if (update.add_certifications?.length) {
+    const incoming = update.add_certifications.map((item) => ({
+      ...item,
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    certifications = [...certifications, ...incoming];
+    if (!changed.includes("certifications")) changed.push("certifications");
+  }
+  if (update.add_references?.length) {
+    const incoming = update.add_references.map((item) => ({
+      ...item,
+      name: item.name ?? "Reference",
+      phone: item.phone?.trim() || "Not provided",
+      source: "ai" as const,
+      source_ref: sourceRef,
+    }));
+    references = [...references, ...incoming];
+    if (!changed.includes("references")) changed.push("references");
+  }
+
+  if (changed.length === 0) {
+    return { ok: false, profile: current, changed, errors };
+  }
+
+  payload.experiences = experiences;
+  payload.certifications = certifications;
+  payload.references = references;
+  payload.polished_cv_json = syncPolishedCvJson(payload);
+  payload.polished_cv_markdown = buildPolishedCvMarkdown({
+    ...payload,
+    polished_cv_json: payload.polished_cv_json,
+  });
+
+  const profile = await saveDiverProfile(supabase, diverId, normalizeProfilePayloadForSave(payload));
+  return { ok: true, profile, changed, errors };
 }
 
 export async function publishDiverProfile(supabase: DbClient, diverId: string) {

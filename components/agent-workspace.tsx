@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { FileText, PanelLeft, Send, X } from "lucide-react";
+import { FileText, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { UserRole } from "@/lib/types";
 
@@ -18,6 +18,8 @@ type ChatResponse = {
     score: number;
   }>;
   profileStatus?: "draft" | "published";
+  cvUpdated?: boolean;
+  updatedParts?: string[];
 };
 
 type DocumentEntry = {
@@ -48,10 +50,10 @@ type StoredChatMessage = {
 };
 
 const diverStarterPrompts = [
-  "How does my profile look?",
-  "What should I improve before publishing?",
-  "Find jobs that match my certifications.",
-  "Make my headline stronger for offshore work.",
+  "How does my CV look?",
+  "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
+  "Set my sat hours to 2100 and say I'm available on short notice",
+  "Rewrite my summary in clearer English",
 ];
 
 const companyStarterPrompts = [
@@ -74,7 +76,9 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certs, setCerts] = useState<File[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [cvUpdatedParts, setCvUpdatedParts] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const starters = useMemo(
     () => (role === "diver" ? diverStarterPrompts : companyStarterPrompts),
@@ -108,7 +112,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               from: "agent",
               text:
                 role === "diver"
-                  ? "Hi — I'm Hermes. Upload your CV in the side panel, then talk to me naturally: review your profile, tighten your headline, or find matching jobs."
+                  ? "Hi — I'm Hermes. Update your CV just by talking, in English. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save it for you."
                   : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
             },
           ]);
@@ -184,6 +188,9 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: data.reply }]);
       setSuggestions(data.suggestions ?? []);
       if (data.profileStatus) setProfileStatus(data.profileStatus);
+      if (data.cvUpdated) {
+        setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -198,15 +205,26 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     }
   }
 
-  async function processCvUpload() {
-    if (!mainCv) {
+  async function processCvUpload(fileOverride?: File) {
+    const cvFile = fileOverride ?? mainCv;
+    if (!cvFile) {
       setUploadError("Select a main CV PDF first.");
       return;
     }
     setUploading(true);
     setUploadError(null);
+    if (fileOverride) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          from: "user",
+          text: `Please process this CV PDF: ${cvFile.name}`,
+        },
+      ]);
+    }
     const form = new FormData();
-    form.append("mainCv", mainCv);
+    form.append("mainCv", cvFile);
     certs.forEach((file) => form.append("certificates", file));
 
     try {
@@ -221,15 +239,33 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       };
       if (!response.ok) {
         const detail = data.detail ? ` ${data.detail}` : "";
-        setUploadError(`${data.error ?? "Failed to process CV upload."}${detail}`);
+        const message = `${data.error ?? "Failed to process CV upload."}${detail}`;
+        setUploadError(message);
+        if (fileOverride) {
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), from: "agent", text: message },
+          ]);
+        }
         return;
       }
       setMainCv(null);
       setCerts([]);
+      setCvUpdatedParts(["CV upload"]);
       await loadDocuments();
       await loadChatHistory({ silent: true });
     } catch {
       setUploadError("Upload request failed.");
+      if (fileOverride) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            from: "agent",
+            text: "Upload request failed. Please try attaching the PDF again.",
+          },
+        ]);
+      }
     } finally {
       setUploading(false);
     }
@@ -274,6 +310,9 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       {role === "diver" ? (
         <div className="space-y-2 rounded-xl border border-border/60 bg-[#050f18] p-3">
           <p className="text-sm font-medium text-cyan-50">Upload CV & certificates</p>
+          <p className="text-[11px] text-muted-foreground">
+            Optional — you can also paste CV text or attach a PDF in the chat.
+          </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-muted-foreground">Main CV (PDF)</span>
             <input
@@ -293,7 +332,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-cyan-50"
             />
           </label>
-          <Button size="sm" className="w-full" onClick={processCvUpload} disabled={uploading}>
+          <Button size="sm" className="w-full" onClick={() => void processCvUpload()} disabled={uploading}>
             {uploading ? "Processing…" : "Process files"}
           </Button>
           {uploadError ? <p className="text-xs text-amber-300">{uploadError}</p> : null}
@@ -386,7 +425,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-cyan-50">Hermes</p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {role === "diver" ? "Commercial diving agent" : "Recruitment agent"} ·{" "}
+                {role === "diver" ? "Talk to update your CV" : "Recruitment agent"} ·{" "}
                 <span className="text-success">Online</span>
               </p>
             </div>
@@ -404,18 +443,28 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           ) : (
             <>
               {messages.length <= 1 ? (
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {starters.map((starter) => (
-                    <button
-                      key={starter}
-                      type="button"
-                      disabled={sending}
-                      onClick={() => sendMessage(starter)}
-                      className="rounded-full border border-border/60 bg-[#07111c] px-3 py-1.5 text-left text-xs text-cyan-100/90 transition hover:border-primary/40 hover:bg-muted/40 disabled:opacity-50"
-                    >
-                      {starter}
-                    </button>
-                  ))}
+                <div className="mb-3 space-y-3">
+                  {role === "diver" ? (
+                    <div className="rounded-xl border border-border/60 bg-[#07111c] px-3.5 py-3 text-sm text-muted-foreground">
+                      <p className="font-medium text-cyan-50">Update your CV in this chat</p>
+                      <p className="mt-1">
+                        Type a change, paste CV text, or attach a PDF. Everything is saved in English.
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    {starters.map((starter) => (
+                      <button
+                        key={starter}
+                        type="button"
+                        disabled={sending || uploading}
+                        onClick={() => sendMessage(starter)}
+                        className="rounded-full border border-border/60 bg-[#07111c] px-3 py-1.5 text-left text-xs text-cyan-100/90 transition hover:border-primary/40 hover:bg-muted/40 disabled:opacity-50"
+                      >
+                        {starter}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
@@ -435,10 +484,10 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
                 </div>
               ))}
 
-              {sending ? (
+              {sending || uploading ? (
                 <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-border/55 bg-[#07111c] px-3.5 py-2.5 text-sm text-muted-foreground">
                   <p className="mb-1 text-[11px] font-medium text-primary/80">Hermes</p>
-                  <p className="animate-pulse-soft">Thinking…</p>
+                  <p className="animate-pulse-soft">{uploading ? "Processing your CV…" : "Thinking…"}</p>
                 </div>
               ) : null}
 
@@ -467,6 +516,20 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
                 </div>
               ) : null}
 
+              {cvUpdatedParts.length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2.5 text-sm text-cyan-50">
+                  <p>
+                    Saved to your CV
+                    {cvUpdatedParts[0] === "CV upload"
+                      ? " from your PDF."
+                      : `: ${cvUpdatedParts.map((part) => part.replaceAll("_", " ")).join(", ")}.`}
+                  </p>
+                  <Link href="/preview/cv" target="_blank" className="text-xs font-medium text-primary hover:underline">
+                    Preview CV
+                  </Link>
+                </div>
+              ) : null}
+
               <div ref={bottomRef} />
             </>
           )}
@@ -480,6 +543,31 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           }}
         >
           <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-[#07111c] p-2 focus-within:border-primary/40">
+            {role === "diver" ? (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void processCvUpload(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-cyan-100/80 transition hover:bg-muted/50 hover:text-cyan-50 disabled:opacity-50"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || sending}
+                  aria-label="Attach CV PDF"
+                  title="Attach CV PDF"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+              </>
+            ) : null}
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -491,12 +579,16 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               }}
               rows={1}
               className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-cyan-50 outline-none placeholder:text-muted-foreground"
-              placeholder="Message Hermes…"
+              placeholder={
+                role === "diver"
+                  ? "Tell Hermes what to change on your CV…"
+                  : "Message Hermes…"
+              }
             />
             <Button
               type="submit"
               size="sm"
-              disabled={sending || !input.trim()}
+              disabled={sending || uploading || !input.trim()}
               className="h-10 w-10 shrink-0 rounded-xl p-0"
               aria-label="Send message"
             >
@@ -504,7 +596,9 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
             </Button>
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">
-            Enter to send · Shift+Enter for new line
+            {role === "diver"
+              ? "English · Type a change, paste CV text, or attach a PDF"
+              : "Enter to send · Shift+Enter for a new line"}
           </p>
         </form>
       </section>

@@ -1,14 +1,14 @@
 import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { aiModel } from "@/lib/ai";
+import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import {
+  applyConversationalCvUpdate,
   getDiverProfile,
-  patchDiverProfile,
   publishDiverProfile,
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
-import type { DiverProfileFull } from "@/lib/diver-profile";
+import { conversationalCvUpdateSchema, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser } from "@/lib/email";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
 import { logAgentInteraction } from "@/lib/audit";
@@ -40,20 +40,16 @@ export type HermesDiverTurnResult = {
   reply: string;
   suggestions: JobSuggestion[];
   profile: DiverProfileFull;
+  cvUpdated: boolean;
+  updatedParts: string[];
 };
 
-const profileUpdateSchema = z.object({
-  headline: z.string().max(180).optional(),
-  bio: z.string().max(2000).optional(),
-  location: z.string().max(180).optional(),
-  mobilization_notice: z.string().max(180).optional(),
-  availability_status: z.enum(["available", "deployed"]).optional(),
-  sat_hours: z.number().int().min(0).optional(),
-  dive_hours: z.number().int().min(0).optional(),
-  ambassador_public_headline: z.string().max(220).optional(),
-  ambassador_short_bio: z.string().max(1200).optional(),
-  ambassador_key_highlights: z.array(z.string().max(180)).max(12).optional(),
-});
+function truncateText(value: string | null | undefined, max = 280) {
+  const text = value?.trim() ?? "";
+  if (!text) return undefined;
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
 
 function scoreJobsForDiver(
   jobs: Array<{ id: string; title: string; location: string | null; required_certs: string[] | null }>,
@@ -148,20 +144,30 @@ function buildProfileContext(
       certifications: profile.certifications.length,
       references: profile.references.length,
     },
-    recent_experiences: profile.experiences.slice(0, 8).map((exp) => ({
+    experiences: profile.experiences.map((exp) => ({
+      id: exp.id,
       role_title: exp.role_title,
       company: exp.company,
       project_name: exp.project_name,
       location: exp.location,
       date_start: exp.date_start,
       date_end: exp.date_end,
-      summary: exp.summary,
+      summary: truncateText(exp.summary),
     })),
     certifications: profile.certifications.map((cert) => ({
+      id: cert.id,
       name: cert.name,
       issuing_body: cert.issuing_body,
+      cert_number: cert.cert_number,
       issue_date: cert.issue_date,
       expiry_date: cert.expiry_date,
+    })),
+    references: profile.references.map((ref) => ({
+      id: ref.id,
+      name: ref.name,
+      company: ref.company,
+      phone: ref.phone,
+      email: ref.email,
     })),
     validation: {
       errors: validation.errors,
@@ -173,21 +179,34 @@ function buildProfileContext(
 function buildSystemPrompt(context: ReturnType<typeof buildProfileContext>) {
   return `You are Hermes, the DoneUnder diver profile agent.
 
-You help commercial divers build, refine, review, and publish their ambassador profile, find matching offshore jobs, and send professional emails on their behalf.
+You help commercial divers build, refine, review, and publish their CV and ambassador profile, find matching offshore jobs, and send professional emails on their behalf.
+
+Language:
+- ${ENGLISH_ONLY_INSTRUCTION}
+- Always reply in English, even if the diver writes in another language. Understand them, then answer and save CV text in English.
 
 Conversation style:
 - Talk naturally, like a knowledgeable recruiter — not a command menu.
 - Answer questions directly using the profile context below (e.g. "how does it look?", "can you see my CV?", "what's missing?").
-- When the diver wants a change, use update_profile. When they want to go live, use publish_profile. When they want opportunities, use find_matching_jobs.
-- When they want to email a contractor, recruiter, or contact, draft the message first, show them to/subject/body, and only call send_email after they clearly confirm. Always set confirmed=true only after explicit approval.
-- Emails are sent as the logged-in diver (their name + email identity). Never invent a different sender.
-- If email_capability.configured is false, explain that outbound email is not configured yet — do not pretend you sent mail.
-- If profile_status is draft, the owner can preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
-- If profile_status is published, the public ambassador URL is /{username}.
-- Confirm before publishing if their intent is ambiguous.
-- Never invent certifications, roles, or hours that are not in the profile context.
-- If structured CV data is missing, tell them to upload and process files in the workspace panel first.
 - Keep replies concise but helpful — a short paragraph or a few bullets, not a wall of text unless they ask for detail.
+
+Updating the CV from chat (this is the main way to edit):
+- When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
+- They can talk in plain English: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
+- Use add_* for new rows, update_* for existing rows (match by id, company, role, or certificate name), remove_* to delete, and replace_* only when they paste a full CV or clearly want a whole section rewritten.
+- Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
+- After a successful update_cv, briefly confirm what you saved and invite them to preview /preview/cv.
+- If the profile is empty, invite them to paste CV text here or attach a PDF in the chat. You can build the CV from conversation — do not send them to a form.
+
+Other tools:
+- publish_profile when they want to go live. Confirm first if their intent is ambiguous.
+- find_matching_jobs when they want opportunities.
+- For email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
+- Emails are sent as the logged-in diver. Never invent a different sender.
+- If email_capability.configured is false, explain that outbound email is not configured yet — do not pretend you sent mail.
+- If profile_status is draft, preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
+- If profile_status is published, the public ambassador URL is /{username}.
+- Never invent certifications, roles, or hours that are not in the profile context or the diver's latest message.
 
 Current profile context (source of truth):
 ${JSON.stringify(context, null, 2)}`;
@@ -214,35 +233,51 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   if (!isAiConfigured()) {
     return {
       reply:
-        "Hermes AI is not configured yet (missing XAI_API_KEY). I can still process CV uploads from the files panel, but natural chat replies need the AI key enabled in your environment.",
+        "Hermes AI is not configured yet (missing XAI_API_KEY). You can still attach a CV PDF in this chat, but I cannot update your profile by talking until the AI key is enabled.",
       suggestions,
       profile,
+      cvUpdated: false,
+      updatedParts: [],
     };
   }
 
   const context = buildProfileContext(profile, input.username, input.displayName, input.userEmail);
   const system = buildSystemPrompt(context);
 
-  const state = { profile, suggestions };
+  const state = {
+    profile,
+    suggestions,
+    cvUpdated: false,
+    updatedParts: [] as string[],
+  };
 
   const tools = {
-    update_profile: tool({
-      description: "Update diver profile fields after the diver asks for a change.",
-      inputSchema: profileUpdateSchema,
+    update_cv: tool({
+      description:
+        "Save CV and profile changes from the conversation. Use this for headline, bio, hours, location, availability, jobs/experience, certifications, and references. Write all stored text in English.",
+      inputSchema: conversationalCvUpdateSchema,
       execute: async (patch) => {
         try {
-          const withSources = {
-            ...patch,
-            ...(patch.headline ? { headline_source: "ai" as const } : {}),
-            ...(patch.bio || patch.ambassador_short_bio ? { bio_source: "ai" as const } : {}),
-          };
-          state.profile = await patchDiverProfile(input.supabase, input.diverId, withSources);
+          const result = await applyConversationalCvUpdate(input.supabase, input.diverId, patch, {
+            sourceRef: "source: web-chat",
+          });
+          if (result.ok) {
+            state.profile = result.profile;
+            state.cvUpdated = true;
+            for (const part of result.changed) {
+              if (!state.updatedParts.includes(part)) state.updatedParts.push(part);
+            }
+          }
           return {
-            ok: true,
-            updated_fields: Object.keys(patch),
-            profile_status: state.profile.profile.profile_status,
-            sat_hours: state.profile.profile.sat_hours,
-            dive_hours: state.profile.profile.dive_hours,
+            ok: result.ok,
+            changed: result.changed,
+            errors: result.errors,
+            profile_status: result.profile.profile.profile_status,
+            sat_hours: result.profile.profile.sat_hours,
+            dive_hours: result.profile.profile.dive_hours,
+            experience_count: result.profile.experiences.length,
+            certification_count: result.profile.certifications.length,
+            preview_cv_path: "/preview/cv",
           };
         } catch (error) {
           return {
@@ -301,7 +336,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       inputSchema: z.object({
         to: z.string().email().describe("Recipient email address"),
         subject: z.string().min(1).max(200),
-        body: z.string().min(1).max(8000).describe("Plain-text email body written in the diver's voice"),
+        body: z.string().min(1).max(8000).describe("Plain-text email body in English, written in the diver's voice"),
         confirmed: z
           .boolean()
           .describe("True only after the diver explicitly approved sending this exact email."),
@@ -355,16 +390,18 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     system,
     messages: toModelMessages(input.history, input.message),
     tools,
-    stopWhen: stepCountIs(6),
+    stopWhen: stepCountIs(8),
   });
 
   const reply =
     result.text.trim() ||
-    "I processed your request. Tell me if you want to adjust anything else on your profile.";
+    "I processed your request. Tell me if you want to adjust anything else on your CV.";
 
   return {
     reply,
     suggestions: state.suggestions,
     profile: state.profile,
+    cvUpdated: state.cvUpdated,
+    updatedParts: state.updatedParts,
   };
 }

@@ -97,6 +97,112 @@ export const diverProfilePatchSchema = diverProfilePayloadSchema
   })
   .refine((value) => Object.keys(value).length > 0, { message: "Patch payload cannot be empty." });
 
+const experienceBodySchema = experienceInputSchema.omit({ id: true, source: true, source_ref: true });
+const certificationBodySchema = certificationInputSchema.omit({ id: true, source: true, source_ref: true });
+const referenceBodySchema = referenceInputSchema.omit({ id: true, source: true, source_ref: true });
+
+export const experienceMatchSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    company: z.string().min(1).optional(),
+    role_title: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.id || value.company || value.role_title), {
+    message: "Provide an experience id, company, or role title to match.",
+  });
+
+export const certificationMatchSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.id || value.name), {
+    message: "Provide a certification id or name to match.",
+  });
+
+export const referenceMatchSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    name: z.string().min(1).optional(),
+    company: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.id || value.name || value.company), {
+    message: "Provide a reference id, name, or company to match.",
+  });
+
+/** Incremental CV edits from Hermes chat (add / update / remove / replace). */
+export const conversationalCvUpdateSchema = z
+  .object({
+    headline: z.string().max(180).optional().describe("Professional CV headline in English"),
+    bio: z.string().max(2000).optional().describe("Profile / CV summary in English"),
+    location: z.string().max(180).optional(),
+    mobilization_notice: z.string().max(180).optional(),
+    availability_status: z.enum(AVAILABILITY_STATUSES).optional(),
+    sat_hours: z.number().int().min(0).optional(),
+    dive_hours: z.number().int().min(0).optional(),
+    ambassador_public_headline: z.string().max(220).optional(),
+    ambassador_short_bio: z.string().max(1200).optional(),
+    ambassador_key_highlights: z.array(z.string().max(180)).max(12).optional(),
+    add_experiences: z
+      .array(experienceBodySchema)
+      .max(20)
+      .optional()
+      .describe("New jobs to prepend on the CV. Most recent first. English summaries."),
+    update_experiences: z
+      .array(
+        z.object({
+          match: experienceMatchSchema,
+          patch: experienceBodySchema.partial(),
+        }),
+      )
+      .max(20)
+      .optional()
+      .describe("Change existing jobs. Match by id, company, or role title."),
+    remove_experiences: z
+      .array(experienceMatchSchema)
+      .max(20)
+      .optional()
+      .describe("Remove jobs that match id, company, or role title."),
+    replace_experiences: z
+      .array(experienceBodySchema)
+      .max(50)
+      .optional()
+      .describe("Replace the whole experience section. Only when the diver pastes a full CV."),
+    add_certifications: z
+      .array(certificationBodySchema)
+      .max(20)
+      .optional()
+      .describe("New tickets/certs to add. Keep official certificate titles."),
+    update_certifications: z
+      .array(
+        z.object({
+          match: certificationMatchSchema,
+          patch: certificationBodySchema.partial(),
+        }),
+      )
+      .max(20)
+      .optional(),
+    remove_certifications: z.array(certificationMatchSchema).max(20).optional(),
+    replace_certifications: z.array(certificationBodySchema).max(50).optional(),
+    add_references: z.array(referenceBodySchema.partial({ phone: true })).max(10).optional(),
+    update_references: z
+      .array(
+        z.object({
+          match: referenceMatchSchema,
+          patch: referenceBodySchema.partial(),
+        }),
+      )
+      .max(10)
+      .optional(),
+    remove_references: z.array(referenceMatchSchema).max(10).optional(),
+    replace_references: z.array(referenceBodySchema.partial({ phone: true })).max(20).optional(),
+  })
+  .refine((value) => Object.values(value).some((item) => item !== undefined), {
+    message: "Provide at least one CV change.",
+  });
+
+export type ConversationalCvUpdate = z.infer<typeof conversationalCvUpdateSchema>;
+
 /** AI CV pipeline output — shared between process-cv route and seed scripts. */
 export const aiCvOutputSchema = z.object({
   professional_headline: z.string().min(1).max(220),
