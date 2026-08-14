@@ -1,3 +1,4 @@
+import { englishPublicText } from "@/lib/english";
 import type { DiverProfileFull } from "@/lib/diver-profile";
 
 type PdfLine = {
@@ -57,13 +58,18 @@ function wrapWords(text: string, maxChars: number) {
 
 export function buildCvPdfLines(profile: DiverProfileFull, displayName: string): PdfLine[] {
   const p = profile.profile;
-  const headline = p.ambassador_public_headline || p.headline || "Commercial Diver CV";
-  const summary = p.ambassador_short_bio || p.bio || "Professional summary not provided yet.";
+  const headline = englishPublicText(p.ambassador_public_headline || p.headline) || "Commercial Diver CV";
+  const summary = englishPublicText(p.ambassador_short_bio || p.bio) || "Professional summary not provided yet.";
   const lines: PdfLine[] = [
     { text: displayName.trim() || "Commercial Diver", size: 18, bold: true, gapAfter: 4 },
     { text: headline, size: 12, bold: true, gapAfter: 4 },
     {
-      text: [p.location || "Location not provided", p.mobilization_notice || null].filter(Boolean).join(" • "),
+      text: [
+        englishPublicText(p.location) || "Location not provided",
+        p.mobilization_notice ? englishPublicText(p.mobilization_notice) : null,
+      ]
+        .filter(Boolean)
+        .join(" • "),
       size: 10,
       gapAfter: 14,
     },
@@ -90,14 +96,17 @@ export function buildCvPdfLines(profile: DiverProfileFull, displayName: string):
       const end = formatCvDate(item.date_end) ?? (item.date_start ? "Present" : null);
       const dates = start || end ? `${start ?? "Start"} – ${end ?? "Present"}` : null;
       lines.push({
-        text: `${item.role_title} • ${item.company}`,
+        text: `${englishPublicText(item.role_title)} • ${englishPublicText(item.company)}`,
         size: 11,
         bold: true,
         gapAfter: 2,
       });
-      const meta = [item.project_name, item.location, dates].filter(Boolean).join(" • ");
+      const meta = [item.project_name, item.location, dates]
+        .filter(Boolean)
+        .map((part) => (typeof part === "string" ? englishPublicText(part) || part : part))
+        .join(" • ");
       if (meta) lines.push({ text: meta, size: 9, gapAfter: 2 });
-      if (item.summary) lines.push({ text: item.summary, size: 10, gapAfter: 8 });
+      if (item.summary) lines.push({ text: englishPublicText(item.summary), size: 10, gapAfter: 8 });
       else lines.push({ text: " ", size: 8, gapAfter: 6 });
     }
   }
@@ -107,7 +116,7 @@ export function buildCvPdfLines(profile: DiverProfileFull, displayName: string):
     lines.push({ text: "No certifications listed yet.", size: 10, gapAfter: 12 });
   } else {
     for (const cert of profile.certifications) {
-      lines.push({ text: cert.name, size: 11, bold: true, gapAfter: 2 });
+      lines.push({ text: englishPublicText(cert.name), size: 11, bold: true, gapAfter: 2 });
       lines.push({
         text: [
           cert.issuing_body,
@@ -258,7 +267,7 @@ export function buildDiverCertificatesPdf(profile: DiverProfileFull, displayName
     });
   } else {
     for (const cert of profile.certifications) {
-      lines.push({ text: cert.name, size: 11, bold: true, gapAfter: 2 });
+      lines.push({ text: englishPublicText(cert.name), size: 11, bold: true, gapAfter: 2 });
       lines.push({
         text: [
           cert.issuing_body,

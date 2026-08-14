@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { englishPublicText } from "@/lib/english";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { divers } from "@/lib/mock-data";
@@ -77,10 +78,13 @@ export default async function DiverCvPage({
     publicAmbassador?.polished_cv_markdown || profileExtras?.polished_cv_markdown || null;
 
   const fullName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
-  const headline = publicAmbassador?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV";
-  const location = publicAmbassador?.location || fallbackDiver?.location || "Location not provided";
-  const mobilization = publicAmbassador?.mobilization_notice || fallbackDiver?.mobilizationNotice || "Mobilization not provided";
-  const summary = publicAmbassador?.bio || fallbackDiver?.bio || "Professional summary not provided yet.";
+  const headline = englishPublicText(publicAmbassador?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV");
+  const location = englishPublicText(publicAmbassador?.location || fallbackDiver?.location) || "Location not provided";
+  const mobilization =
+    englishPublicText(publicAmbassador?.mobilization_notice || fallbackDiver?.mobilizationNotice) ||
+    "Mobilization not provided";
+  const summary =
+    englishPublicText(publicAmbassador?.bio || fallbackDiver?.bio) || "Professional summary not provided yet.";
   const satHours =
     publicAmbassador?.sat_hours && publicAmbassador.sat_hours > 0
       ? publicAmbassador.sat_hours.toLocaleString()
@@ -122,12 +126,14 @@ export default async function DiverCvPage({
               const end = formatDate(item.date_end);
               return (
                 <li key={`${item.company}-${item.role_title}-${index}`} className="rounded-md border p-3">
-                  <p className="font-semibold">{item.role_title} • {item.company}</p>
+                  <p className="font-semibold">
+                    {englishPublicText(item.role_title)} • {englishPublicText(item.company)}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {[item.project_name, item.location].filter(Boolean).join(" • ")}
+                    {[item.project_name, item.location].filter(Boolean).map((part) => englishPublicText(part)).join(" • ")}
                     {(start || end) ? ` • ${start ?? "Start"} - ${end ?? "Present"}` : ""}
                   </p>
-                  {item.summary ? <p className="mt-1">{item.summary}</p> : null}
+                  {item.summary ? <p className="mt-1">{englishPublicText(item.summary)}</p> : null}
                 </li>
               );
             })}
@@ -143,7 +149,7 @@ export default async function DiverCvPage({
           <ul className="space-y-2">
             {displayCertifications.map((item, index) => (
               <li key={`${item.name}-${index}`} className="rounded-md border p-3">
-                <p className="font-semibold">{item.name}</p>
+                <p className="font-semibold">{englishPublicText(item.name)}</p>
                 <p className="text-xs text-muted-foreground">
                   {[item.issuing_body, item.cert_number ? `#${item.cert_number}` : null].filter(Boolean).join(" • ")}
                 </p>
@@ -186,7 +192,7 @@ export default async function DiverCvPage({
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">{hasStructuredCv ? "AI Polished CV Draft" : "CV draft"}</h2>
           <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
-            {polishedMarkdown}
+            {englishPublicText(polishedMarkdown)}
           </pre>
         </section>
       ) : null}

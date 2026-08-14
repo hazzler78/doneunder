@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { englishPublicText } from "@/lib/english";
 import {
   DIVER_CERTIFICATION_COLUMNS,
   DIVER_EXPERIENCE_COLUMNS,
@@ -39,7 +40,7 @@ function formatCvDate(value?: string | null) {
 }
 
 function normalizeOptionalString(value?: string | null) {
-  const trimmed = value?.trim();
+  const trimmed = englishPublicText(value?.trim() ?? "").trim();
   return trimmed ? trimmed : null;
 }
 
@@ -50,13 +51,13 @@ function patchTouchesChildRows(patch: DiverProfilePatch) {
 function normalizeExperienceInput(exp: DiverExperienceInput): DiverExperienceInput {
   return {
     ...exp,
-    company: (exp.company ?? "").trim() || "Unknown",
-    role_title: (exp.role_title ?? "").trim() || "Commercial Diver",
-    project_name: exp.project_name?.trim() || undefined,
-    location: exp.location?.trim() || undefined,
+    company: englishPublicText(exp.company ?? "").trim() || "Unknown",
+    role_title: englishPublicText(exp.role_title ?? "").trim() || "Commercial Diver",
+    project_name: englishPublicText(exp.project_name ?? "").trim() || undefined,
+    location: englishPublicText(exp.location ?? "").trim() || undefined,
     date_start: exp.date_start ?? undefined,
     date_end: exp.date_end ?? undefined,
-    summary: exp.summary?.trim() || undefined,
+    summary: englishPublicText(exp.summary ?? "").trim() || undefined,
     source_ref: exp.source_ref ?? undefined,
   };
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
+import { englishPublicText } from "@/lib/english";
 import { getDiverProfile, persistMissingChildRowsFromJson } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -47,8 +48,8 @@ export default async function CvPreviewPage() {
   }
   const p = profile.profile;
   const fullName = userRow?.full_name ?? "Commercial Diver";
-  const headline = p.ambassador_public_headline || p.headline || "Commercial Diver CV";
-  const summary = p.ambassador_short_bio || p.bio || "Professional summary not provided yet.";
+  const headline = englishPublicText(p.ambassador_public_headline || p.headline) || "Commercial Diver CV";
+  const summary = englishPublicText(p.ambassador_short_bio || p.bio) || "Professional summary not provided yet.";
   const satHours = p.sat_hours > 0 ? p.sat_hours.toLocaleString() : "Not declared";
   const diveHours = p.dive_hours > 0 ? p.dive_hours.toLocaleString() : "Not declared";
 
@@ -65,7 +66,8 @@ export default async function CvPreviewPage() {
         <h1 className="text-3xl font-bold">{fullName}</h1>
         <p className="font-semibold">{headline}</p>
         <p>
-          {p.location || "Location not provided"} • {p.mobilization_notice || "Mobilization not provided"}
+          {englishPublicText(p.location) || "Location not provided"} •{" "}
+          {englishPublicText(p.mobilization_notice) || "Mobilization not provided"}
         </p>
       </header>
 
@@ -90,13 +92,16 @@ export default async function CvPreviewPage() {
               return (
                 <li key={`${item.company}-${item.role_title}-${index}`} className="rounded-md border p-3">
                   <p className="font-semibold">
-                    {item.role_title} • {item.company}
+                    {englishPublicText(item.role_title)} • {englishPublicText(item.company)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {[item.project_name, item.location].filter(Boolean).join(" • ")}
+                    {[item.project_name, item.location]
+                      .filter(Boolean)
+                      .map((part) => englishPublicText(String(part)))
+                      .join(" • ")}
                     {start || end ? ` • ${start ?? "Start"} - ${end ?? "Present"}` : ""}
                   </p>
-                  {item.summary ? <p className="mt-1">{item.summary}</p> : null}
+                  {item.summary ? <p className="mt-1">{englishPublicText(item.summary)}</p> : null}
                 </li>
               );
             })}
@@ -112,7 +117,7 @@ export default async function CvPreviewPage() {
           <ul className="space-y-2">
             {profile.certifications.map((item, index) => (
               <li key={`${item.name}-${index}`} className="rounded-md border p-3">
-                <p className="font-semibold">{item.name}</p>
+                <p className="font-semibold">{englishPublicText(item.name)}</p>
                 <p className="text-xs text-muted-foreground">
                   {[item.issuing_body, item.cert_number ? `#${item.cert_number}` : null].filter(Boolean).join(" • ")}
                 </p>
@@ -150,7 +155,7 @@ export default async function CvPreviewPage() {
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">AI Polished CV Draft</h2>
           <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
-            {p.polished_cv_markdown}
+            {englishPublicText(p.polished_cv_markdown)}
           </pre>
         </section>
       ) : null}

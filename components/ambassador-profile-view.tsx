@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { RequestProfileButton } from "@/components/request-profile-button";
+import { englishPublicText } from "@/lib/english";
 import { cn } from "@/lib/utils";
 
 export type AmbassadorCertification = {
@@ -48,8 +49,13 @@ export function AmbassadorProfileView({
   const satHoursLabel = satHours > 0 ? satHours.toLocaleString() : "Not declared";
   const diveHoursLabel = diveHours > 0 ? diveHours.toLocaleString() : "Not declared";
   const certLabels = certifications.map((cert) =>
-    cert.expiry_date ? `${cert.name} (Exp ${cert.expiry_date})` : cert.name,
+    cert.expiry_date ? `${englishPublicText(cert.name)} (Exp ${cert.expiry_date})` : englishPublicText(cert.name),
   );
+  const publicHeadline = englishPublicText(headline);
+  const publicBio = englishPublicText(shortBio);
+  const publicLocation = englishPublicText(location);
+  const publicMobilization = englishPublicText(mobilizationNotice);
+  const publicHighlights = highlights.map((item) => englishPublicText(item)).filter(Boolean);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-10">
@@ -68,7 +74,7 @@ export function AmbassadorProfileView({
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{displayName}</h1>
-              <p className="mt-2 text-cyan-200">{headline}</p>
+              <p className="mt-2 text-cyan-200">{publicHeadline}</p>
             </div>
             <Badge className={availabilityStatus === "available" ? "bg-emerald-900/60" : ""}>
               {availabilityStatus === "available" ? "Available Now" : "Deployed"}
@@ -76,14 +82,14 @@ export function AmbassadorProfileView({
           </div>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          <p>{shortBio}</p>
+          <p>{publicBio}</p>
           <p className="text-muted-foreground">
-            Sat hours: {satHoursLabel} • Dive hours: {diveHoursLabel} • {location || "Location not provided"}
+            Sat hours: {satHoursLabel} • Dive hours: {diveHoursLabel} • {publicLocation || "Location not provided"}
           </p>
-          <p className="text-cyan-200">{mobilizationNotice || "Mobilization notice not provided"}</p>
-          {highlights.length > 0 ? (
+          <p className="text-cyan-200">{publicMobilization || "Mobilization notice not provided"}</p>
+          {publicHighlights.length > 0 ? (
             <ul className="list-disc space-y-1 pl-5">
-              {highlights.map((item) => (
+              {publicHighlights.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
