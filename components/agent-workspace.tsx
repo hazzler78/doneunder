@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
+import { isStoredMainCvFilename, looksLikeMainCvFilename } from "@/lib/document-names";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -237,16 +238,10 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     }
   }
 
+  const hasStoredCv = documents.some((doc) => isStoredMainCvFilename(doc.name));
+
   function classifyDroppedFiles(files: File[]) {
-    const namedCv = files.find(
-      (file) =>
-        (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
-        /cv|curriculum|resume/i.test(file.name),
-    );
-    const onlyOnePdf =
-      files.length === 1 &&
-      (files[0].type === "application/pdf" || files[0].name.toLowerCase().endsWith(".pdf"));
-    const cvFile = namedCv ?? (onlyOnePdf ? files[0] : null);
+    const cvFile = files.find((file) => looksLikeMainCvFilename(file.name)) ?? null;
     return {
       cvFile,
       certFiles: files.filter((file) => file !== cvFile),
@@ -363,10 +358,14 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         <div className="space-y-2 rounded-xl border border-border/60 bg-[#050f18] p-3">
           <p className="text-sm font-medium text-cyan-50">Upload CV & certificates</p>
           <p className="text-[11px] text-muted-foreground">
-            Mix PDFs and photos. Certificates are baked into one PDF when Hermes sends them.
+            {hasStoredCv
+              ? "Your CV is already on file. Add certificate PDFs or photos only — no need to upload the CV again."
+              : "Mix PDFs and photos. Certificates are baked into one PDF when Hermes sends them."}
           </p>
           <label className="block space-y-1">
-            <span className="text-[11px] text-muted-foreground">Main CV (PDF)</span>
+            <span className="text-[11px] text-muted-foreground">
+              {hasStoredCv ? "Replace CV (optional)" : "Main CV (PDF)"}
+            </span>
             <input
               type="file"
               accept="application/pdf"
@@ -680,7 +679,9 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">
             {role === "diver"
-              ? "English · Type a change, or attach a CV PDF plus certificate PDFs/photos"
+              ? hasStoredCv
+                ? "English · Attach certificate PDFs/photos, or type a CV change"
+                : "English · Type a change, or attach a CV PDF plus certificate PDFs/photos"
               : "Enter to send · Shift+Enter for a new line"}
           </p>
         </form>
