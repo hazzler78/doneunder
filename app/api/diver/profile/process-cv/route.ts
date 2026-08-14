@@ -11,6 +11,7 @@ import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
 import { classifyCertificateFile } from "@/lib/certificate-pack";
+import { looksLikeMainCvFilename } from "@/lib/document-names";
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
 const BUCKET_NAME = "diver-documents";
@@ -103,10 +104,14 @@ export async function POST(req: Request) {
 
     const formData = await req.formData();
     const mainCvEntry = formData.get("mainCv");
-    const mainCvFile = mainCvEntry instanceof File && mainCvEntry.size > 0 ? mainCvEntry : null;
+    let mainCvFile = mainCvEntry instanceof File && mainCvEntry.size > 0 ? mainCvEntry : null;
     const certFiles = formData.getAll("certificates");
 
     const certificateFiles = certFiles.filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (mainCvFile && !looksLikeMainCvFilename(mainCvFile.name)) {
+      certificateFiles.unshift(mainCvFile);
+      mainCvFile = null;
+    }
     if (!mainCvFile && certificateFiles.length === 0) {
       return NextResponse.json({ error: "Upload a CV PDF and/or certificate files (PDF, JPG, PNG)." }, { status: 400 });
     }
@@ -210,6 +215,7 @@ export async function POST(req: Request) {
     if (!mainCvFile || !cvBuffer) {
       const certReply =
         `Stored ${certUploadResults.length} certificate file${certUploadResults.length === 1 ? "" : "s"}. ` +
+        "Your existing CV is unchanged — no need to upload it again. " +
         "When you ask me to send certificates I will bake the PDFs and photos into one Certificates PDF. " +
         (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")}` : "");
       await appendAgentTurn(serviceSupabase, {

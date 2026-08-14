@@ -451,8 +451,8 @@ export function DiverProfileEditor({
   }
 
   async function onProcessWithAi() {
-    if (!mainCv) {
-      setMessage("Upload a main CV PDF first.");
+    if (!mainCv && certFiles.length === 0) {
+      setMessage("Select certificate files, or a new CV PDF if you want to replace the current one.");
       return;
     }
     if (hasUnsavedChanges) {
@@ -474,7 +474,7 @@ export function DiverProfileEditor({
     setMessage(null);
 
     const payload = new FormData();
-    payload.append("mainCv", mainCv);
+    if (mainCv) payload.append("mainCv", mainCv);
     certFiles.forEach((file) => payload.append("certificates", file));
 
     const response = await fetch("/api/diver/profile/process-cv", {
@@ -626,7 +626,9 @@ export function DiverProfileEditor({
     <div className="space-y-6">
       <section id="core-profile" className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Upload & Improve Your CV" />
-        <p className="text-xs text-muted-foreground">Upload CV, click Process with AI, then Save profile.</p>
+        <p className="text-xs text-muted-foreground">
+          Your CV stays on file. Add certificates alone, or optionally replace the CV PDF.
+        </p>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <span className="text-xs text-muted-foreground">Main CV (PDF)</span>
@@ -674,7 +676,7 @@ export function DiverProfileEditor({
         </div>
         <Button
           onClick={onProcessWithAi}
-          disabled={processing || !mainCv}
+          disabled={processing || (!mainCv && certFiles.length === 0)}
           className="w-full sm:w-auto disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-400"
         >
           {processing ? "Processing..." : "Process with AI"}
