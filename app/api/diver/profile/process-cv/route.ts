@@ -12,6 +12,11 @@ import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
 import { classifyCertificateFile } from "@/lib/certificate-pack";
 import { looksLikeMainCvFilename } from "@/lib/document-names";
+import {
+  listCertificateDocumentFiles,
+  listDiverDocumentFiles,
+  upsertDiverCertificateFile,
+} from "@/lib/diver-documents";
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
 const BUCKET_NAME = "diver-documents";
@@ -145,44 +150,46 @@ export async function POST(req: Request) {
     });
 
     const importBatchId = randomUUID();
-    const userFolder = `${authResult.diverId}/${importBatchId}`;
     const diverId = authResult.diverId;
+    const existingFiles = listCertificateDocumentFiles(await listDiverDocumentFiles(serviceSupabase, diverId));
 
     let cvBuffer: Buffer | null = null;
     let cvPath = "";
     if (mainCvFile) {
       cvBuffer = Buffer.from(await mainCvFile.arrayBuffer());
-      cvPath = `${userFolder}/main-cv-${Date.now()}.pdf`;
+      cvPath = `${diverId}/source/original-cv.pdf`;
       const cvUpload = await serviceSupabase.storage.from(BUCKET_NAME).upload(cvPath, cvBuffer, {
         contentType: "application/pdf",
-        upsert: false,
+        upsert: true,
       });
       if (cvUpload.error) {
         return NextResponse.json({ error: `Failed to upload CV: ${cvUpload.error.message}` }, { status: 400 });
       }
     }
 
-    const certUploadResults: { path: string; mimeType: string; name: string; dataUrl: string }[] = [];
+    const certUploadResults: { path: string; mimeType: string; name: string; action: string }[] = [];
     const certExtractedTextParts: string[] = [];
     const extractionWarnings: string[] = [];
     for (const certFile of certificateFiles) {
       const certBuffer = Buffer.from(await certFile.arrayBuffer());
       const kind = classifyCertificateFile(certFile.name, certFile.type) ?? "jpg";
-      const extension = kind === "pdf" ? "pdf" : kind === "png" ? "png" : "jpg";
-      const mimeType = kind === "pdf" ? "application/pdf" : kind === "png" ? "image/png" : "image/jpeg";
-      const certPath = `${userFolder}/cert-${randomUUID()}.${extension}`;
-      const uploadResult = await serviceSupabase.storage.from(BUCKET_NAME).upload(certPath, certBuffer, {
-        contentType: mimeType,
-        upsert: false,
+      const uploaded = await upsertDiverCertificateFile(
+        serviceSupabase,
+        diverId,
+        { name: certFile.name, bytes: certBuffer, contentType: certFile.type || "" },
+        existingFiles,
+      );
+      existingFiles.push({
+        name: uploaded.name,
+        path: uploaded.path,
+        created_at: new Date().toISOString(),
+        size: certBuffer.length,
       });
-      if (uploadResult.error) {
-        return NextResponse.json({ error: `Failed to upload ${certFile.name}: ${uploadResult.error.message}` }, { status: 400 });
-      }
       certUploadResults.push({
-        path: certPath,
-        mimeType,
+        path: uploaded.path,
+        mimeType: uploaded.mimeType,
         name: certFile.name,
-        dataUrl: "",
+        action: uploaded.action,
       });
 
       if (kind === "pdf") {
@@ -213,10 +220,18 @@ export async function POST(req: Request) {
       }));
 
     if (!mainCvFile || !cvBuffer) {
+      const added = certUploadResults.filter((item) => item.action === "added").map((item) => item.name);
+      const renewed = certUploadResults.filter((item) => item.action === "renewed").map((item) => item.name);
+      const duplicates = certUploadResults.filter((item) => item.action === "duplicate").map((item) => item.name);
+      const parts = [
+        added.length ? `New: ${added.join(", ")}.` : "",
+        renewed.length ? `Renewed (replaced existing): ${renewed.join(", ")}.` : "",
+        duplicates.length ? `Already on file, unchanged: ${duplicates.join(", ")}.` : "",
+      ].filter(Boolean);
       const certReply =
-        `Stored ${certUploadResults.length} certificate file${certUploadResults.length === 1 ? "" : "s"}. ` +
-        "Your existing CV is unchanged — no need to upload it again. " +
-        "When you ask me to send certificates I will bake the PDFs and photos into one Certificates PDF. " +
+        `${parts.join(" ") || `Stored ${certUploadResults.length} certificate file(s).`} ` +
+        "The living CV Hermes keeps is unchanged. " +
+        "When you ask me to send certificates I will bake the current scans into one Certificates PDF. " +
         (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")}` : "");
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,

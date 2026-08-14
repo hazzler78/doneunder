@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildCertificatePackPdf, classifyCertificateFile } from "@/lib/certificate-pack";
+import { certificateSlug, isGenericCertificateSlug, isStoredMainCvFilename } from "@/lib/document-names";
 import type { EmailAttachment } from "@/lib/email";
 import { buildDiverCertificatesPdf, certificatesPdfFilename } from "@/lib/cv-pdf";
 import type { DiverProfileFull } from "@/lib/diver-profile";
@@ -19,8 +20,9 @@ export type DiverDocumentFile = {
   size: number;
 };
 
-function isMainCvFilename(name: string) {
-  return /^main-cv-/i.test(name);
+function isMainCvFilename(name: string, path?: string) {
+  if (path?.includes("/source/")) return true;
+  return isStoredMainCvFilename(name);
 }
 
 function contentTypeForName(name: string) {
@@ -32,9 +34,18 @@ function contentTypeForName(name: string) {
   return "";
 }
 
-function isAttachableCertificate(name: string) {
-  return Boolean(contentTypeForName(name)) && !isMainCvFilename(name);
+function isAttachableCertificate(name: string, path?: string) {
+  return Boolean(contentTypeForName(name)) && !isMainCvFilename(name, path);
 }
+
+export type CertificateUploadAction = "added" | "renewed" | "duplicate";
+
+export type CertificateUploadResult = {
+  path: string;
+  name: string;
+  mimeType: string;
+  action: CertificateUploadAction;
+};
 
 function attachmentFilename(displayName: string, originalName: string, index: number) {
   const slug = displayName
@@ -78,28 +89,41 @@ export async function listDiverDocumentFiles(
   return nested.flat().sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
 }
 
-export async function uploadDiverCertificateFiles(
+export function listCertificateDocumentFiles(files: DiverDocumentFile[]) {
+  return files.filter((file) => isAttachableCertificate(file.name, file.path));
+}
+
+function fileFingerprint(bytes: Buffer) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+export async function upsertDiverCertificateFile(
   supabase: SupabaseClient,
   diverId: string,
-  files: Array<{ name: string; bytes: Buffer; contentType: string }>,
-) {
-  const importBatchId = randomUUID();
-  const uploaded: { path: string; name: string; mimeType: string }[] = [];
-  for (const file of files) {
-    const kind = classifyCertificateFile(file.name, file.contentType);
-    if (!kind) throw new Error(`Unsupported certificate format for ${file.name}. Use PDF, JPG, or PNG.`);
-    const extension = kind === "pdf" ? "pdf" : kind === "png" ? "png" : "jpg";
-    const path = `${diverId}/${importBatchId}/cert-${randomUUID()}.${extension}`;
-    const mime =
-      kind === "pdf" ? "application/pdf" : kind === "png" ? "image/png" : "image/jpeg";
-    const result = await supabase.storage.from(BUCKET).upload(path, file.bytes, {
-      contentType: mime,
-      upsert: false,
-    });
-    if (result.error) throw new Error(`Failed to upload ${file.name}: ${result.error.message}`);
-    uploaded.push({ path, name: file.name, mimeType: mime });
+  file: { name: string; bytes: Buffer; contentType: string },
+  existing: DiverDocumentFile[],
+): Promise<CertificateUploadResult> {
+  const kind = classifyCertificateFile(file.name, file.contentType);
+  if (!kind || kind === "webp") {
+    throw new Error(`Unsupported certificate format for ${file.name}. Use PDF, JPG, or PNG.`);
   }
-  return { importBatchId, uploaded };
+  const extension = kind === "pdf" ? "pdf" : kind === "png" ? "png" : "jpg";
+  const mime = kind === "pdf" ? "application/pdf" : kind === "png" ? "image/png" : "image/jpeg";
+  const hash = fileFingerprint(file.bytes);
+  const namedSlug = certificateSlug(file.name);
+  const slug = isGenericCertificateSlug(namedSlug) ? `photo-${hash.slice(0, 12)}` : namedSlug;
+  const path = `${diverId}/certs/${slug}.${extension}`;
+  const alreadySameHash = existing.some((item) => item.path === path && item.size === file.bytes.length);
+  const existed = existing.some((item) => item.path === path || certificateSlug(item.name) === slug);
+
+  const result = await supabase.storage.from(BUCKET).upload(path, file.bytes, {
+    contentType: mime,
+    upsert: true,
+  });
+  if (result.error) throw new Error(`Failed to upload ${file.name}: ${result.error.message}`);
+
+  const action: CertificateUploadAction = alreadySameHash ? "duplicate" : existed ? "renewed" : "added";
+  return { path, name: `${slug}.${extension}`, mimeType: mime, action };
 }
 
 export async function buildCertificateAttachments(
@@ -110,9 +134,7 @@ export async function buildCertificateAttachments(
     profile: DiverProfileFull;
   },
 ): Promise<EmailAttachment[]> {
-  const files = (await listDiverDocumentFiles(supabase, input.diverId)).filter((file) =>
-    isAttachableCertificate(file.name),
-  );
+  const files = listCertificateDocumentFiles(await listDiverDocumentFiles(supabase, input.diverId));
 
   const sources: Array<{ name: string; bytes: Buffer; contentType: string }> = [];
   let total = 0;
