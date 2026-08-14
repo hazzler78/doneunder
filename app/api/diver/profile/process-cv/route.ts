@@ -19,6 +19,9 @@ import {
 } from "@/lib/diver-documents";
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 const BUCKET_NAME = "diver-documents";
 const MAX_MAIN_CV_MB = 12;
 const MAX_CERT_MB = 8;
