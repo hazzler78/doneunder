@@ -203,7 +203,7 @@ export const conversationalCvUpdateSchema = z
       .array(certificationBodySchema)
       .max(20)
       .optional()
-      .describe("New tickets/certs to add. Keep official certificate titles."),
+      .describe("New tickets/certs to add. Keep official titles. Put expiry_date as YYYY-MM-DD or DD/MM/YYYY."),
     update_certifications: z
       .array(
         z.object({
@@ -212,7 +212,8 @@ export const conversationalCvUpdateSchema = z
         }),
       )
       .max(20)
-      .optional(),
+      .optional()
+      .describe("Change an existing ticket. Use this to set expiry_date / issue_date. Dates: YYYY-MM-DD or DD/MM/YYYY."),
     remove_certifications: z.array(certificationMatchSchema).max(20).optional(),
     replace_certifications: z.array(certificationBodySchema).max(50).optional(),
     add_references: z.array(referenceBodySchema.partial({ phone: true })).max(10).optional(),
