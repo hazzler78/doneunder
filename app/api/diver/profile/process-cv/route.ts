@@ -10,12 +10,13 @@ import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
+import { classifyCertificateFile } from "@/lib/certificate-pack";
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
 const BUCKET_NAME = "diver-documents";
 const MAX_MAIN_CV_MB = 12;
 const MAX_CERT_MB = 8;
-const MAX_CERT_FILES = 10;
+const MAX_CERT_FILES = 20;
 const MAX_SOURCE_TEXT_CHARS = 60000;
 const CHUNK_SIZE = 6000;
 const CHUNK_OVERLAP = 400;
@@ -101,24 +102,30 @@ export async function POST(req: Request) {
     if ("error" in authResult) return authResult.error;
 
     const formData = await req.formData();
-    const mainCvFile = formData.get("mainCv");
+    const mainCvEntry = formData.get("mainCv");
+    const mainCvFile = mainCvEntry instanceof File && mainCvEntry.size > 0 ? mainCvEntry : null;
     const certFiles = formData.getAll("certificates");
 
-    if (!(mainCvFile instanceof File)) {
-      return NextResponse.json({ error: "Main CV PDF is required." }, { status: 400 });
+    const certificateFiles = certFiles.filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (!mainCvFile && certificateFiles.length === 0) {
+      return NextResponse.json({ error: "Upload a CV PDF and/or certificate files (PDF, JPG, PNG)." }, { status: 400 });
     }
-    if (mainCvFile.type !== "application/pdf") {
+    if (mainCvFile && mainCvFile.type !== "application/pdf" && !mainCvFile.name.toLowerCase().endsWith(".pdf")) {
       return NextResponse.json({ error: "Main CV must be a PDF." }, { status: 400 });
     }
 
-    const certificateFiles = certFiles.filter((entry): entry is File => entry instanceof File);
     if (certificateFiles.length > MAX_CERT_FILES) {
       return NextResponse.json({ error: `Maximum ${MAX_CERT_FILES} certificate files allowed.` }, { status: 400 });
     }
 
-    validateFile(mainCvFile, MAX_MAIN_CV_MB);
+    if (mainCvFile) validateFile(mainCvFile, MAX_MAIN_CV_MB);
     for (const certFile of certificateFiles) {
-      const validType = certFile.type === "application/pdf" || certFile.type === "image/jpeg" || certFile.type === "image/png";
+      const validType =
+        certFile.type === "application/pdf" ||
+        certFile.type === "image/jpeg" ||
+        certFile.type === "image/jpg" ||
+        certFile.type === "image/png" ||
+        /\.(pdf|png|jpe?g)$/i.test(certFile.name);
       if (!validType) {
         return NextResponse.json(
           { error: `Unsupported certificate format for ${certFile.name}. Use PDF, JPG, or PNG.` },
@@ -136,14 +143,18 @@ export async function POST(req: Request) {
     const userFolder = `${authResult.diverId}/${importBatchId}`;
     const diverId = authResult.diverId;
 
-    const cvBuffer = Buffer.from(await mainCvFile.arrayBuffer());
-    const cvPath = `${userFolder}/main-cv-${Date.now()}.pdf`;
-    const cvUpload = await serviceSupabase.storage.from(BUCKET_NAME).upload(cvPath, cvBuffer, {
-      contentType: "application/pdf",
-      upsert: false,
-    });
-    if (cvUpload.error) {
-      return NextResponse.json({ error: `Failed to upload CV: ${cvUpload.error.message}` }, { status: 400 });
+    let cvBuffer: Buffer | null = null;
+    let cvPath = "";
+    if (mainCvFile) {
+      cvBuffer = Buffer.from(await mainCvFile.arrayBuffer());
+      cvPath = `${userFolder}/main-cv-${Date.now()}.pdf`;
+      const cvUpload = await serviceSupabase.storage.from(BUCKET_NAME).upload(cvPath, cvBuffer, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+      if (cvUpload.error) {
+        return NextResponse.json({ error: `Failed to upload CV: ${cvUpload.error.message}` }, { status: 400 });
+      }
     }
 
     const certUploadResults: { path: string; mimeType: string; name: string; dataUrl: string }[] = [];
@@ -151,10 +162,12 @@ export async function POST(req: Request) {
     const extractionWarnings: string[] = [];
     for (const certFile of certificateFiles) {
       const certBuffer = Buffer.from(await certFile.arrayBuffer());
-      const extension = certFile.type === "application/pdf" ? "pdf" : certFile.type === "image/png" ? "png" : "jpg";
+      const kind = classifyCertificateFile(certFile.name, certFile.type) ?? "jpg";
+      const extension = kind === "pdf" ? "pdf" : kind === "png" ? "png" : "jpg";
+      const mimeType = kind === "pdf" ? "application/pdf" : kind === "png" ? "image/png" : "image/jpeg";
       const certPath = `${userFolder}/cert-${randomUUID()}.${extension}`;
       const uploadResult = await serviceSupabase.storage.from(BUCKET_NAME).upload(certPath, certBuffer, {
-        contentType: certFile.type,
+        contentType: mimeType,
         upsert: false,
       });
       if (uploadResult.error) {
@@ -162,12 +175,12 @@ export async function POST(req: Request) {
       }
       certUploadResults.push({
         path: certPath,
-        mimeType: certFile.type,
+        mimeType,
         name: certFile.name,
         dataUrl: "",
       });
 
-      if (certFile.type === "application/pdf") {
+      if (kind === "pdf") {
         try {
           const extracted = await extractPdfText(certBuffer);
           if (extracted) certExtractedTextParts.push(`[${certFile.name}] ${truncateText(extracted, 12000)}`);
@@ -183,6 +196,38 @@ export async function POST(req: Request) {
           );
         }
       }
+    }
+
+    const thread =
+      (await getAgentThread(serviceSupabase, "web", diverId)) ??
+      (await upsertWorkspaceThread(serviceSupabase, {
+        userId: diverId,
+        role: "diver",
+        channel: "web",
+        externalChatId: diverId,
+      }));
+
+    if (!mainCvFile || !cvBuffer) {
+      const certReply =
+        `Stored ${certUploadResults.length} certificate file${certUploadResults.length === 1 ? "" : "s"}. ` +
+        "When you ask me to send certificates I will bake the PDFs and photos into one Certificates PDF. " +
+        (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")}` : "");
+      await appendAgentTurn(serviceSupabase, {
+        threadId: thread.id,
+        userContent: `Please store these certificate files: ${certificateFiles.map((file) => file.name).join(", ")}`,
+        assistantContent: certReply,
+        metadata: { source: "process-cv", importBatchId, certificatesOnly: true },
+      });
+      return NextResponse.json({
+        ok: true,
+        certificatesOnly: true,
+        warnings: extractionWarnings,
+        importBatchId,
+        uploaded: {
+          cv: null,
+          certificates: certUploadResults.map((item) => item.path),
+        },
+      });
     }
 
     const cvText = truncateText(await extractPdfText(cvBuffer));
@@ -234,15 +279,6 @@ export async function POST(req: Request) {
       cvLastProcessedAt: nowIso,
       preserveEmptyChildSections: true,
     });
-
-    const thread =
-      (await getAgentThread(serviceSupabase, "web", diverId)) ??
-      (await upsertWorkspaceThread(serviceSupabase, {
-        userId: diverId,
-        role: "diver",
-        channel: "web",
-        externalChatId: diverId,
-      }));
 
     const cvReply =
       "CV processed in English. I updated your structured profile. " +
