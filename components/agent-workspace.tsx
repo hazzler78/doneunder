@@ -237,27 +237,47 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     }
   }
 
-  async function processCvUpload(fileOverride?: File) {
-    const cvFile = fileOverride ?? mainCv;
-    if (!cvFile) {
-      setUploadError("Select a main CV PDF first.");
+  function classifyDroppedFiles(files: File[]) {
+    const namedCv = files.find(
+      (file) =>
+        (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
+        /cv|curriculum|resume/i.test(file.name),
+    );
+    const onlyOnePdf =
+      files.length === 1 &&
+      (files[0].type === "application/pdf" || files[0].name.toLowerCase().endsWith(".pdf"));
+    const cvFile = namedCv ?? (onlyOnePdf ? files[0] : null);
+    return {
+      cvFile,
+      certFiles: files.filter((file) => file !== cvFile),
+    };
+  }
+
+  async function processCvUpload(fileOverride?: File | File[]) {
+    const dropped = fileOverride ? (Array.isArray(fileOverride) ? fileOverride : [fileOverride]) : [];
+    const classified = dropped.length > 0 ? classifyDroppedFiles(dropped) : { cvFile: mainCv, certFiles: certs };
+    const cvFile = classified.cvFile;
+    const certFiles = classified.certFiles;
+    if (!cvFile && certFiles.length === 0) {
+      setUploadError("Select a CV PDF and/or certificate files (PDF, JPG, PNG).");
       return;
     }
     setUploading(true);
     setUploadError(null);
-    if (fileOverride) {
+    if (dropped.length > 0) {
+      const names = dropped.map((file) => file.name).join(", ");
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           from: "user",
-          text: `Please process this CV PDF: ${cvFile.name}`,
+          text: cvFile && certFiles.length === 0 ? `Please process this CV PDF: ${cvFile.name}` : `Please store these files: ${names}`,
         },
       ]);
     }
     const form = new FormData();
-    form.append("mainCv", cvFile);
-    certs.forEach((file) => form.append("certificates", file));
+    if (cvFile) form.append("mainCv", cvFile);
+    certFiles.forEach((file) => form.append("certificates", file));
 
     try {
       const response = await fetch("/api/diver/profile/process-cv", {
@@ -283,7 +303,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
       }
       setMainCv(null);
       setCerts([]);
-      setCvUpdatedParts(["CV upload"]);
+      setCvUpdatedParts([cvFile ? "CV upload" : "Certificate files"]);
       await loadDocuments();
       await loadChatHistory({ silent: true });
     } catch {
@@ -294,7 +314,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           {
             id: crypto.randomUUID(),
             from: "agent",
-            text: "Upload request failed. Please try attaching the PDF again.",
+            text: "Upload request failed. Please try attaching the files again.",
           },
         ]);
       }
@@ -343,7 +363,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         <div className="space-y-2 rounded-xl border border-border/60 bg-[#050f18] p-3">
           <p className="text-sm font-medium text-cyan-50">Upload CV & certificates</p>
           <p className="text-[11px] text-muted-foreground">
-            Optional — you can also paste CV text or attach a PDF in the chat.
+            Mix PDFs and photos. Certificates are baked into one PDF when Hermes sends them.
           </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-muted-foreground">Main CV (PDF)</span>
@@ -364,8 +384,13 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
               className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-cyan-50"
             />
           </label>
-          <Button size="sm" className="w-full" onClick={() => void processCvUpload()} disabled={uploading}>
-            {uploading ? "Processing…" : "Process files"}
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={() => void processCvUpload()}
+            disabled={uploading || (!mainCv && certs.length === 0)}
+          >
+            {uploading ? "Processing…" : mainCv ? "Process files" : "Store certificates"}
           </Button>
           {uploadError ? <p className="text-xs text-amber-300">{uploadError}</p> : null}
         </div>
@@ -605,12 +630,13 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="application/pdf"
+                  accept="application/pdf,image/png,image/jpeg"
+                  multiple
                   className="sr-only"
                   onChange={(event) => {
-                    const file = event.target.files?.[0];
+                    const files = Array.from(event.target.files ?? []);
                     event.target.value = "";
-                    if (file) void processCvUpload(file);
+                    if (files.length > 0) void processCvUpload(files);
                   }}
                 />
                 <button
@@ -618,8 +644,8 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
                   className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-cyan-100/80 transition hover:bg-muted/50 hover:text-cyan-50 disabled:opacity-50"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading || sending}
-                  aria-label="Attach CV PDF"
-                  title="Attach CV PDF"
+                  aria-label="Attach CV or certificates"
+                  title="Attach CV PDF and/or certificate photos"
                 >
                   <Paperclip className="h-4 w-4" />
                 </button>
@@ -654,7 +680,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">
             {role === "diver"
-              ? "English · Type a change, paste CV text, or attach a PDF"
+              ? "English · Type a change, or attach a CV PDF plus certificate PDFs/photos"
               : "Enter to send · Shift+Enter for a new line"}
           </p>
         </form>

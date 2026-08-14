@@ -215,7 +215,7 @@ Updating the CV from chat (this is the main way to edit):
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
-- If the profile is empty, invite them to paste CV text here or attach a PDF in the chat. You can build the CV from conversation — do not send them to a form.
+- If the profile is empty, invite them to paste CV text here or attach a CV PDF and certificate files (PDF, JPG, PNG) in the chat. You can build the CV from conversation — do not send them to a form.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
 - Never invent that a company or role is on the CV unless it appears in the profile context or a successful update_cv result.
 
@@ -226,7 +226,7 @@ Other tools:
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
-- If they ask to send certificates, set attach_certificates=true. Never write that certificates are attached unless send_email returns attached filenames.
+- If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
 - Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
 - Emails are sent as the logged-in diver. Reply-To is the inbound Hermes mailbox so employer replies come back here. Never invent a different sender.
@@ -669,7 +669,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     send_email: tool({
       description:
-        "Send an email as the logged-in diver after they confirm recipient, subject, and body. Set attach_cv=true when sending a CV, or attach_certificates=true when sending certificates. Never send without confirmed=true.",
+        "Send an email as the logged-in diver after they confirm recipient, subject, and body. Set attach_cv=true when sending a CV. Set attach_certificates=true to attach one combined Certificates PDF (all stored PDFs and photos). Never send without confirmed=true.",
       inputSchema: z.object({
         to: z.string().email().describe("Recipient email address"),
         subject: z.string().min(1).max(200),
@@ -681,7 +681,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         attach_certificates: z
           .boolean()
           .optional()
-          .describe("True when the diver wants certificate files attached."),
+          .describe("True when the diver wants certificates attached as one combined PDF pack."),
         confirmed: z
           .boolean()
           .describe("True only after the diver explicitly approved sending this exact email."),
