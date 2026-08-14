@@ -31,6 +31,11 @@ type DocumentEntry = {
   size: number;
 };
 
+type LivingCvInfo = {
+  present: boolean;
+  updatedAt: string | null;
+};
+
 type Props = {
   role: Exclude<UserRole, "admin">;
   userId: string;
@@ -79,6 +84,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   const [suggestions, setSuggestions] = useState<ChatResponse["suggestions"]>([]);
   const [profileStatus, setProfileStatus] = useState<"draft" | "published">("draft");
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
+  const [livingCv, setLivingCv] = useState<LivingCvInfo>({ present: false, updatedAt: null });
   const [docLoading, setDocLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -181,9 +187,14 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     setDocLoading(true);
     try {
       const response = await fetch("/api/diver/documents");
-      const data = (await response.json()) as { documents?: DocumentEntry[] };
+      const data = (await response.json()) as {
+        documents?: DocumentEntry[];
+        certificates?: DocumentEntry[];
+        livingCv?: LivingCvInfo;
+      };
       if (response.ok) {
-        setDocuments(data.documents ?? []);
+        setDocuments(data.certificates ?? data.documents ?? []);
+        if (data.livingCv) setLivingCv(data.livingCv);
       }
     } finally {
       setDocLoading(false);
@@ -238,7 +249,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
     }
   }
 
-  const hasStoredCv = documents.some((doc) => isStoredMainCvFilename(doc.name));
+  const hasStoredCv = livingCv.present || documents.some((doc) => isStoredMainCvFilename(doc.name));
 
   function classifyDroppedFiles(files: File[]) {
     const cvFile = files.find((file) => looksLikeMainCvFilename(file.name)) ?? null;
@@ -359,12 +370,12 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
           <p className="text-sm font-medium text-cyan-50">Upload CV & certificates</p>
           <p className="text-[11px] text-muted-foreground">
             {hasStoredCv
-              ? "Your CV is already on file. Add certificate PDFs or photos only — no need to upload the CV again."
-              : "Mix PDFs and photos. Certificates are baked into one PDF when Hermes sends them."}
+              ? "Hermes already keeps your living CV. Add a new or renewed certificate scan — no new CV file needed."
+              : "Upload a CV once to seed Hermes. After that, talk to Hermes to update it. Certificates are stored separately."}
           </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-muted-foreground">
-              {hasStoredCv ? "Replace CV (optional)" : "Main CV (PDF)"}
+              {hasStoredCv ? "Replace living CV from a new PDF (rare)" : "Seed CV (PDF)"}
             </span>
             <input
               type="file"
@@ -412,15 +423,25 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         </div>
         {role !== "diver" ? (
           <p className="text-xs text-muted-foreground">Company files panel coming next.</p>
-        ) : documents.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No uploaded files yet.</p>
+        ) : !livingCv.present && documents.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No living CV or certificates yet.</p>
         ) : (
           <ul className="space-y-2">
+            {livingCv.present ? (
+              <li className="rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-2 text-xs">
+                <p className="font-medium text-cyan-50">Living CV</p>
+                <p className="text-muted-foreground">
+                  Hermes keeps this updated
+                  {livingCv.updatedAt ? ` · ${new Date(livingCv.updatedAt).toLocaleString("en-GB")}` : ""}
+                </p>
+              </li>
+            ) : null}
             {documents.map((doc) => (
               <li key={doc.path} className="rounded-lg border border-border/50 px-2.5 py-2 text-xs">
                 <p className="font-medium text-cyan-50">{doc.name}</p>
                 <p className="text-muted-foreground">
-                  {new Date(doc.created_at).toLocaleString("en-GB")}
+                  Certificate
+                  {doc.created_at ? ` · ${new Date(doc.created_at).toLocaleString("en-GB")}` : ""}
                 </p>
               </li>
             ))}
