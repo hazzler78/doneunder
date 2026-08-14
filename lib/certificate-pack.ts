@@ -1,5 +1,4 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas";
-import { PDFDocument, PageSizes } from "pdf-lib";
+import { PDFDocument, PageSizes, degrees, type PDFImage, type PDFPage } from "pdf-lib";
 
 export type CertificatePackSource = {
   name: string;
@@ -9,7 +8,6 @@ export type CertificatePackSource = {
 
 const A4 = PageSizes.A4;
 const MARGIN = 28;
-const MAX_IMAGE_EDGE = 2000;
 
 export function classifyCertificateFile(name: string, contentType?: string) {
   const lower = name.toLowerCase();
@@ -55,59 +53,6 @@ export function jpegExifOrientation(bytes: Buffer) {
   return 1;
 }
 
-async function normalizeImageForPdf(bytes: Buffer, kind: "jpg" | "png" | "webp") {
-  const image = await loadImage(bytes);
-  const orientation = kind === "jpg" ? jpegExifOrientation(bytes) : 1;
-  const swapped = orientation >= 5 && orientation <= 8;
-  let width = image.width;
-  let height = image.height;
-  const longest = Math.max(width, height);
-  const scale = longest > MAX_IMAGE_EDGE ? MAX_IMAGE_EDGE / longest : 1;
-  width = Math.max(1, Math.round(width * scale));
-  height = Math.max(1, Math.round(height * scale));
-  const canvasWidth = swapped ? height : width;
-  const canvasHeight = swapped ? width : height;
-  const canvas = createCanvas(canvasWidth, canvasHeight);
-  const ctx = canvas.getContext("2d");
-  ctx.save();
-  switch (orientation) {
-    case 2:
-      ctx.translate(canvasWidth, 0);
-      ctx.scale(-1, 1);
-      break;
-    case 3:
-      ctx.translate(canvasWidth, canvasHeight);
-      ctx.rotate(Math.PI);
-      break;
-    case 4:
-      ctx.translate(0, canvasHeight);
-      ctx.scale(1, -1);
-      break;
-    case 5:
-      ctx.rotate(0.5 * Math.PI);
-      ctx.scale(1, -1);
-      break;
-    case 6:
-      ctx.translate(canvasWidth, 0);
-      ctx.rotate(0.5 * Math.PI);
-      break;
-    case 7:
-      ctx.translate(canvasWidth, canvasHeight);
-      ctx.rotate(0.5 * Math.PI);
-      ctx.scale(1, -1);
-      break;
-    case 8:
-      ctx.translate(0, canvasHeight);
-      ctx.rotate(-0.5 * Math.PI);
-      break;
-    default:
-      break;
-  }
-  ctx.drawImage(image, 0, 0, width, height);
-  ctx.restore();
-  return canvas.toBuffer("image/jpeg", 85);
-}
-
 async function appendPdfPages(target: PDFDocument, bytes: Buffer) {
   const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const pages = await target.copyPages(source, source.getPageIndices());
@@ -115,29 +60,49 @@ async function appendPdfPages(target: PDFDocument, bytes: Buffer) {
   return pages.length;
 }
 
-async function embedRaster(target: PDFDocument, bytes: Buffer, kind: "jpg" | "png" | "webp") {
-  try {
-    const normalized = await normalizeImageForPdf(bytes, kind);
-    return target.embedJpg(normalized);
-  } catch {
-    if (kind === "png") return target.embedPng(bytes);
-    if (kind === "jpg") return target.embedJpg(bytes);
-    throw new Error("Could not embed image");
+async function embedRaster(target: PDFDocument, bytes: Buffer, kind: "jpg" | "png") {
+  if (kind === "png") return target.embedPng(bytes);
+  return target.embedJpg(bytes);
+}
+
+function drawOrientedImage(
+  page: PDFPage,
+  image: PDFImage,
+  orientation: number,
+  box: { x: number; y: number; width: number; height: number },
+) {
+  const { x, y, width, height } = box;
+  switch (orientation) {
+    case 3:
+      page.drawImage(image, { x: x + width, y: y + height, width, height, rotate: degrees(180) });
+      return;
+    case 6:
+      page.drawImage(image, { x: x + width, y, width: height, height: width, rotate: degrees(90) });
+      return;
+    case 8:
+      page.drawImage(image, { x, y: y + height, width: height, height: width, rotate: degrees(-90) });
+      return;
+    default:
+      page.drawImage(image, { x, y, width, height });
   }
 }
 
-async function appendImagePage(target: PDFDocument, bytes: Buffer, kind: "jpg" | "png" | "webp") {
+async function appendImagePage(target: PDFDocument, bytes: Buffer, kind: "jpg" | "png") {
   const image = await embedRaster(target, bytes, kind);
-  const landscape = image.width > image.height;
+  const orientation = kind === "jpg" ? jpegExifOrientation(bytes) : 1;
+  const swapped = orientation === 6 || orientation === 8;
+  const displayWidth = swapped ? image.height : image.width;
+  const displayHeight = swapped ? image.width : image.height;
+  const landscape = displayWidth > displayHeight;
   const pageWidth = landscape ? A4[1] : A4[0];
   const pageHeight = landscape ? A4[0] : A4[1];
   const page = target.addPage([pageWidth, pageHeight]);
   const maxW = pageWidth - MARGIN * 2;
   const maxH = pageHeight - MARGIN * 2;
-  const scale = Math.min(maxW / image.width, maxH / image.height);
-  const width = image.width * scale;
-  const height = image.height * scale;
-  page.drawImage(image, {
+  const scale = Math.min(maxW / displayWidth, maxH / displayHeight);
+  const width = displayWidth * scale;
+  const height = displayHeight * scale;
+  drawOrientedImage(page, image, orientation, {
     x: (pageWidth - width) / 2,
     y: (pageHeight - height) / 2,
     width,
@@ -155,7 +120,7 @@ export async function buildCertificatePackPdf(sources: CertificatePackSource[]) 
 
   for (const source of sources) {
     const kind = classifyCertificateFile(source.name, source.contentType);
-    if (!kind) {
+    if (!kind || kind === "webp") {
       skipped.push(source.name);
       continue;
     }
