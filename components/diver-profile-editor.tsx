@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
+import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { cn } from "@/lib/utils";
 import type {
   DiverCertificationInput,
@@ -473,24 +474,55 @@ export function DiverProfileEditor({
     startProcessingProgress();
     setMessage(null);
 
-    const payload = new FormData();
-    if (mainCv) payload.append("mainCv", mainCv);
-    certFiles.forEach((file) => payload.append("certificates", file));
+    let data: AiProcessResponse | null = null;
+    try {
+      if (mainCv) {
+        const payload = new FormData();
+        payload.append("mainCv", mainCv);
+        const response = await fetch("/api/diver/profile/process-cv", {
+          method: "POST",
+          body: payload,
+        });
+        const parsed = (await response.json().catch(() => ({}))) as AiProcessResponse & { error?: string };
+        if (!response.ok) {
+          setMessage(parsed.error ?? "Failed to process CV.");
+          setProcessing(false);
+          finishProcessingProgress();
+          return;
+        }
+        data = parsed;
+      }
 
-    const response = await fetch("/api/diver/profile/process-cv", {
-      method: "POST",
-      body: payload,
-    });
-
-    setProcessing(false);
-    finishProcessingProgress();
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({ error: "Failed to process CV." }));
-      setMessage(data.error ?? "Failed to process CV.");
+      if (certFiles.length > 0) {
+        const { uploaded, errors } = await uploadCertificateFilesSequentially(certFiles, (current, total) => {
+          setMessage(`Uploading ${current} of ${total}…`);
+        });
+        if (errors.length > 0) {
+          setMessage(`Stored ${uploaded.length} file(s). Failed: ${errors.join(" ")}`);
+          setProcessing(false);
+          finishProcessingProgress();
+          return;
+        }
+      }
+    } catch {
+      setMessage("Upload request failed.");
+      setProcessing(false);
+      finishProcessingProgress();
       return;
     }
 
-    const data = (await response.json()) as AiProcessResponse;
+    setProcessing(false);
+    finishProcessingProgress();
+    if (!data?.output) {
+      setMainCv(null);
+      setCertFiles([]);
+      setMessage(
+        certFiles.length > 0
+          ? `Stored ${certFiles.length} certificate file(s). Living CV unchanged.`
+          : "Upload finished.",
+      );
+      return;
+    }
     const profile = data.output.polished_cv_json;
 
     setForm((prev) => ({

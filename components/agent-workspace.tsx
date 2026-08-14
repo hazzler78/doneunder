@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
+import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { isStoredMainCvFilename, looksLikeMainCvFilename } from "@/lib/document-names";
 import type { UserRole } from "@/lib/types";
 
@@ -281,32 +282,43 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
         },
       ]);
     }
-    const form = new FormData();
-    if (cvFile) form.append("mainCv", cvFile);
-    certFiles.forEach((file) => form.append("certificates", file));
-
     try {
-      const response = await fetch("/api/diver/profile/process-cv", {
-        method: "POST",
-        body: form,
-      });
-      const data = (await response.json()) as {
-        error?: string;
-        detail?: string;
-        warnings?: string[];
-      };
-      if (!response.ok) {
-        const detail = data.detail ? ` ${data.detail}` : "";
-        const message = `${data.error ?? "Failed to process CV upload."}${detail}`;
-        setUploadError(message);
-        if (fileOverride) {
-          setMessages((prev) => [
-            ...prev,
-            { id: crypto.randomUUID(), from: "agent", text: message },
-          ]);
+      if (cvFile) {
+        const form = new FormData();
+        form.append("mainCv", cvFile);
+        const response = await fetch("/api/diver/profile/process-cv", {
+          method: "POST",
+          body: form,
+        });
+        const data = (await response.json()) as { error?: string; detail?: string };
+        if (!response.ok) {
+          const message = `${data.error ?? "Failed to process CV upload."}${data.detail ? ` ${data.detail}` : ""}`;
+          setUploadError(message);
+          if (fileOverride) {
+            setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+          }
+          return;
         }
-        return;
       }
+
+      if (certFiles.length > 0) {
+        const { uploaded, errors } = await uploadCertificateFilesSequentially(
+          certFiles,
+          (current, total, fileName) => {
+            setUploadError(`Uploading ${current} of ${total}: ${fileName}`);
+          },
+        );
+        if (errors.length > 0) {
+          const message = `Stored ${uploaded.length} file(s). Failed: ${errors.join(" ")}`;
+          setUploadError(message);
+          if (fileOverride) {
+            setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+          }
+        } else {
+          setUploadError(null);
+        }
+      }
+
       setMainCv(null);
       setCerts([]);
       setCvUpdatedParts([cvFile ? "CV upload" : "Certificate files"]);
@@ -400,8 +412,11 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
             onClick={() => void processCvUpload()}
             disabled={uploading || (!mainCv && certs.length === 0)}
           >
-            {uploading ? "Processing…" : mainCv ? "Process files" : "Store certificates"}
+            {uploading ? "Uploading…" : mainCv ? "Process files" : "Store certificates"}
           </Button>
+          {certs.length > 0 ? (
+            <p className="text-[11px] text-cyan-200">{certs.length} certificate file{certs.length === 1 ? "" : "s"} selected</p>
+          ) : null}
           {uploadError ? <p className="text-xs text-amber-300">{uploadError}</p> : null}
         </div>
       ) : null}
