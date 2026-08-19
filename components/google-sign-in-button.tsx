@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { googleDiverSignInAction } from "@/app/auth/actions";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function GoogleMark() {
   return (
@@ -26,11 +26,12 @@ function GoogleMark() {
 
 export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   return (
-    <form action={googleDiverSignInAction}>
-      <Button type="submit" variant="outline" className="h-11 w-full gap-2">
-        <GoogleMark />
-        {label}
-      </Button>
-    </form>
+    <a
+      href="/auth/google"
+      className={cn(buttonVariants({ variant: "outline" }), "h-11 w-full gap-2")}
+    >
+      <GoogleMark />
+      {label}
+    </a>
   );
 }

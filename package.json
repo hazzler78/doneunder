@@ -9,7 +9,9 @@
     "lint": "next lint",
     "seed:gareth": "node --env-file=.env.local scripts/seed-gareth-from-zip.mjs",
     "bootstrap:gareth-auth": "node --env-file=.env.local scripts/bootstrap-gareth-auth.mjs",
-    "bootstrap:auth": "node --env-file=.env.local scripts/bootstrap-auth-user.mjs"
+    "bootstrap:auth": "node --env-file=.env.local scripts/bootstrap-auth-user.mjs",
+    "test": "tsx --test tests/**/*.test.ts",
+    "probe:join": "node scripts/probe-join-flow.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.62",
@@ -46,6 +48,7 @@
     "eslint": "^9",
     "eslint-config-next": "^15.5.16",
     "tailwindcss": "^4",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }
