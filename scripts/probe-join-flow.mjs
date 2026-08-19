@@ -59,8 +59,17 @@ if (google.status === 307 || google.status === 302) {
   const toGoogle = /accounts\.google\.com|googleapis\.com/.test(location);
   const toSupabase = /supabase\.co\/auth\/v1/.test(location);
   const toLogin = location.includes("/login?");
-  if (toGoogle || toSupabase) {
-    ok(`/auth/google starts OAuth → ${location.split("?")[0]}`);
+  if (toGoogle) {
+    ok(`/auth/google starts Google consent → ${location.split("?")[0]}`);
+  } else if (toSupabase) {
+    const auth = await fetch(location, { redirect: "manual" });
+    const next = auth.headers.get("location") || "";
+    if (/accounts\.google\.com|googleapis\.com/.test(next)) {
+      ok(`/auth/google starts Google consent via Supabase → ${next.split("?")[0]}`);
+    } else {
+      const detail = (await auth.text()).slice(0, 240);
+      fail(`/auth/google reached Supabase but Google is not enabled (${auth.status}): ${detail}`);
+    }
   } else if (toLogin) {
     const message = decodeURIComponent(location.split("message=")[1] || location);
     fail(`/auth/google bounced to login: ${message}`);
