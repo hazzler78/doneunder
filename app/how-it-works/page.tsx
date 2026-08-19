@@ -69,7 +69,7 @@ export default function HowItWorksPage() {
         </Link>
         <Link href="/pricing">
           <Button size="lg" variant="outline">
-            Company plans
+            For companies
           </Button>
         </Link>
       </div>

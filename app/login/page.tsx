@@ -49,7 +49,7 @@ export default async function LoginPage({
             className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 transition hover:border-primary/30"
           >
             <p className="text-xs font-medium text-primary">New — Company</p>
-            <p className="mt-1 text-sm text-cyan-50">View plans</p>
+            <p className="mt-1 text-sm text-cyan-50">Contact us</p>
           </Link>
         </div>
 

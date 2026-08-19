@@ -1,10 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import { CONTACT_EMAIL, CONTACT_MAILTO } from "@/lib/site";
 
 const footerLinks = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/jobs", label: "Jobs" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/pricing", label: "Companies" },
   { href: "/login", label: "Sign in" },
 ];
 
@@ -28,6 +29,11 @@ export function SiteFooter() {
           <p className="mt-2 max-w-sm text-sm text-muted-foreground">
             Commercial diving talent marketplace — verification-first matching for Offshore and
             Inshore teams.
+          </p>
+          <p className="mt-3 text-sm">
+            <a href={CONTACT_MAILTO} className="text-cyan-100/90 transition hover:text-cyan-50">
+              {CONTACT_EMAIL}
+            </a>
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">

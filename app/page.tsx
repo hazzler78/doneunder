@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { divers } from "@/lib/mock-data";
+import { CONTACT_EMAIL, CONTACT_MAILTO } from "@/lib/site";
 import {
   AgentChatMockup,
   HeroProductMockup,
@@ -75,7 +76,10 @@ export default function Home() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Free for divers. Company plans from €149/mo.
+            Free for divers. Companies:{" "}
+            <a href={CONTACT_MAILTO} className="text-cyan-100/80 hover:text-cyan-50">
+              {CONTACT_EMAIL}
+            </a>
           </p>
         </div>
 
