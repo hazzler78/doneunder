@@ -87,6 +87,14 @@ function drawOrientedImage(
   }
 }
 
+export async function imageBytesToCertificatePdf(bytes: Buffer, kind: "jpg" | "png") {
+  const doc = await PDFDocument.create();
+  doc.setTitle("Certificate");
+  doc.setProducer("doneunder.ai");
+  await appendImagePage(doc, bytes, kind);
+  return Buffer.from(await doc.save());
+}
+
 async function appendImagePage(target: PDFDocument, bytes: Buffer, kind: "jpg" | "png") {
   const image = await embedRaster(target, bytes, kind);
   const orientation = kind === "jpg" ? jpegExifOrientation(bytes) : 1;

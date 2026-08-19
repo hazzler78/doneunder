@@ -12,7 +12,7 @@ import {
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
 import { buildDiverCvPdf, cvPdfFilename } from "@/lib/cv-pdf";
-import { extractDatesFromPdfBuffer } from "@/lib/cert-text";
+import { applyCertificateRead, readCertificateBytes } from "@/lib/cert-text";
 import {
   buildCertificateAttachments,
   DIVER_DOCUMENTS_BUCKET,
@@ -238,7 +238,7 @@ Other tools:
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
-- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates. Then update_cv with update_certifications and the dates you found (YYYY-MM-DD). Do not say "not provided" if a stored PDF has CertificateExpiryDate.
+- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos. Do not say "not provided" if a stored scan has a date. If unreadable is true, ask the diver to type the date.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
 - Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
@@ -665,7 +665,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     inspect_certificates: tool({
       description:
-        "Read stored certificate PDFs and list issue/expiry dates. Use this when the diver asks about expiry dates or a ticket shows expiry missing.",
+        "Read stored certificate PDFs and photos (JPEG/PNG). Extract ticket name, issue date, and expiry. Use this when the diver asks about expiry dates or a ticket shows expiry missing.",
       inputSchema: z.object({
         apply: z
           .boolean()
@@ -678,10 +678,6 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         );
         const fromFiles = [];
         for (const file of files) {
-          if (!file.name.toLowerCase().endsWith(".pdf")) {
-            fromFiles.push({ file: file.name, issue_date: null, expiry_date: null, note: "image scan" });
-            continue;
-          }
           const { data, error } = await input.supabase.storage
             .from(DIVER_DOCUMENTS_BUCKET)
             .download(file.path);
@@ -690,32 +686,20 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             continue;
           }
           const bytes = Buffer.from(await data.arrayBuffer());
-          const dates = await extractDatesFromPdfBuffer(bytes);
+          const read = await readCertificateBytes(bytes, file.name);
           fromFiles.push({
             file: file.name,
-            issue_date: dates.issue_date,
-            expiry_date: dates.expiry_date,
-            excerpt: dates.excerpt,
+            name: read.name,
+            issue_date: read.issue_date,
+            expiry_date: read.expiry_date,
+            source: read.source,
+            unreadable: read.unreadable,
+            excerpt: read.excerpt,
           });
-          if (apply && (dates.expiry_date || dates.issue_date)) {
-            const result = await applyConversationalCvUpdate(
-              input.supabase,
-              input.diverId,
-              {
-                update_certifications: [
-                  {
-                    match: { name: file.name.replace(/\.[a-z0-9]+$/i, "") },
-                    patch: {
-                      issue_date: dates.issue_date ?? undefined,
-                      expiry_date: dates.expiry_date ?? undefined,
-                    },
-                  },
-                ],
-              },
-              { sourceRef: "source: cert-inspect" },
-            );
+          if (apply && (read.expiry_date || read.issue_date || read.name)) {
+            const result = await applyCertificateRead(input.supabase, input.diverId, read, file.name);
             if (result.ok) {
-              state.profile = result.profile;
+              state.profile = await getDiverProfile(input.supabase, input.diverId);
               state.cvUpdated = true;
               if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
             }
