@@ -12,7 +12,7 @@ const links = [
   { href: "/#pipeline", label: "Pipeline" },
   { href: "/#agent", label: "Agent" },
   { href: "/jobs", label: "Jobs" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/pricing", label: "Companies" },
 ];
 
 type Props = {
