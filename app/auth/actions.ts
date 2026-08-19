@@ -2,7 +2,6 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
-import { publicOrigin } from "@/lib/auth-origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { claimPreferredUsername } from "@/lib/usernames";
 
@@ -165,23 +164,4 @@ export async function logoutAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/");
-}
-
-export async function googleDiverSignInAction() {
-  const supabase = await createSupabaseServerClient();
-  const origin = await publicOrigin();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${origin}/auth/callback?next=/workspace`,
-      queryParams: { prompt: "select_account" },
-    },
-  });
-  if (error) {
-    redirect(withMessage("/login", error.message));
-  }
-  if (data.url) {
-    redirect(data.url);
-  }
-  redirect(withMessage("/login", "Google sign-in could not start."));
 }
