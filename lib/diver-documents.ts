@@ -93,6 +93,23 @@ export function listCertificateDocumentFiles(files: DiverDocumentFile[]) {
   return files.filter((file) => isAttachableCertificate(file.name, file.path));
 }
 
+/** Prefer a PDF copy over the JPEG/PNG of the same ticket so the pack is not doubled. */
+export function filesForCertificatePack(files: DiverDocumentFile[]) {
+  const certs = listCertificateDocumentFiles(files);
+  const byStem = new Map<string, DiverDocumentFile>();
+  for (const file of certs) {
+    const stem = file.name.replace(/\.[a-z0-9]+$/i, "").toLowerCase();
+    const prev = byStem.get(stem);
+    if (!prev) {
+      byStem.set(stem, file);
+      continue;
+    }
+    const preferPdf = file.name.toLowerCase().endsWith(".pdf") && !prev.name.toLowerCase().endsWith(".pdf");
+    if (preferPdf) byStem.set(stem, file);
+  }
+  return [...byStem.values()];
+}
+
 function fileFingerprint(bytes: Buffer) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -134,7 +151,7 @@ export async function buildCertificateAttachments(
     profile: DiverProfileFull;
   },
 ): Promise<EmailAttachment[]> {
-  const files = listCertificateDocumentFiles(await listDiverDocumentFiles(supabase, input.diverId));
+  const files = filesForCertificatePack(await listDiverDocumentFiles(supabase, input.diverId));
 
   const sources: Array<{ name: string; bytes: Buffer; contentType: string }> = [];
   let total = 0;

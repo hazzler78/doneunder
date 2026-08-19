@@ -3,14 +3,13 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
-import { extractDatesFromPdfBuffer } from "@/lib/cert-text";
+import { applyCertificateRead, pdfCopyFromImage, readCertificateBytes } from "@/lib/cert-text";
 import {
   listCertificateDocumentFiles,
   listDiverDocumentFiles,
   upsertDiverCertificateFile,
 } from "@/lib/diver-documents";
 import { displayCertificateName } from "@/lib/document-names";
-import { applyConversationalCvUpdate } from "@/lib/diver-profile-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -124,34 +123,31 @@ export async function POST(req: Request) {
         created_at: new Date().toISOString(),
         size: bytes.length,
       });
-      const dates =
-        file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf"
-          ? await extractDatesFromPdfBuffer(bytes)
-          : { issue_date: null, expiry_date: null };
-      if (dates.expiry_date || dates.issue_date) {
-        await applyConversationalCvUpdate(
+      const read = await readCertificateBytes(bytes, file.name, file.type);
+      if (read.expiry_date || read.issue_date || read.name) {
+        await applyCertificateRead(supabase, authResult.diverId, read, file.name);
+      }
+      const pdfCopy = await pdfCopyFromImage(bytes, file.name, file.type);
+      if (pdfCopy) {
+        await upsertDiverCertificateFile(
           supabase,
           authResult.diverId,
           {
-            update_certifications: [
-              {
-                match: { name: file.name.replace(/\.[a-z0-9]+$/i, "") },
-                patch: {
-                  issue_date: dates.issue_date ?? undefined,
-                  expiry_date: dates.expiry_date ?? undefined,
-                },
-              },
-            ],
+            name: file.name.replace(/\.[a-z0-9]+$/i, ".pdf"),
+            bytes: pdfCopy,
+            contentType: "application/pdf",
           },
-          { sourceRef: "source: cert-upload" },
+          existing,
         );
       }
       uploaded.push({
         name: file.name,
         action: result.action,
         path: result.path,
-        issue_date: dates.issue_date,
-        expiry_date: dates.expiry_date,
+        issue_date: read.issue_date,
+        expiry_date: read.expiry_date,
+        ticket: read.name,
+        source: read.source,
       });
     }
 
