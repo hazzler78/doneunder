@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +27,12 @@ function GoogleMark() {
 
 export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
   return (
-    <a
+    <Link
       href="/auth/google"
       className={cn(buttonVariants({ variant: "outline" }), "h-11 w-full gap-2")}
     >
       <GoogleMark />
       {label}
-    </a>
+    </Link>
   );
 }
