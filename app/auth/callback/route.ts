@@ -9,6 +9,11 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get("code");
   const origin = url.origin || SITE_URL;
 
+  const oauthError = url.searchParams.get("error_description") || url.searchParams.get("error");
+  if (oauthError) {
+    return redirectWithCookies(`${origin}/login?message=${encodeURIComponent(oauthError)}`, []);
+  }
+
   if (!code) {
     return redirectWithCookies(
       `${origin}/login?message=${encodeURIComponent("Google sign-in was cancelled.")}`,

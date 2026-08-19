@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { User } from "@supabase/supabase-js";
-import { safeInternalPath } from "../lib/auth-paths";
+import { oauthForwardPath, safeInternalPath } from "../lib/auth-paths";
 import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser } from "../lib/diver-bootstrap";
 import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
@@ -98,6 +98,20 @@ describe("safeInternalPath", () => {
     assert.equal(safeInternalPath("//evil.test"), "/workspace");
     assert.equal(safeInternalPath("\\evil"), "/workspace");
     assert.equal(safeInternalPath(null), "/workspace");
+  });
+});
+
+describe("oauthForwardPath", () => {
+  it("sends a homepage auth code to /auth/callback", () => {
+    const path = oauthForwardPath("/", new URLSearchParams("code=96d76ae5-6f99-4bcf-b4f9-8b676f1f38de"));
+    assert.equal(
+      path,
+      "/auth/callback?code=96d76ae5-6f99-4bcf-b4f9-8b676f1f38de&next=%2Fworkspace",
+    );
+  });
+
+  it("does not loop on the real callback route", () => {
+    assert.equal(oauthForwardPath("/auth/callback", new URLSearchParams("code=abc")), null);
   });
 });
 
