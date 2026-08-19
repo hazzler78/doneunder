@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { oauthForwardPath } from "@/lib/auth-paths";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
 
 /**
@@ -7,6 +8,11 @@ import { isSupabaseConfigured } from "@/lib/feature-flags";
  * Required for reliable server-side auth after sign-in (see Supabase Next.js SSR guide).
  */
 export async function middleware(request: NextRequest) {
+  const forwarded = oauthForwardPath(request.nextUrl.pathname, request.nextUrl.searchParams);
+  if (forwarded) {
+    return NextResponse.redirect(new URL(forwarded, request.url));
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   if (!isSupabaseConfigured()) {
