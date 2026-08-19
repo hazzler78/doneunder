@@ -1,12 +1,12 @@
+import type { NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
 import { safeInternalPath } from "@/lib/auth-paths";
 import { createSupabaseRouteClient, redirectWithCookies } from "@/lib/supabase/route-handler";
 import { SITE_URL } from "@/lib/site";
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const origin = url.origin || SITE_URL;
-  const next = safeInternalPath(url.searchParams.get("next"));
+export async function GET(request: NextRequest) {
+  const origin = request.nextUrl.origin || SITE_URL;
+  const next = safeInternalPath(request.nextUrl.searchParams.get("next"));
   const fail = (message: string) =>
     redirectWithCookies(`${origin}/login?message=${encodeURIComponent(message)}`, []);
 
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { supabase, cookiesToSet } = createSupabaseRouteClient(request);
+    const { supabase, cookiesToSet, responseHeaders } = createSupabaseRouteClient(request);
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       return fail(error?.message || "Google sign-in could not start.");
     }
 
-    return redirectWithCookies(data.url, cookiesToSet);
+    return redirectWithCookies(data.url, cookiesToSet, responseHeaders);
   } catch (error) {
     console.error("Google OAuth route failed:", error);
     return fail("Google sign-in could not start.");

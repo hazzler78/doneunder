@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { User } from "@supabase/supabase-js";
 import { safeInternalPath } from "../lib/auth-paths";
+import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser } from "../lib/diver-bootstrap";
 import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
 import { claimPreferredUsername, preferredUsernameFromIdentity } from "../lib/usernames";
@@ -76,6 +77,15 @@ function fakeUsersClient(rows: UserRow[]) {
     users,
   };
 }
+
+describe("session cookies", () => {
+  it("always sets path=/ so workspace can read the Google session", () => {
+    const options = sessionCookieOptions({ path: "/auth/callback", sameSite: "lax", httpOnly: true });
+    assert.equal(options.path, "/");
+    assert.equal(options.sameSite, "lax");
+    assert.equal(options.httpOnly, true);
+  });
+});
 
 describe("safeInternalPath", () => {
   it("keeps workspace and other same-origin paths", () => {
