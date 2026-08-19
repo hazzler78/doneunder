@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { loginAction } from "@/app/auth/actions";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export const metadata: Metadata = {
   title: "Sign in | doneunder.ai",
@@ -51,6 +52,16 @@ export default async function LoginPage({
             <p className="text-xs font-medium text-primary">New — Company</p>
             <p className="mt-1 text-sm text-cyan-50">Contact us</p>
           </Link>
+        </div>
+
+        <GoogleSignInButton label="Continue with Google" />
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Divers: Google opens your workspace. New Google users get a free diver account.
+        </p>
+        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span className="h-px flex-1 bg-border/70" />
+          or email
+          <span className="h-px flex-1 bg-border/70" />
         </div>
 
         <form action={loginAction} className="space-y-4">
