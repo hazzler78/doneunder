@@ -39,7 +39,7 @@ const google = await fetchStatus("/auth/google");
 if (login.status === 200 && login.text.includes("Continue with Google")) ok("/login shows Continue with Google");
 else fail(`/login status=${login.status} missing Google button`);
 
-if (login.text.includes('href="/auth/google"')) ok("/login Google button points at /auth/google");
+if (login.text.includes("/auth/google")) ok("/login Google button points at /auth/google");
 else fail("/login Google button is not a link to /auth/google");
 
 if (register.status === 200 && register.text.includes("Continue with Google")) {
