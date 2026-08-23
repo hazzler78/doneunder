@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { loginAction } from "@/app/auth/actions";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { safeInternalPath } from "@/lib/auth-paths";
 
 export const metadata: Metadata = {
   title: "Sign in | doneunder.ai",
@@ -12,9 +13,10 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; next?: string }>;
 }) {
-  const { message } = await searchParams;
+  const { message, next: nextRaw } = await searchParams;
+  const next = safeInternalPath(nextRaw);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col justify-center section-pad py-12 sm:py-16">
@@ -54,7 +56,7 @@ export default async function LoginPage({
           </Link>
         </div>
 
-        <GoogleSignInButton label="Continue with Google" />
+        <GoogleSignInButton label="Continue with Google" next={next} />
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
           Divers: Google opens your workspace. New Google users get a free diver account.
         </p>
@@ -65,6 +67,7 @@ export default async function LoginPage({
         </div>
 
         <form action={loginAction} className="space-y-4">
+          <input type="hidden" name="next" value={next} />
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Email or username</span>
             <input

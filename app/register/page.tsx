@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { registerAction } from "@/app/auth/actions";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { safeInternalPath } from "@/lib/auth-paths";
 
 export const metadata: Metadata = {
   title: "Create account | doneunder.ai",
@@ -12,9 +13,10 @@ export const metadata: Metadata = {
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ message?: string }>;
+  searchParams: Promise<{ message?: string; next?: string }>;
 }) {
-  const { message } = await searchParams;
+  const { message, next: nextRaw } = await searchParams;
+  const next = safeInternalPath(nextRaw);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col justify-center section-pad py-12 sm:py-16">
@@ -37,7 +39,7 @@ export default async function RegisterPage({
           </p>
         ) : null}
 
-        <GoogleSignInButton label="Continue with Google" />
+        <GoogleSignInButton label="Continue with Google" next={next} />
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
           Google sign-in creates a free diver account and opens your workspace.
         </p>
@@ -48,6 +50,7 @@ export default async function RegisterPage({
         </div>
 
         <form action={registerAction} className="space-y-4">
+          <input type="hidden" name="next" value={next} />
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">Full name</span>
             <input

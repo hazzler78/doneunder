@@ -27,6 +27,54 @@ export function daysUntilClose(closesAt: string | null, now = new Date()) {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
+export function findCatalogJob(id: string) {
+  return JOB_CATALOG.find((job) => job.id === id) ?? null;
+}
+
+export function workspaceMatchHref(jobId: string) {
+  return `/workspace?job=${encodeURIComponent(jobId)}`;
+}
+
+export function matchPromptForJob(job: PublicJob) {
+  return [
+    `Match me to this campaign (job id ${job.id}).`,
+    `Title: ${job.title}`,
+    `Location: ${job.location}`,
+    `Scope: ${job.scope}`,
+    job.startDate ? `Starts: ${job.startDate}` : null,
+    job.closesAt ? `Apply by: ${job.closesAt}` : null,
+    job.mobilization ? `Mobilisation: ${job.mobilization}` : null,
+    `Required tickets: ${job.requiredCerts.join(", ") || "not listed"}`,
+    `Description: ${job.description}`,
+    `You MUST call match_job with job_id="${job.id}". Tell me the fit (strong / possible / weak), which required tickets I have, which I am missing, and the next step. Do not invent tickets I do not have.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function scoreDiverAgainstJob(
+  job: PublicJob,
+  input: { certNames: string[]; location?: string | null },
+) {
+  const certNames = input.certNames.map((name) => name.toLowerCase());
+  const required = job.requiredCerts;
+  const have: string[] = [];
+  const missing: string[] = [];
+  for (const cert of required) {
+    const needle = cert.toLowerCase();
+    const hit = certNames.some((name) => name.includes(needle) || needle.includes(name));
+    if (hit) have.push(cert);
+    else missing.push(cert);
+  }
+  const loc = (input.location ?? "").toLowerCase();
+  const jobLoc = job.location.toLowerCase();
+  const locationFit = Boolean(loc && jobLoc && (loc.includes(jobLoc) || jobLoc.includes(loc)));
+  const score = Math.min(100, have.length * 28 + (missing.length === 0 && required.length > 0 ? 16 : 0) + (locationFit ? 10 : 0));
+  const verdict: "strong" | "possible" | "weak" =
+    required.length > 0 && missing.length === 0 ? "strong" : have.length > 0 ? "possible" : "weak";
+  return { have, missing, locationFit, score, verdict, open: isJobOpen(job) };
+}
+
 type JobRow = {
   id: string;
   title: string;

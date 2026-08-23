@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
-import { daysUntilClose, loadOpenJobs } from "@/lib/jobs";
+import { daysUntilClose, loadOpenJobs, workspaceMatchHref } from "@/lib/jobs";
 import { CONTACT_EMAIL, CONTACT_MAILTO } from "@/lib/site";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -110,7 +110,7 @@ export default async function JobsPage() {
                   </ul>
                 ) : null}
                 <div className="mt-5">
-                  <Link href="/workspace">
+                  <Link href={workspaceMatchHref(job.id)}>
                     <Button className="w-full sm:w-auto">Match in Hermes</Button>
                   </Link>
                 </div>
