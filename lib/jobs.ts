@@ -49,34 +49,141 @@ export function matchPromptForJob(job: PublicJob) {
     job.mobilization ? `Mobilisation: ${job.mobilization}` : null,
     `Required tickets: ${job.requiredCerts.join(", ") || "not listed"}`,
     `Description: ${job.description}`,
-    `You MUST call match_job with job_id="${job.id}". Tell me the fit (strong / possible / weak), which required tickets I have, which I am missing, and the next step. Do not invent tickets I do not have.`,
-    `If they want to apply, wait for a clear yes, then call apply_job with this job_id. Do not invent a company email.`,
+    `You MUST call match_job with job_id="${job.id}". Tell me the fit (strong / possible / weak), which required tickets are current, which are expired, which are missing, and the next step. Do not invent tickets I do not have. An expired required ticket is not current.`,
+    `If required tickets are expired or missing, do not offer apply. If they want to apply and canApply is true, wait for a clear yes, then call apply_job with this job_id. Do not invent a company email.`,
   ]
     .filter(Boolean)
     .join("\n");
 }
 
+export type DiverTicket = {
+  name: string;
+  expiryDate?: string | null;
+};
+
+export type JobMatch = {
+  have: string[];
+  missing: string[];
+  expired: string[];
+  unknownExpiry: string[];
+  locationFit: boolean;
+  score: number;
+  verdict: "strong" | "possible" | "weak";
+  open: boolean;
+  canApply: boolean;
+};
+
+function calendarDay(value: Date | string) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 10);
+  }
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+}
+
+/** True when the expiry calendar day is before today. Same-day expiry is still current. */
+export function isTicketExpired(expiryDate: string | null | undefined, now = new Date()) {
+  if (!expiryDate?.trim()) return false;
+  const exp = calendarDay(expiryDate);
+  const today = calendarDay(now);
+  if (!exp || !today) return false;
+  return exp < today;
+}
+
+function namesMatch(required: string, ticketName: string) {
+  const needle = required.toLowerCase();
+  const name = ticketName.toLowerCase();
+  if (name.includes(needle) || needle.includes(name)) return true;
+  const tokens = needle.split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
+  return tokens.length > 0 && tokens.every((token) => name.includes(token));
+}
+
 export function scoreDiverAgainstJob(
   job: PublicJob,
-  input: { certNames: string[]; location?: string | null },
-) {
-  const certNames = input.certNames.map((name) => name.toLowerCase());
+  input: {
+    certs?: DiverTicket[];
+    certNames?: string[];
+    location?: string | null;
+  },
+  now = new Date(),
+): JobMatch {
+  const tickets: DiverTicket[] =
+    input.certs ?? (input.certNames ?? []).map((name) => ({ name, expiryDate: null }));
+
   const required = job.requiredCerts;
   const have: string[] = [];
   const missing: string[] = [];
+  const expired: string[] = [];
+  const unknownExpiry: string[] = [];
+
   for (const cert of required) {
-    const needle = cert.toLowerCase();
-    const hit = certNames.some((name) => name.includes(needle) || needle.includes(name));
-    if (hit) have.push(cert);
-    else missing.push(cert);
+    const hit = tickets.find((ticket) => namesMatch(cert, ticket.name));
+    if (!hit) {
+      missing.push(cert);
+      continue;
+    }
+    if (isTicketExpired(hit.expiryDate, now)) {
+      expired.push(cert);
+      continue;
+    }
+    have.push(cert);
+    if (!hit.expiryDate?.trim()) unknownExpiry.push(cert);
   }
+
   const loc = (input.location ?? "").toLowerCase();
   const jobLoc = job.location.toLowerCase();
   const locationFit = Boolean(loc && jobLoc && (loc.includes(jobLoc) || jobLoc.includes(loc)));
-  const score = Math.min(100, have.length * 28 + (missing.length === 0 && required.length > 0 ? 16 : 0) + (locationFit ? 10 : 0));
-  const verdict: "strong" | "possible" | "weak" =
-    required.length > 0 && missing.length === 0 ? "strong" : have.length > 0 ? "possible" : "weak";
-  return { have, missing, locationFit, score, verdict, open: isJobOpen(job) };
+  const complete = required.length > 0 && missing.length === 0 && expired.length === 0;
+  const score = Math.max(
+    0,
+    Math.min(100, have.length * 28 + (complete ? 16 : 0) + (locationFit ? 10 : 0) - expired.length * 12),
+  );
+  const verdict: "strong" | "possible" | "weak" = complete
+    ? "strong"
+    : have.length > 0
+      ? "possible"
+      : "weak";
+  const open = isJobOpen(job, now);
+  return {
+    have,
+    missing,
+    expired,
+    unknownExpiry,
+    locationFit,
+    score,
+    verdict,
+    open,
+    canApply: open && expired.length === 0 && missing.length === 0,
+  };
+}
+
+export function formatMatchReason(match: JobMatch) {
+  const parts: string[] = [];
+  if (match.have.length) parts.push(`Current: ${match.have.join(", ")}`);
+  if (match.expired.length) parts.push(`Expired: ${match.expired.join(", ")}`);
+  if (match.missing.length) parts.push(`Missing: ${match.missing.join(", ")}`);
+  if (match.unknownExpiry.length) parts.push(`No expiry on file: ${match.unknownExpiry.join(", ")}`);
+  if (!parts.length) parts.push("No required tickets listed");
+  if (!match.canApply) {
+    if (match.expired.length) parts.push("Do not apply until expired tickets are renewed");
+    else if (match.missing.length) parts.push("Do not apply until missing tickets are on file");
+  }
+  return `${parts.join(". ")}.`;
+}
+
+export function applyBlockReason(match: JobMatch) {
+  if (!match.open) return "This campaign has closed.";
+  if (match.expired.length) {
+    return `Not sent. Required tickets expired: ${match.expired.join(", ")}. Renew those first.`;
+  }
+  if (match.missing.length) {
+    return `Not sent. Required tickets missing: ${match.missing.join(", ")}. Add current scans first.`;
+  }
+  return null;
 }
 
 export function applyAddressForJob(job: Pick<PublicJob, "applyEmail">) {

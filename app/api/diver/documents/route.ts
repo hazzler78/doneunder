@@ -60,7 +60,12 @@ export async function POST(req: Request) {
     if (contentType.includes("application/json")) {
       const body = (await req.json()) as {
         complete?: boolean;
-        files?: Array<{ name: string; action?: string }>;
+        files?: Array<{
+          name: string;
+          action?: string;
+          ticket?: string | null;
+          expiry_date?: string | null;
+        }>;
       };
       if (!body.complete) {
         return NextResponse.json({ error: "Nothing to complete." }, { status: 400 });
@@ -69,10 +74,17 @@ export async function POST(req: Request) {
       const added = files.filter((item) => item.action === "added").map((item) => item.name);
       const renewed = files.filter((item) => item.action === "renewed").map((item) => item.name);
       const duplicates = files.filter((item) => item.action === "duplicate").map((item) => item.name);
+      const dated = files
+        .filter((item) => item.ticket || item.expiry_date)
+        .map((item) => {
+          const label = item.ticket || item.name;
+          return item.expiry_date ? `${label} (exp ${item.expiry_date})` : label;
+        });
       const parts = [
         added.length ? `New: ${added.join(", ")}.` : "",
         renewed.length ? `Renewed: ${renewed.join(", ")}.` : "",
         duplicates.length ? `Already on file: ${duplicates.join(", ")}.` : "",
+        dated.length ? `Read: ${dated.join("; ")}.` : "",
       ].filter(Boolean);
       const thread =
         (await getAgentThread(supabase, "web", authResult.diverId)) ??
@@ -87,7 +99,8 @@ export async function POST(req: Request) {
         userContent: `Please store these certificate files: ${files.map((item) => item.name).join(", ") || "batch"}`,
         assistantContent:
           `${parts.join(" ") || `Stored ${files.length} certificate file(s).`} ` +
-          "The living CV Hermes keeps is unchanged.",
+          "Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. " +
+          "If an expiry is missing, type the date. Then say match me to open campaigns.",
         metadata: { source: "documents-upload", count: files.length },
       });
       return NextResponse.json({ ok: true });

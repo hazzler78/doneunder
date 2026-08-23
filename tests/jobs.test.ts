@@ -4,8 +4,11 @@ import { JOB_CATALOG } from "../lib/job-catalog";
 import {
   applicationDraft,
   applyAddressForJob,
+  applyBlockReason,
   daysUntilClose,
+  formatMatchReason,
   isJobOpen,
+  isTicketExpired,
   listCatalogJobs,
   matchPromptForJob,
   scoreDiverAgainstJob,
@@ -54,8 +57,71 @@ describe("job expiry", () => {
     assert.equal(match.verdict, "possible");
     assert.ok(match.have.includes("IMCA"));
     assert.ok(match.missing.includes("DMT"));
+    assert.equal(match.canApply, false);
     assert.ok(matchPromptForJob(job).includes(job.id));
     assert.ok(matchPromptForJob(job).includes("match_job"));
+  });
+
+  it("treats an expired required ticket as expired, not current", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-nsea-irm-2026-09");
+    assert.ok(job);
+    const now = new Date("2026-08-23T12:00:00.000Z");
+    assert.equal(isTicketExpired("2025-03-01", now), true);
+    assert.equal(isTicketExpired("2026-08-23", now), false);
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [
+          { name: "IMCA Air Diver", expiryDate: "2028-01-01" },
+          { name: "OPITO BOSIET", expiryDate: "2025-01-10" },
+          { name: "OEUK Medical", expiryDate: "2027-02-01" },
+        ],
+        location: "Aberdeen",
+      },
+      now,
+    );
+    assert.ok(match.have.includes("IMCA"));
+    assert.ok(match.have.includes("OEUK Medical"));
+    assert.ok(match.expired.includes("BOSIET"));
+    assert.ok(!match.have.includes("BOSIET"));
+    assert.equal(match.verdict, "possible");
+    assert.equal(match.canApply, false);
+    assert.match(applyBlockReason(match) ?? "", /BOSIET/);
+    assert.match(formatMatchReason(match), /Expired: BOSIET/);
+  });
+
+  it("blocks apply when a required ticket is missing", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-nsea-irm-2026-09");
+    assert.ok(job);
+    const match = scoreDiverAgainstJob(job, {
+      certs: [
+        { name: "IMCA Air Diver", expiryDate: "2028-01-01" },
+        { name: "OPITO BOSIET", expiryDate: "2028-01-01" },
+      ],
+    });
+    assert.ok(match.missing.includes("OEUK Medical"));
+    assert.equal(match.canApply, false);
+  });
+
+  it("allows apply when every required ticket is current", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-nsea-irm-2026-09");
+    assert.ok(job);
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [
+          { name: "IMCA Air Diver", expiryDate: "2028-01-01" },
+          { name: "OPITO BOSIET", expiryDate: "2028-01-01" },
+          { name: "OEUK Medical", expiryDate: "2027-02-01" },
+        ],
+      },
+      new Date("2026-08-23T12:00:00.000Z"),
+    );
+    assert.equal(match.verdict, "strong");
+    assert.equal(match.expired.length, 0);
+    assert.equal(match.missing.length, 0);
+    assert.equal(match.canApply, true);
+    assert.equal(applyBlockReason(match), null);
   });
 
   it("applies via hello@doneunder.ai until a company gives an inbox", () => {

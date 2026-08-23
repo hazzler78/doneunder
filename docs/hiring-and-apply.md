@@ -62,6 +62,7 @@ After `match_job` and a **clear yes**, `apply_job` sends the living CV PDF + cer
 - Confirm first (`confirmed=true`). No send on a maybe.
 - Do not re-send if `hermes_apply_job` already logged that `jobId`.
 - Closed campaigns (`closesAt` / status) cannot be applied to.
+- Required tickets that are **expired or missing** block `apply_job`. Same-day expiry still counts as current. A ticket with no date is current-but-unknown — Hermes should ask for the date, not invent one.
 - Do **not** write catalog job ids into an `applications` UUID table. Catalog ids are slugs (`job-nsea-irm-2026-09`), not Postgres UUIDs.
 
 `hello@` is how we learn. When Gareth or other divers press Apply, the inbox shows: did they send, what did the company ask next, do they want a named address.
