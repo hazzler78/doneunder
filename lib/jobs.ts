@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 export type { PublicJob } from "@/lib/job-catalog";
 
@@ -47,6 +48,7 @@ export function matchPromptForJob(job: PublicJob) {
     `Required tickets: ${job.requiredCerts.join(", ") || "not listed"}`,
     `Description: ${job.description}`,
     `You MUST call match_job with job_id="${job.id}". Tell me the fit (strong / possible / weak), which required tickets I have, which I am missing, and the next step. Do not invent tickets I do not have.`,
+    `If they want to apply, wait for a clear yes, then call apply_job with this job_id. Do not invent a company email.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -75,6 +77,31 @@ export function scoreDiverAgainstJob(
   return { have, missing, locationFit, score, verdict, open: isJobOpen(job) };
 }
 
+export function applyAddressForJob(job: Pick<PublicJob, "applyEmail">) {
+  const custom = job.applyEmail?.trim().toLowerCase();
+  if (custom && custom.includes("@")) return custom;
+  return CONTACT_EMAIL;
+}
+
+export function applicationDraft(job: PublicJob, displayName: string) {
+  const to = applyAddressForJob(job);
+  const subject = `Application: ${job.title} — ${displayName}`;
+  const body = [
+    "Hello,",
+    "",
+    `Please consider my application for ${job.title} (${job.location}).`,
+    job.mobilization ? `I can mobilise ${job.mobilization}.` : null,
+    "",
+    "CV and certificates are attached.",
+    "",
+    "Kind regards,",
+    displayName,
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+  return { to, subject, body, attachCv: true as const, attachCertificates: true as const };
+}
+
 type JobRow = {
   id: string;
   title: string;
@@ -100,6 +127,7 @@ function rowToPublicJob(row: JobRow): PublicJob {
     scope: row.scope === "inshore" ? "inshore" : "offshore",
     mobilization: row.mobilization ?? "",
     status: row.status === "filled" || row.status === "draft" ? row.status : "open",
+    applyEmail: null,
   };
 }
 

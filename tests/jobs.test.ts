@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { JOB_CATALOG } from "../lib/job-catalog";
-import { daysUntilClose, isJobOpen, listCatalogJobs, matchPromptForJob, scoreDiverAgainstJob } from "../lib/jobs";
+import {
+  applicationDraft,
+  applyAddressForJob,
+  daysUntilClose,
+  isJobOpen,
+  listCatalogJobs,
+  matchPromptForJob,
+  scoreDiverAgainstJob,
+} from "../lib/jobs";
 
 describe("job expiry", () => {
   it("hides a listing after closesAt", () => {
@@ -48,5 +56,16 @@ describe("job expiry", () => {
     assert.ok(match.missing.includes("DMT"));
     assert.ok(matchPromptForJob(job).includes(job.id));
     assert.ok(matchPromptForJob(job).includes("match_job"));
+  });
+
+  it("applies via hello@doneunder.ai until a company gives an inbox", () => {
+    const job = JOB_CATALOG[0]!;
+    assert.equal(applyAddressForJob(job), "hello@doneunder.ai");
+    const draft = applicationDraft(job, "Gareth Darrin Middleton");
+    assert.equal(draft.to, "hello@doneunder.ai");
+    assert.ok(draft.subject.includes(job.title));
+    assert.equal(draft.attachCv, true);
+    assert.equal(draft.attachCertificates, true);
+    assert.equal(applyAddressForJob({ applyEmail: "crew@contractor.test" }), "crew@contractor.test");
   });
 });

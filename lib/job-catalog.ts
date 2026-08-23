@@ -11,6 +11,8 @@ export type PublicJob = {
   scope: JobScope;
   mobilization: string;
   status: "open" | "filled" | "draft";
+  /** Company inbox when they have given one. Until then Hermes applies via hello@doneunder.ai. */
+  applyEmail?: string | null;
 };
 
 /**

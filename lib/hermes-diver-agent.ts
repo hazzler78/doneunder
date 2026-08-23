@@ -20,7 +20,8 @@ import {
   listDiverDocumentFiles,
 } from "@/lib/diver-documents";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
-import { findCatalogJob, loadOpenJobs, scoreDiverAgainstJob } from "@/lib/jobs";
+import { applicationDraft, findCatalogJob, isJobOpen, loadOpenJobs, scoreDiverAgainstJob } from "@/lib/jobs";
+import { CONTACT_EMAIL } from "@/lib/site";
 import { logAgentInteraction } from "@/lib/audit";
 import {
   isInboundFollowUpConfirmation,
@@ -236,7 +237,9 @@ Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
 - find_matching_jobs when they want several open campaigns.
 - match_job when they name one campaign or the message includes a job id. Always call it before saying they fit or do not fit.
-- For email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
+- After match_job, ask if they want you to apply. Show the draft. Do not send until they clearly say yes.
+- apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
+- For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
@@ -778,6 +781,89 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             open: match.open,
           },
           match,
+          apply: applicationDraft(job, input.displayName),
+        };
+      },
+    }),
+    apply_job: tool({
+      description:
+        "Apply the diver to one campaign after they confirm. Sends the living CV and certificate pack to the listing desk. Never send without confirmed=true.",
+      inputSchema: z.object({
+        job_id: z.string(),
+        confirmed: z.boolean().describe("True only after the diver approved this application."),
+      }),
+      execute: async ({ job_id: jobId, confirmed }) => {
+        const openJobs = await loadOpenJobs(input.supabase);
+        const job = openJobs.find((item) => item.id === jobId) ?? findCatalogJob(jobId);
+        if (!job) {
+          return { ok: false, error: "That campaign is not on the board." };
+        }
+        const draft = applicationDraft(job, input.displayName);
+        if (!confirmed) {
+          return {
+            ok: false,
+            message: "Not sent. Show the draft and wait for a clear yes.",
+            draft,
+          };
+        }
+        if (!isJobOpen(job)) {
+          return { ok: false, error: "This campaign has closed.", draft };
+        }
+        if (!input.userEmail) {
+          return { ok: false, error: "Logged-in account has no email address on file.", draft };
+        }
+
+        const { data: prior } = await input.supabase
+          .from("ai_interactions")
+          .select("id, input, output")
+          .eq("actor_id", input.diverId)
+          .eq("feature", "hermes_apply_job")
+          .order("created_at", { ascending: false })
+          .limit(30);
+        const already = (prior ?? []).some((row) => {
+          try {
+            const parsed = typeof row.input === "string" ? JSON.parse(row.input) : row.input;
+            return parsed && typeof parsed === "object" && (parsed as { jobId?: string }).jobId === job.id;
+          } catch {
+            return false;
+          }
+        });
+        if (already) {
+          return { ok: false, already_applied: true, error: "Already applied to this campaign.", draft };
+        }
+
+        const result = await sendDiverFollowUpEmail({
+          supabase: input.supabase,
+          diverId: input.diverId,
+          username: input.username,
+          displayName: input.displayName,
+          userEmail: input.userEmail,
+          profile: state.profile,
+          to: draft.to,
+          subject: draft.subject,
+          body: draft.body,
+          attachCv: true,
+          attachCertificates: true,
+          pendingInbound: input.pendingInbound ?? null,
+        });
+
+        await logAgentInteraction({
+          actorId: input.diverId,
+          feature: "hermes_apply_job",
+          input: { jobId: job.id, title: job.title, to: draft.to },
+          output: result,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: result.error, draft };
+        }
+        return {
+          ok: true,
+          to: draft.to,
+          from: result.from,
+          attached: result.attached,
+          jobId: job.id,
+          title: job.title,
         };
       },
     }),
