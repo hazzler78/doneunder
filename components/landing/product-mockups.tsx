@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { divers, jobs } from "@/lib/mock-data";
+import { divers } from "@/lib/mock-data";
+import { listCatalogJobs } from "@/lib/jobs";
 
 export function HeroProductMockup() {
-  const topJobs = jobs.slice(0, 3);
+  const topJobs = listCatalogJobs().slice(0, 3);
   const diver = divers[0];
 
   return (
@@ -57,7 +58,7 @@ export function HeroProductMockup() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-cyan-50">{job.title}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {job.location} · starts {job.startDate}
+                    {job.location}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-md bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
@@ -112,7 +113,7 @@ export function PipelineVisual({
   if (step === "match") {
     return (
       <div className="product-frame space-y-2 rounded-xl p-4">
-        {jobs.slice(0, 2).map((job, i) => (
+        {listCatalogJobs().slice(0, 2).map((job, i) => (
           <div key={job.id} className="flex items-center justify-between gap-3 text-sm">
             <div className="min-w-0">
               <p className="truncate font-medium text-cyan-50">{job.title}</p>
