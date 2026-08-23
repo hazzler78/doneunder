@@ -20,6 +20,7 @@ import {
   listDiverDocumentFiles,
 } from "@/lib/diver-documents";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
+import { loadOpenJobs } from "@/lib/jobs";
 import { logAgentInteraction } from "@/lib/audit";
 import {
   isInboundFollowUpConfirmation,
@@ -719,13 +720,16 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       description: "Find open jobs that match the diver certifications and location.",
       inputSchema: z.object({}),
       execute: async () => {
-        const { data: jobs } = await input.supabase
-          .from("jobs")
-          .select("id,title,location,required_certs")
-          .eq("status", "open")
-          .order("created_at", { ascending: false })
-          .limit(20);
-        state.suggestions = scoreJobsForDiver(jobs ?? [], state.profile);
+        const openJobs = await loadOpenJobs(input.supabase);
+        state.suggestions = scoreJobsForDiver(
+          openJobs.map((job) => ({
+            id: job.id,
+            title: job.title,
+            location: job.location,
+            required_certs: job.requiredCerts,
+          })),
+          state.profile,
+        );
         return {
           count: state.suggestions.length,
           suggestions: state.suggestions,
