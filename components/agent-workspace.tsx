@@ -65,11 +65,13 @@ type PendingInboundNotice = {
   status: "pending";
 };
 
+const diverFirstRunPrompts = ["Match me to open campaigns"];
+
 const diverStarterPrompts = [
   "How does my CV look?",
+  "Match me to open campaigns",
   "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
   "Set my sat hours to 2100 and say I'm available on short notice",
-  "Rewrite my summary in clearer English",
 ];
 
 const companyStarterPrompts = [
@@ -99,9 +101,10 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   const fileInputRef = useRef<HTMLInputElement>(null);
   const matchSentRef = useRef(false);
 
+  const firstRun = role === "diver" && !livingCv.present && documents.length === 0;
   const starters = useMemo(
-    () => (role === "diver" ? diverStarterPrompts : companyStarterPrompts),
-    [role],
+    () => (role === "diver" ? (firstRun ? diverFirstRunPrompts : diverStarterPrompts) : companyStarterPrompts),
+    [role, firstRun],
   );
 
   useEffect(() => {
@@ -158,7 +161,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               from: "agent",
               text:
                 role === "diver"
-                  ? "Hi — I'm Hermes. Update your CV just by talking, in English. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save it for you."
+                  ? "Hi — I'm Hermes. Attach your CV PDF and photos or PDFs of your tickets (IMCA, BOSIET, medical). I'll build one living CV and a certificate pack. Then we can match you to open campaigns."
                   : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
             },
           ]);
@@ -530,7 +533,12 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-cyan-50">Hermes</p>
               <p className="truncate text-[11px] text-muted-foreground">
-                {role === "diver" ? "Talk to update your CV" : "Recruitment agent"} ·{" "}
+                {role === "diver"
+                  ? firstRun
+                    ? "Attach CV and tickets to start"
+                    : "Talk to update your CV"
+                  : "Recruitment agent"}{" "}
+                ·{" "}
                 <span className="text-success">Online</span>
               </p>
             </div>
@@ -576,9 +584,13 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                 <div className="mb-3 space-y-3">
                   {role === "diver" ? (
                     <div className="rounded-xl border border-border/60 bg-[#07111c] px-3.5 py-3 text-sm text-muted-foreground">
-                      <p className="font-medium text-cyan-50">Update your CV in this chat</p>
+                      <p className="font-medium text-cyan-50">
+                        {firstRun ? "First: get your pack on file" : "Update your CV in this chat"}
+                      </p>
                       <p className="mt-1">
-                        Type a change, paste CV text, or attach a PDF. Everything is saved in English.
+                        {firstRun
+                          ? "Use the paperclip under the chat, or Upload in the side panel. CV PDF plus ticket photos (IMCA, BOSIET, medical). I'll extract jobs and expiry dates."
+                          : "Type a change, paste CV text, or attach a ticket scan. Everything is saved in English."}
                       </p>
                     </div>
                   ) : null}
@@ -712,7 +724,9 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-cyan-50 outline-none placeholder:text-muted-foreground"
               placeholder={
                 role === "diver"
-                  ? "Tell Hermes what to change on your CV…"
+                  ? firstRun
+                    ? "Attach CV + tickets, or type here…"
+                    : "Tell Hermes what to change on your CV…"
                   : "Message Hermes…"
               }
             />

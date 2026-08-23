@@ -20,7 +20,16 @@ import {
   listDiverDocumentFiles,
 } from "@/lib/diver-documents";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
-import { applicationDraft, findCatalogJob, isJobOpen, loadOpenJobs, scoreDiverAgainstJob } from "@/lib/jobs";
+import {
+  applicationDraft,
+  applyBlockReason,
+  findCatalogJob,
+  formatMatchReason,
+  isJobOpen,
+  loadOpenJobs,
+  scoreDiverAgainstJob,
+  type PublicJob,
+} from "@/lib/jobs";
 import { CONTACT_EMAIL } from "@/lib/site";
 import { logAgentInteraction } from "@/lib/audit";
 import {
@@ -70,33 +79,30 @@ function truncateText(value: string | null | undefined, max = 280) {
   return `${text.slice(0, max - 1)}…`;
 }
 
-function scoreJobsForDiver(
-  jobs: Array<{ id: string; title: string; location: string | null; required_certs: string[] | null }>,
-  profile: DiverProfileFull,
-): JobSuggestion[] {
-  const certNames = new Set(profile.certifications.map((item) => item.name.toLowerCase()));
-  const location = profile.profile.location.toLowerCase();
+function ticketsFromProfile(profile: DiverProfileFull) {
+  return profile.certifications.map((cert) => ({
+    name: cert.name,
+    expiryDate: cert.expiry_date ?? null,
+  }));
+}
 
+function matchProfileToJob(job: PublicJob, profile: DiverProfileFull) {
+  return scoreDiverAgainstJob(job, {
+    certs: ticketsFromProfile(profile),
+    location: profile.profile.location,
+  });
+}
+
+function scoreJobsForDiver(jobs: PublicJob[], profile: DiverProfileFull): JobSuggestion[] {
   return jobs
     .map((job) => {
-      const required = (job.required_certs ?? []).map((item) => item.toLowerCase());
-      const certHits = required.filter((cert) =>
-        [...certNames].some((name) => name.includes(cert) || cert.includes(name)),
-      ).length;
-      const locationHit =
-        job.location && location
-          ? Number(location.includes(job.location.toLowerCase()) || job.location.toLowerCase().includes(location))
-          : 0;
-      const score = certHits * 3 + locationHit * 2;
+      const match = matchProfileToJob(job, profile);
       return {
         id: job.id,
         title: job.title,
-        location: job.location ?? "Unknown",
-        reason:
-          certHits > 0
-            ? `Matches ${certHits} required certifications; location fit is ${locationHit ? "strong" : "neutral"}.`
-            : "No direct certification match yet, but may still be worth reviewing.",
-        score,
+        location: job.location,
+        reason: formatMatchReason(match),
+        score: match.score,
       };
     })
     .sort((a, b) => b.score - a.score)
@@ -228,7 +234,7 @@ Updating the CV from chat (this is the main way to edit):
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
-- If the profile is empty, invite them to paste CV text here or attach a CV PDF and certificate files (PDF, JPG, PNG) in the chat. You can build the CV from conversation — do not send them to a form.
+- If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos (IMCA, BOSIET/FOET, medical) in this chat. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
 - Never invent that a company or role is on the CV unless it appears in the profile context or a successful update_cv result.
@@ -237,8 +243,9 @@ Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
 - find_matching_jobs when they want several open campaigns.
 - match_job when they name one campaign or the message includes a job id. Always call it before saying they fit or do not fit.
-- After match_job, ask if they want you to apply. Show the draft. Do not send until they clearly say yes.
-- apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
+- match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo.
+- After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft and wait for a clear yes.
+- apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
 - For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
@@ -725,15 +732,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       inputSchema: z.object({}),
       execute: async () => {
         const openJobs = await loadOpenJobs(input.supabase);
-        state.suggestions = scoreJobsForDiver(
-          openJobs.map((job) => ({
-            id: job.id,
-            title: job.title,
-            location: job.location,
-            required_certs: job.requiredCerts,
-          })),
-          state.profile,
-        );
+        state.suggestions = scoreJobsForDiver(openJobs, state.profile);
         return {
           count: state.suggestions.length,
           suggestions: state.suggestions,
@@ -752,19 +751,13 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         if (!job) {
           return { ok: false, error: "That campaign is not on the board." };
         }
-        const match = scoreDiverAgainstJob(job, {
-          certNames: state.profile.certifications.map((cert) => cert.name),
-          location: state.profile.profile.location,
-        });
+        const match = matchProfileToJob(job, state.profile);
         state.suggestions = [
           {
             id: job.id,
             title: job.title,
             location: job.location,
-            reason:
-              match.missing.length === 0
-                ? `Strong fit. Required tickets present: ${match.have.join(", ") || "none listed"}.`
-                : `Missing ${match.missing.join(", ")}. Have ${match.have.join(", ") || "none of the listed tickets"}.`,
+            reason: formatMatchReason(match),
             score: match.score,
           },
         ];
@@ -787,7 +780,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     apply_job: tool({
       description:
-        "Apply the diver to one campaign after they confirm. Sends the living CV and certificate pack to the listing desk. Never send without confirmed=true.",
+        "Apply the diver to one campaign after they confirm. Sends the living CV and certificate pack to the listing desk. Refuses when required tickets are expired or missing. Never send without confirmed=true.",
       inputSchema: z.object({
         job_id: z.string(),
         confirmed: z.boolean().describe("True only after the diver approved this application."),
@@ -799,10 +792,16 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           return { ok: false, error: "That campaign is not on the board." };
         }
         const draft = applicationDraft(job, input.displayName);
+        const match = matchProfileToJob(job, state.profile);
+        const blocked = applyBlockReason(match);
+        if (blocked) {
+          return { ok: false, error: blocked, match, draft };
+        }
         if (!confirmed) {
           return {
             ok: false,
             message: "Not sent. Show the draft and wait for a clear yes.",
+            match,
             draft,
           };
         }

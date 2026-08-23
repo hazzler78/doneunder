@@ -233,8 +233,8 @@ export async function POST(req: Request) {
       ].filter(Boolean);
       const certReply =
         `${parts.join(" ") || `Stored ${certUploadResults.length} certificate file(s).`} ` +
-        "The living CV Hermes keeps is unchanged. " +
-        "When you ask me to send certificates I will bake the current scans into one Certificates PDF. " +
+        "Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. " +
+        "If an expiry is missing, type the date. Then say match me to open campaigns. " +
         (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")}` : "");
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,
@@ -305,11 +305,11 @@ export async function POST(req: Request) {
     });
 
     const cvReply =
-      "CV processed in English. I updated your structured profile. " +
+      "CV processed in English. Preview at /preview/cv. " +
       (extractionWarnings.length
         ? `Some OCR parts were skipped: ${extractionWarnings.join(" ")} `
         : "") +
-      "Tell me in this chat what to change next — jobs, hours, tickets, or your summary.";
+      "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";
 
     await appendAgentTurn(serviceSupabase, {
       threadId: thread.id,

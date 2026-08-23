@@ -3,6 +3,9 @@ export type CertificateUploadAction = "added" | "renewed" | "duplicate";
 export type CertificateUploadItem = {
   name: string;
   action: CertificateUploadAction;
+  ticket?: string | null;
+  expiry_date?: string | null;
+  issue_date?: string | null;
 };
 
 async function compressImageIfNeeded(file: File): Promise<File> {
