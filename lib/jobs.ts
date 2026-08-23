@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
 import { CONTACT_EMAIL } from "@/lib/site";
 
+/** Product policy for match/apply: docs/hiring-and-apply.md */
+
 export type { PublicJob } from "@/lib/job-catalog";
 
 export function isJobOpen(job: Pick<PublicJob, "status" | "closesAt">, now = new Date()) {

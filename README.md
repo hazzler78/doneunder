@@ -48,6 +48,8 @@ copy .env.example .env.local
 
 Hermes agent integration guide: `docs/hermes-diver-profile.md`
 
+Hiring research and apply policy (read before adding ATS / company portal / CV blast): `docs/hiring-and-apply.md`
+
 1. Run database SQL in Supabase:
 
 - `supabase/migrations/001_init.sql` through `006_agent_threads.sql`
