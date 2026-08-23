@@ -2,6 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { safeInternalPath } from "@/lib/auth-paths";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { claimPreferredUsername } from "@/lib/usernames";
 
@@ -94,11 +95,12 @@ export async function loginAction(formData: FormData) {
 
   const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
   const role = userRow?.role ?? "diver";
+  const next = safeInternalPath(String(formData.get("next") ?? "/workspace"));
 
   if (role === "admin") {
     redirect("/dashboard/admin");
   }
-  redirect("/workspace");
+  redirect(next);
 }
 
 export async function registerAction(formData: FormData) {
@@ -157,7 +159,7 @@ export async function registerAction(formData: FormData) {
     redirect(withMessage("/register", userInsertError.message));
   }
 
-  redirect("/workspace");
+  redirect(safeInternalPath(String(formData.get("next") ?? "/workspace")));
 }
 
 export async function logoutAction() {

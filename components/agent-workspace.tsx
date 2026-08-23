@@ -42,6 +42,7 @@ type Props = {
   userId: string;
   displayName: string;
   username: string | null;
+  initialMatchPrompt?: string | null;
 };
 
 type Message = {
@@ -77,7 +78,7 @@ const companyStarterPrompts = [
   "Screen candidates available in 7 days.",
 ];
 
-export function AgentWorkspace({ role, userId, displayName, username }: Props) {
+export function AgentWorkspace({ role, userId, displayName, username, initialMatchPrompt = null }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
@@ -96,6 +97,7 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   const [pendingInbound, setPendingInbound] = useState<PendingInboundNotice | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const matchSentRef = useRef(false);
 
   const starters = useMemo(
     () => (role === "diver" ? diverStarterPrompts : companyStarterPrompts),
@@ -123,6 +125,17 @@ export function AgentWorkspace({ role, userId, displayName, username }: Props) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (role !== "diver" || !initialMatchPrompt || historyLoading || sending) return;
+    if (matchSentRef.current) return;
+    matchSentRef.current = true;
+    void sendMessage(initialMatchPrompt);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/workspace");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, initialMatchPrompt, historyLoading, sending]);
 
   async function loadChatHistory(options?: { silent?: boolean }) {
     if (!options?.silent) {

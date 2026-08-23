@@ -20,7 +20,7 @@ import {
   listDiverDocumentFiles,
 } from "@/lib/diver-documents";
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
-import { loadOpenJobs } from "@/lib/jobs";
+import { findCatalogJob, loadOpenJobs, scoreDiverAgainstJob } from "@/lib/jobs";
 import { logAgentInteraction } from "@/lib/audit";
 import {
   isInboundFollowUpConfirmation,
@@ -234,7 +234,8 @@ Updating the CV from chat (this is the main way to edit):
 
 Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
-- find_matching_jobs when they want opportunities.
+- find_matching_jobs when they want several open campaigns.
+- match_job when they name one campaign or the message includes a job id. Always call it before saying they fit or do not fit.
 - For email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
@@ -733,6 +734,50 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         return {
           count: state.suggestions.length,
           suggestions: state.suggestions,
+        };
+      },
+    }),
+    match_job: tool({
+      description:
+        "Score the logged-in diver against one campaign. Use when they click Match in Hermes or name a listing.",
+      inputSchema: z.object({
+        job_id: z.string().describe("Public job id from the jobs board"),
+      }),
+      execute: async ({ job_id: jobId }) => {
+        const openJobs = await loadOpenJobs(input.supabase);
+        const job = openJobs.find((item) => item.id === jobId) ?? findCatalogJob(jobId);
+        if (!job) {
+          return { ok: false, error: "That campaign is not on the board." };
+        }
+        const match = scoreDiverAgainstJob(job, {
+          certNames: state.profile.certifications.map((cert) => cert.name),
+          location: state.profile.profile.location,
+        });
+        state.suggestions = [
+          {
+            id: job.id,
+            title: job.title,
+            location: job.location,
+            reason:
+              match.missing.length === 0
+                ? `Strong fit. Required tickets present: ${match.have.join(", ") || "none listed"}.`
+                : `Missing ${match.missing.join(", ")}. Have ${match.have.join(", ") || "none of the listed tickets"}.`,
+            score: match.score,
+          },
+        ];
+        return {
+          ok: true,
+          job: {
+            id: job.id,
+            title: job.title,
+            location: job.location,
+            scope: job.scope,
+            startDate: job.startDate,
+            closesAt: job.closesAt,
+            requiredCerts: job.requiredCerts,
+            open: match.open,
+          },
+          match,
         };
       },
     }),

@@ -25,10 +25,17 @@ function GoogleMark() {
   );
 }
 
-export function GoogleSignInButton({ label = "Continue with Google" }: { label?: string }) {
+export function GoogleSignInButton({
+  label = "Continue with Google",
+  next = "/workspace",
+}: {
+  label?: string;
+  next?: string;
+}) {
+  const href = next && next !== "/workspace" ? `/auth/google?next=${encodeURIComponent(next)}` : "/auth/google";
   return (
     <Link
-      href="/auth/google"
+      href={href}
       className={cn(buttonVariants({ variant: "outline" }), "h-11 w-full gap-2")}
     >
       <GoogleMark />

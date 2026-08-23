@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { daysUntilClose, isJobOpen, listCatalogJobs } from "../lib/jobs";
+import { JOB_CATALOG } from "../lib/job-catalog";
+import { daysUntilClose, isJobOpen, listCatalogJobs, matchPromptForJob, scoreDiverAgainstJob } from "../lib/jobs";
 
 describe("job expiry", () => {
   it("hides a listing after closesAt", () => {
@@ -33,5 +34,19 @@ describe("job expiry", () => {
     assert.ok(jobs.every((job) => isJobOpen(job, now)));
     const days = daysUntilClose(jobs[0]!.closesAt, now);
     assert.ok(days === null || days > 0);
+  });
+
+  it("scores a diver against a campaign without inventing tickets", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-dsv-dmt-2026-10");
+    assert.ok(job);
+    const match = scoreDiverAgainstJob(job, {
+      certNames: ["IMCA Trainee Air Diving Supervisor", "OPITO BOSIET with HUET"],
+      location: "Malmo, Sweden",
+    });
+    assert.equal(match.verdict, "possible");
+    assert.ok(match.have.includes("IMCA"));
+    assert.ok(match.missing.includes("DMT"));
+    assert.ok(matchPromptForJob(job).includes(job.id));
+    assert.ok(matchPromptForJob(job).includes("match_job"));
   });
 });
