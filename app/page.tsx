@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { divers } from "@/lib/mock-data";
 import { CONTACT_EMAIL, CONTACT_MAILTO } from "@/lib/site";
+import { loadPublicAmbassadorCards } from "@/lib/public-ambassadors";
 import {
   AgentChatMockup,
   HeroProductMockup,
@@ -36,7 +36,9 @@ const pipeline = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const ambassadors = await loadPublicAmbassadorCards(4);
+
   return (
     <div className="overflow-x-hidden">
       {/* Hero */}
@@ -222,41 +224,50 @@ export default function Home() {
               Profiles contractors can trust at a glance.
             </h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
-              Public ambassador pages showcase verified credentials, specialties, and mobilization
-              readiness.
+              Live ambassador pages only — published divers with a current pack, not sample profiles.
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2">
-            {divers.slice(0, 4).map((diver) => (
-              <Link
-                key={diver.id}
-                href={`/${diver.username}`}
-                className="group block rounded-xl border border-border/60 bg-[#060e18]/80 p-5 transition hover:border-primary/35 hover:bg-[#081422]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-display text-lg font-semibold text-cyan-50 group-hover:text-white">
-                      {diver.fullName}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{diver.headline}</p>
-                  </div>
-                  {diver.verified ? (
+          {ambassadors.length === 0 ? (
+            <p className="mt-10 text-sm text-muted-foreground">
+              No public ambassador pages yet. Create a free account and publish yours with Hermes.
+            </p>
+          ) : (
+            <div className="mt-10 grid gap-4 sm:grid-cols-2">
+              {ambassadors.map((diver) => (
+                <Link
+                  key={diver.username}
+                  href={`/${diver.username}`}
+                  className="group block rounded-xl border border-border/60 bg-[#060e18]/80 p-5 transition hover:border-primary/35 hover:bg-[#081422]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-display text-lg font-semibold text-cyan-50 group-hover:text-white">
+                        {diver.fullName}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{diver.headline}</p>
+                    </div>
                     <span className="shrink-0 rounded-md bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">
-                      Verified
+                      Live
                     </span>
-                  ) : null}
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>{diver.location}</span>
-                  <span className="text-border">·</span>
-                  <span className="capitalize">{diver.availabilityStatus}</span>
-                  <span className="text-border">·</span>
-                  <span>{diver.mobilizationNotice}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {diver.location ? <span>{diver.location}</span> : null}
+                    {diver.location && diver.availabilityStatus ? <span className="text-border">·</span> : null}
+                    {diver.availabilityStatus ? (
+                      <span className="capitalize">{diver.availabilityStatus}</span>
+                    ) : null}
+                    {diver.mobilizationNotice ? (
+                      <>
+                        <span className="text-border">·</span>
+                        <span>{diver.mobilizationNotice}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

@@ -1,7 +1,21 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { divers } from "@/lib/mock-data";
+import { isIndexableAmbassadorUsername } from "@/lib/usernames";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}): Promise<Metadata> {
+  const { username: rawUsername } = await params;
+  const username = rawUsername.trim().toLowerCase();
+  if (!isIndexableAmbassadorUsername(username)) {
+    return { title: "Profile", robots: { index: false, follow: false } };
+  }
+  return { title: `${username} | doneunder.ai` };
+}
 
 export default async function AmbassadorPage({
   params,
@@ -18,11 +32,7 @@ export default async function AmbassadorPage({
     )
     .eq("username", username)
     .maybeSingle();
-  const { data: registeredDiver } = publicAmbassador
-    ? { data: null }
-    : await supabase.from("users").select("id").eq("username", username).eq("role", "diver").maybeSingle();
-  const fallbackDiver = registeredDiver ? undefined : divers.find((entry) => entry.username === username);
-  if (!publicAmbassador && !fallbackDiver) notFound();
+  if (!publicAmbassador) notFound();
 
   const [{ data: certifications }] = await Promise.all([
     supabase
@@ -32,34 +42,26 @@ export default async function AmbassadorPage({
       .order("sort_order", { ascending: true }),
   ]);
 
-  const safeProfile = publicAmbassador ?? null;
-  const displayName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
-  const certRows =
-    (certifications ?? []).length > 0
-      ? (certifications ?? []).map((cert) => ({ name: cert.name, expiry_date: cert.expiry_date }))
-      : (fallbackDiver?.certifications ?? []).map((name) => ({ name, expiry_date: null }));
-  const highlights = Array.isArray(safeProfile?.ambassador_key_highlights)
-    ? safeProfile.ambassador_key_highlights.filter((item): item is string => typeof item === "string")
+  const displayName = publicAmbassador.full_name || "Commercial Diver";
+  const certRows = (certifications ?? []).map((cert) => ({ name: cert.name, expiry_date: cert.expiry_date }));
+  const highlights = Array.isArray(publicAmbassador.ambassador_key_highlights)
+    ? publicAmbassador.ambassador_key_highlights.filter((item): item is string => typeof item === "string")
     : [];
 
   return (
     <AmbassadorProfileView
       displayName={displayName}
       username={username}
-      headline={safeProfile?.ambassador_public_headline || safeProfile?.headline || fallbackDiver?.headline || null}
-      shortBio={safeProfile?.ambassador_short_bio || safeProfile?.bio || fallbackDiver?.bio || null}
+      headline={publicAmbassador.ambassador_public_headline || publicAmbassador.headline || null}
+      shortBio={publicAmbassador.ambassador_short_bio || publicAmbassador.bio || null}
       highlights={highlights}
-      satHours={safeProfile?.sat_hours ?? fallbackDiver?.satHours ?? 0}
-      diveHours={safeProfile?.dive_hours ?? fallbackDiver?.diveHours ?? 0}
-      location={safeProfile?.location || fallbackDiver?.location || null}
-      mobilizationNotice={safeProfile?.mobilization_notice || fallbackDiver?.mobilizationNotice || null}
-      availabilityStatus={
-        safeProfile?.availability_status === "deployed" || fallbackDiver?.availabilityStatus === "deployed"
-          ? "deployed"
-          : "available"
-      }
+      satHours={publicAmbassador.sat_hours ?? 0}
+      diveHours={publicAmbassador.dive_hours ?? 0}
+      location={publicAmbassador.location || null}
+      mobilizationNotice={publicAmbassador.mobilization_notice || null}
+      availabilityStatus={publicAmbassador.availability_status === "deployed" ? "deployed" : "available"}
       certifications={certRows}
-      showCvLink={Boolean(safeProfile?.polished_cv_markdown || username === "gareth")}
+      showCvLink={Boolean(publicAmbassador.polished_cv_markdown || username === "gareth")}
     />
   );
 }

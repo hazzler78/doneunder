@@ -7,6 +7,13 @@ export function normalizeUsername(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
+/** Demo/test handles stay off Google and the homepage. */
+export function isIndexableAmbassadorUsername(username?: string | null) {
+  const handle = normalizeUsername(username);
+  if (!handle) return false;
+  return !handle.endsWith("-demo") && !handle.endsWith("-test");
+}
+
 export function preferredUsernameFromIdentity(input: {
   metadataUsername?: string | null;
   email?: string | null;
