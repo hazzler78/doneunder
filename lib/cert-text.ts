@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { extractPdfText } from "@/lib/pdf-text";
 import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import { classifyCertificateFile, imageBytesToCertificatePdf } from "@/lib/certificate-pack";
 import { extractCertificateDates, parseFlexibleDate } from "@/lib/dates";
@@ -66,8 +66,7 @@ export async function extractDatesFromPdfBuffer(bytes: Buffer) {
 
 async function readPdfText(bytes: Buffer): Promise<CertificateRead> {
   try {
-    const parsed = await pdfParse(bytes);
-    const text = parsed.text || "";
+    const text = await extractPdfText(bytes);
     const dates = extractCertificateDates(text);
     const excerpt = text.replace(/\s+/g, " ").trim();
     const hasDates = Boolean(dates.expiry_date || dates.issue_date);
