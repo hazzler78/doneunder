@@ -1,4 +1,4 @@
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { claimPreferredUsername } from "@/lib/usernames";
 
@@ -45,6 +45,12 @@ export function diverFieldsFromAuthUser(user: User, existing?: AppUserRecord | n
 /**
  * New Google/email users become divers. Existing company/admin roles are left alone.
  */
+/** agent_threads.diver_id points at diver_profiles.user_id, not public.users. */
+export async function ensureDiverProfileRow(supabase: SupabaseClient, userId: string) {
+  const { error } = await supabase.from("diver_profiles").upsert({ user_id: userId }, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+}
+
 export async function ensureDiverProfileForAuthUser(user: User): Promise<AppUserRecord | null> {
   let admin;
   try {
@@ -77,6 +83,11 @@ export async function ensureDiverProfileForAuthUser(user: User): Promise<AppUser
   }
 
   if (record && record.role === "diver") {
+    try {
+      await ensureDiverProfileRow(admin, user.id);
+    } catch (error) {
+      console.error("Failed to create diver_profiles row:", error);
+    }
     const claimed = await claimPreferredUsername(admin, {
       userId: user.id,
       email: fields.email,
