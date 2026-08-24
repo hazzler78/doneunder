@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { generateObject } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { createWorker } from "tesseract.js";
+import { extractPdfText as readPdfBytes } from "@/lib/pdf-text";
 import { z } from "zod";
 import { AI_DISCLAIMER, ENGLISH_ONLY_INSTRUCTION, aiModel } from "@/lib/ai";
 import { appendAgentTurn } from "@/lib/agent-messages";
@@ -67,8 +67,7 @@ function splitTextIntoChunks(input: string, size = CHUNK_SIZE, overlap = CHUNK_O
 }
 
 async function extractPdfText(buffer: Buffer) {
-  const parsed = await pdfParse(buffer);
-  return cleanText(parsed.text || "");
+  return readPdfBytes(buffer);
 }
 
 async function extractImageText(buffer: Buffer) {
@@ -255,6 +254,23 @@ export async function POST(req: Request) {
     }
 
     const cvText = truncateText(await extractPdfText(cvBuffer));
+    if (!cvText) {
+      extractionWarnings.push(
+        "Could not read text from the CV PDF. The file is stored — paste the CV text in this chat and Hermes will build it.",
+      );
+      await appendAgentTurn(serviceSupabase, {
+        threadId: thread.id,
+        userContent: `Please process this CV PDF: ${mainCvFile.name}`,
+        assistantContent: extractionWarnings.join(" "),
+        metadata: { source: "process-cv", importBatchId, unreadablePdf: true },
+      });
+      return NextResponse.json({
+        ok: true,
+        warnings: extractionWarnings,
+        importBatchId,
+        uploaded: { cv: cvPath, certificates: certUploadResults.map((item) => item.path) },
+      });
+    }
     const cvChunks = splitTextIntoChunks(cvText);
     const chunkSummaries: string[] = [];
     const chunkCertMentions: string[] = [];
