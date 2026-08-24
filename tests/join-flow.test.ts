@@ -5,7 +5,11 @@ import { oauthForwardPath, safeInternalPath } from "../lib/auth-paths";
 import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser } from "../lib/diver-bootstrap";
 import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
-import { claimPreferredUsername, preferredUsernameFromIdentity } from "../lib/usernames";
+import {
+  claimPreferredUsername,
+  isIndexableAmbassadorUsername,
+  preferredUsernameFromIdentity,
+} from "../lib/usernames";
 
 function authUser(partial: Partial<User> & Pick<User, "id">): User {
   return {
@@ -151,6 +155,12 @@ describe("Google diver bootstrap", () => {
 });
 
 describe("preferred usernames", () => {
+  it("keeps demo handles off Google and the homepage", () => {
+    assert.equal(isIndexableAmbassadorUsername("gareth"), true);
+    assert.equal(isIndexableAmbassadorUsername("gareth-demo"), false);
+    assert.equal(isIndexableAmbassadorUsername("qa-test"), false);
+  });
+
   it("uses the Gmail local-part when metadata has no handle", () => {
     assert.equal(preferredUsernameFromIdentity({ email: "jane.diver@gmail.com" }), "jane.diver");
   });

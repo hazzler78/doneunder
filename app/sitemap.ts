@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { SITE_URL } from "@/lib/site";
+import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 
 export const revalidate = 3600;
 
@@ -33,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .order("published_at", { ascending: false });
 
     profileEntries = (data ?? [])
-      .filter((row) => row.username?.trim())
+      .filter((row) => isIndexableAmbassadorUsername(row.username))
       .map((row) => ({
         url: `${SITE_URL}/${row.username}`,
         lastModified: row.published_at ? new Date(row.published_at) : new Date(),

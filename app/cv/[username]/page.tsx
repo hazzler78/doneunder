@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
-import { divers } from "@/lib/mock-data";
 
 function formatDate(dateValue?: string | null) {
   if (!dateValue) return null;
@@ -27,11 +26,7 @@ export default async function DiverCvPage({
     .eq("username", username)
     .maybeSingle();
 
-  const { data: registeredDiver } = publicAmbassador
-    ? { data: null }
-    : await supabase.from("users").select("id").eq("username", username).eq("role", "diver").maybeSingle();
-  const fallbackDiver = registeredDiver ? undefined : divers.find((entry) => entry.username === username);
-  if (!publicAmbassador && !fallbackDiver) notFound();
+  if (!publicAmbassador) notFound();
 
   const [{ data: experiences }, { data: certifications }, { data: references }, { data: profileExtras }] =
     await Promise.all([
@@ -76,11 +71,11 @@ export default async function DiverCvPage({
   const polishedMarkdown =
     publicAmbassador?.polished_cv_markdown || profileExtras?.polished_cv_markdown || null;
 
-  const fullName = publicAmbassador?.full_name ?? fallbackDiver?.fullName ?? "Commercial Diver";
-  const headline = publicAmbassador?.headline ?? fallbackDiver?.headline ?? "Commercial Diver CV";
-  const location = publicAmbassador?.location || fallbackDiver?.location || "Location not provided";
-  const mobilization = publicAmbassador?.mobilization_notice || fallbackDiver?.mobilizationNotice || "Mobilization not provided";
-  const summary = publicAmbassador?.bio || fallbackDiver?.bio || "Professional summary not provided yet.";
+  const fullName = publicAmbassador.full_name ?? "Commercial Diver";
+  const headline = publicAmbassador.headline ?? "Commercial Diver CV";
+  const location = publicAmbassador.location || "Location not provided";
+  const mobilization = publicAmbassador.mobilization_notice || "Mobilization not provided";
+  const summary = publicAmbassador.bio || "Professional summary not provided yet.";
   const satHours =
     publicAmbassador?.sat_hours && publicAmbassador.sat_hours > 0
       ? publicAmbassador.sat_hours.toLocaleString()
@@ -153,14 +148,8 @@ export default async function DiverCvPage({
               </li>
             ))}
           </ul>
-        ) : publicAmbassador ? (
-          <p>No certifications listed yet.</p>
         ) : (
-          <ul className="list-disc pl-5">
-            {(fallbackDiver?.certifications ?? []).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          <p>No certifications listed yet.</p>
         )}
       </section>
 
