@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ensureDiverProfileRow } from "@/lib/diver-bootstrap";
 
 export type AgentChannel = "telegram" | "web";
 
@@ -23,6 +24,9 @@ export async function upsertWorkspaceThread(
     metadata?: Record<string, unknown>;
   },
 ) {
+  if (input.role === "diver") {
+    await ensureDiverProfileRow(supabase, input.userId);
+  }
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("agent_threads")
@@ -112,10 +116,17 @@ export async function ensureWorkspaceWebThread(
   role: "diver" | "company",
 ) {
   const existing = await getAgentThread(supabase, "web", userId);
-  if (existing) return existing;
-
-  if (role === "diver") {
-    await supabase.from("diver_profiles").upsert({ user_id: userId }, { onConflict: "user_id" });
+  if (existing) {
+    if (role === "diver" && !existing.diver_id) {
+      return upsertWorkspaceThread(supabase, {
+        userId,
+        role,
+        channel: "web",
+        externalChatId: userId,
+        metadata: { role },
+      });
+    }
+    return existing;
   }
 
   return upsertWorkspaceThread(supabase, {

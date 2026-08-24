@@ -3,7 +3,8 @@ import { afterEach, describe, it } from "node:test";
 import type { User } from "@supabase/supabase-js";
 import { oauthForwardPath, safeInternalPath } from "../lib/auth-paths";
 import { sessionCookieOptions } from "../lib/supabase/route-handler";
-import { diverFieldsFromAuthUser } from "../lib/diver-bootstrap";
+import { diverFieldsFromAuthUser, ensureDiverProfileRow } from "../lib/diver-bootstrap";
+import { upsertWorkspaceThread } from "../lib/agent-threads";
 import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
 import {
   claimPreferredUsername,
@@ -151,6 +152,71 @@ describe("Google diver bootstrap", () => {
     assert.equal(fields.insert.role, "diver");
     assert.equal(existing.role, "company");
     assert.equal(fields.fullName, "Ops");
+  });
+
+  it("creates a diver_profiles row before Hermes can open a thread", async () => {
+    const profileIds: string[] = [];
+    const db = {
+      from(table: string) {
+        if (table === "diver_profiles") {
+          return {
+            async upsert(row: { user_id: string }) {
+              profileIds.push(row.user_id);
+              return { error: null };
+            },
+          };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+    await ensureDiverProfileRow(db as never, "velvet-user-id");
+    assert.deepEqual(profileIds, ["velvet-user-id"]);
+  });
+
+  it("does not open a web thread until the diver_profiles row exists", async () => {
+    const profileIds: string[] = [];
+    const threads: Array<{ diver_id: string | null }> = [];
+    const db = {
+      from(table: string) {
+        if (table === "diver_profiles") {
+          return {
+            async upsert(row: { user_id: string }) {
+              profileIds.push(row.user_id);
+              return { error: null };
+            },
+          };
+        }
+        if (table === "agent_threads") {
+          const api = {
+            upsert(row: { diver_id: string | null }) {
+              if (row.diver_id && !profileIds.includes(row.diver_id)) {
+                throw new Error(
+                  'insert or update on table "agent_threads" violates foreign key constraint "agent_threads_diver_id_fkey"',
+                );
+              }
+              threads.push(row);
+              return api;
+            },
+            select() {
+              return api;
+            },
+            async maybeSingle() {
+              return { data: { id: "thread-1", ...threads[0] }, error: null };
+            },
+          };
+          return api;
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+    const thread = await upsertWorkspaceThread(db as never, {
+      userId: "velvet-user-id",
+      role: "diver",
+      channel: "web",
+      externalChatId: "velvet-user-id",
+    });
+    assert.deepEqual(profileIds, ["velvet-user-id"]);
+    assert.equal(thread.id, "thread-1");
   });
 });
 
