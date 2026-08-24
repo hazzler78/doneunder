@@ -11,7 +11,7 @@ import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { aiCvOutputSchema } from "@/lib/diver-profile";
 import { classifyCertificateFile } from "@/lib/certificate-pack";
-import { looksLikeMainCvFilename } from "@/lib/document-names";
+import { looksLikeCertificateFilename, looksLikeMainCvFilename } from "@/lib/document-names";
 import {
   listCertificateDocumentFiles,
   listDiverDocumentFiles,
@@ -115,7 +115,12 @@ export async function POST(req: Request) {
     const certFiles = formData.getAll("certificates");
 
     const certificateFiles = certFiles.filter((entry): entry is File => entry instanceof File && entry.size > 0);
-    if (mainCvFile && !looksLikeMainCvFilename(mainCvFile.name)) {
+    if (
+      mainCvFile &&
+      certificateFiles.length === 0 &&
+      looksLikeCertificateFilename(mainCvFile.name) &&
+      !looksLikeMainCvFilename(mainCvFile.name)
+    ) {
       certificateFiles.unshift(mainCvFile);
       mainCvFile = null;
     }

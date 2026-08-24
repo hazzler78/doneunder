@@ -6,6 +6,7 @@ import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser, ensureDiverProfileRow } from "../lib/diver-bootstrap";
 import { upsertWorkspaceThread } from "../lib/agent-threads";
 import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
+import { pickMainCvFile } from "../lib/document-names";
 import {
   claimPreferredUsername,
   isIndexableAmbassadorUsername,
@@ -217,6 +218,19 @@ describe("Google diver bootstrap", () => {
     });
     assert.deepEqual(profileIds, ["velvet-user-id"]);
     assert.equal(thread.id, "thread-1");
+  });
+});
+
+describe("upload classification", () => {
+  it("picks CV_Alex_Holm_TEST.pdf out of a mixed ticket dump", () => {
+    const files = [
+      { name: "IMCA_Air_Diver_TEST.pdf" },
+      { name: "CV_Alex_Holm_TEST.pdf" },
+      { name: "OPITO_BOSIET_TEST.pdf" },
+      { name: "OEUK_Medical_TEST.pdf" },
+    ];
+    const cv = pickMainCvFile(files);
+    assert.equal(cv?.name, "CV_Alex_Holm_TEST.pdf");
   });
 });
 

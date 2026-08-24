@@ -6,7 +6,7 @@ import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
-import { isStoredMainCvFilename, looksLikeMainCvFilename } from "@/lib/document-names";
+import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -269,7 +269,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   const hasStoredCv = livingCv.present || documents.some((doc) => isStoredMainCvFilename(doc.name));
 
   function classifyDroppedFiles(files: File[]) {
-    const cvFile = files.find((file) => looksLikeMainCvFilename(file.name)) ?? null;
+    const cvFile = pickMainCvFile(files);
     return {
       cvFile,
       certFiles: files.filter((file) => file !== cvFile),
@@ -278,7 +278,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
 
   async function processCvUpload(fileOverride?: File | File[]) {
     const dropped = fileOverride ? (Array.isArray(fileOverride) ? fileOverride : [fileOverride]) : [];
-    const classified = dropped.length > 0 ? classifyDroppedFiles(dropped) : { cvFile: mainCv, certFiles: certs };
+    const selected = dropped.length > 0 ? dropped : ([mainCv, ...certs].filter(Boolean) as File[]);
+    const classified = classifyDroppedFiles(selected);
     const cvFile = classified.cvFile;
     const certFiles = classified.certFiles;
     if (!cvFile && certFiles.length === 0) {
@@ -287,37 +288,41 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
     }
     setUploading(true);
     setUploadError(null);
-    if (dropped.length > 0) {
-      const names = dropped.map((file) => file.name).join(", ");
+    if (dropped.length > 0 || selected.length > 0) {
+      const names = selected.map((file) => file.name).join(", ");
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           from: "user",
-          text: cvFile && certFiles.length === 0 ? `Please process this CV PDF: ${cvFile.name}` : `Please store these files: ${names}`,
+          text: cvFile && certFiles.length === 0 ? `Please process this CV PDF: ${cvFile.name}` : `Please process these files: ${names}`,
         },
       ]);
     }
     try {
+      let cvFailed = false;
       if (cvFile) {
         const form = new FormData();
         form.append("mainCv", cvFile);
+        for (const cert of certFiles) {
+          form.append("certificates", cert);
+        }
         const response = await fetch("/api/diver/profile/process-cv", {
           method: "POST",
           body: form,
         });
         const data = (await response.json()) as { error?: string; detail?: string };
         if (!response.ok) {
+          cvFailed = true;
           const message = `${data.error ?? "Failed to process CV upload."}${data.detail ? ` ${data.detail}` : ""}`;
           setUploadError(message);
           if (fileOverride) {
             setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
           }
-          return;
         }
       }
 
-      if (certFiles.length > 0) {
+      if (certFiles.length > 0 && (!cvFile || cvFailed)) {
         const { uploaded, errors } = await uploadCertificateFilesSequentially(
           certFiles,
           (current, total, fileName) => {
@@ -337,7 +342,11 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
 
       setMainCv(null);
       setCerts([]);
-      setCvUpdatedParts([cvFile ? "CV upload" : "Certificate files"]);
+      if (cvFile && !cvFailed) {
+        setCvUpdatedParts(["CV upload"]);
+      } else if (!cvFile) {
+        setCvUpdatedParts(["Certificate files"]);
+      }
       await loadDocuments();
       await loadChatHistory({ silent: true });
     } catch {
@@ -399,7 +408,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
           <p className="text-[11px] text-muted-foreground">
             {hasStoredCv
               ? "Hermes already keeps your living CV. Add a new or renewed certificate scan — no new CV file needed."
-              : "Upload a CV once to seed Hermes. After that, talk to Hermes to update it. Certificates are stored separately."}
+              : "Drop the CV PDF and ticket scans together (paperclip below). Hermes will pick the CV out of the pile."}
           </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-muted-foreground">
