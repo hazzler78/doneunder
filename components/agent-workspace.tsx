@@ -247,7 +247,9 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       }
 
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: data.reply }]);
-      setSuggestions(data.suggestions ?? []);
+      setSuggestions((prev) =>
+        data.suggestions && data.suggestions.length > 0 ? data.suggestions : prev,
+      );
       if (data.profileStatus) setProfileStatus(data.profileStatus);
       if (data.cvUpdated) {
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
