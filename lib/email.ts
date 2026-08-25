@@ -1,6 +1,5 @@
 import { Resend } from "resend";
 import { isEmailConfigured } from "@/lib/feature-flags";
-import { CONTACT_EMAIL } from "@/lib/site";
 
 export type EmailAttachment = {
   filename: string;
@@ -77,13 +76,11 @@ export function inboundReplyToAddress(username?: string | null, userId?: string 
 }
 
 /**
- * Address contractors should reply to. Never expose *.resend.app — that is an
- * internal receiving host. Until inbound.doneunder.ai can receive, desk mail
- * is hello@doneunder.ai.
+ * Unique Reply-To so a company reply is routed to that diver in Hermes.
+ * The address may be on *.resend.app until inbound.doneunder.ai can receive.
+ * Do not print that host in the email body.
  */
 export function contractorReplyToAddress(username?: string | null, userId?: string | null) {
-  const domain = inboundReceivingDomain();
-  if (isManagedResendReceivingDomain(domain)) return CONTACT_EMAIL;
   return inboundReplyToAddress(username, userId);
 }
 
@@ -105,8 +102,8 @@ export function withInboundReplyFooter(body: string, replyTo: string) {
  * - If the user's email domain matches RESEND_FROM_DOMAIN (or the domain of
  *   RESEND_FROM_EMAIL), send as `"Name" <user@domain>`.
  * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>`.
- * - Reply-To is `{username}@inbound.doneunder.ai` when that domain can receive,
- *   otherwise hello@doneunder.ai. Never *.resend.app.
+ * - Reply-To is unique per diver (`{username}@{inbound domain}`) so a company
+ *   reply lands in that diver's Hermes thread. The visible From stays hello@.
  */
 export function resolveSenderIdentity(
   userEmail: string,

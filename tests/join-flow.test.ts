@@ -324,9 +324,9 @@ describe("outbound email identity", () => {
 
     const identity = resolveSenderIdentity("velvetorionx@gmail.com", "Alex Holm", "velvetorionx");
     assert.equal(identity.from, "Alex Holm via doneunder.ai <hello@doneunder.ai>");
-    assert.equal(identity.replyTo, "hello@doneunder.ai");
-    assert.equal(contractorReplyToAddress("velvetorionx"), "hello@doneunder.ai");
-    const footer = withInboundReplyFooter("Kind regards,\nAlex Holm", "velvetorionx@voreek.resend.app");
+    assert.equal(identity.replyTo, "velvetorionx@voreek.resend.app");
+    assert.equal(contractorReplyToAddress("velvetorionx"), "velvetorionx@voreek.resend.app");
+    const footer = withInboundReplyFooter("Kind regards,\nAlex Holm", identity.replyTo);
     assert.equal(footer.includes("resend.app"), false);
     assert.match(footer, /Reply to this email/);
   });

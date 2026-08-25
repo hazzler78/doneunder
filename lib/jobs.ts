@@ -277,6 +277,27 @@ function rowToPublicJob(row: JobRow): PublicJob {
   };
 }
 
+export async function loadAppliedJobIds(supabase: SupabaseClient, diverId: string) {
+  const { data } = await supabase
+    .from("ai_interactions")
+    .select("input")
+    .eq("actor_id", diverId)
+    .eq("feature", "hermes_apply_job")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const ids = new Set<string>();
+  for (const row of data ?? []) {
+    try {
+      const parsed = typeof row.input === "string" ? JSON.parse(row.input) : row.input;
+      const jobId = parsed && typeof parsed === "object" ? (parsed as { jobId?: string }).jobId : null;
+      if (jobId) ids.add(jobId);
+    } catch {
+      // Ignore malformed audit rows.
+    }
+  }
+  return ids;
+}
+
 export async function loadOpenJobs(supabase?: SupabaseClient | null, now = new Date()): Promise<PublicJob[]> {
   if (supabase) {
     try {

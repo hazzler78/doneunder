@@ -186,6 +186,7 @@ export async function POST(req: Request) {
       role,
       reply: agentResult.reply,
       suggestions: agentResult.suggestions,
+      appliedJobIds: agentResult.appliedJobIds ?? [],
       profileStatus: agentResult.profile.profile.profile_status,
       cvUpdated: agentResult.cvUpdated,
       updatedParts: agentResult.updatedParts,
