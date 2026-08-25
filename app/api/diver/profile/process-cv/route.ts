@@ -36,6 +36,7 @@ Turn raw CVs and certification documents into a polished, accurate profile for o
 ${ENGLISH_ONLY_INSTRUCTION}
 Return factual outputs only from provided material. Use "Not provided" when unknown.
 Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
+full_name must be the person's name as printed on the CV (not a Google account or email handle).
 Respond in the exact JSON schema requested. Every string field must be English.`;
 
 const cvChunkSchema = z.object({
@@ -324,6 +325,11 @@ export async function POST(req: Request) {
       cvLastProcessedAt: nowIso,
       preserveEmptyChildSections: true,
     });
+
+    const extractedName = parsed.full_name?.trim();
+    if (extractedName) {
+      await serviceSupabase.from("users").update({ full_name: extractedName }).eq("id", diverId);
+    }
 
     const cvReply =
       "CV processed in English. Preview at /preview/cv. " +

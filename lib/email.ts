@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 export type EmailAttachment = {
   filename: string;
@@ -15,6 +16,8 @@ export type SendUserEmailInput = {
   /** Public username — Reply-To becomes `{username}@{inbound domain}` so Hermes can receive replies. */
   username?: string | null;
   userId?: string | null;
+  /** Override Reply-To (apply desk uses hello@doneunder.ai). */
+  replyTo?: string | null;
   to: string;
   subject: string;
   body: string;
@@ -73,12 +76,27 @@ export function inboundReplyToAddress(username?: string | null, userId?: string 
   return `${local}@${inboundReceivingDomain()}`;
 }
 
+/**
+ * Address contractors should reply to. Never expose *.resend.app — that is an
+ * internal receiving host. Until inbound.doneunder.ai can receive, desk mail
+ * is hello@doneunder.ai.
+ */
+export function contractorReplyToAddress(username?: string | null, userId?: string | null) {
+  const domain = inboundReceivingDomain();
+  if (isManagedResendReceivingDomain(domain)) return CONTACT_EMAIL;
+  return inboundReplyToAddress(username, userId);
+}
+
 /** Visible reply mailbox so Gmail Reply-To misses still reach Hermes. */
 export function withInboundReplyFooter(body: string, replyTo: string) {
   const text = body.trim();
-  const needle = replyTo.trim().toLowerCase();
+  const address = replyTo.trim();
+  const needle = address.toLowerCase();
   if (!needle.includes("@") || text.toLowerCase().includes(needle)) return text;
-  return `${text}\n\n—\nReply to this email, or write to ${replyTo}, and I will see it in my workspace.`;
+  if (isManagedResendReceivingDomain(emailDomain(address))) {
+    return `${text}\n\n—\nReply to this email and I will see it in my workspace.`;
+  }
+  return `${text}\n\n—\nReply to this email, or write to ${address}, and I will see it in my workspace.`;
 }
 
 /**
@@ -87,8 +105,8 @@ export function withInboundReplyFooter(body: string, replyTo: string) {
  * - If the user's email domain matches RESEND_FROM_DOMAIN (or the domain of
  *   RESEND_FROM_EMAIL), send as `"Name" <user@domain>`.
  * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>`.
- * - Reply-To is always `{username}@{RESEND_INBOUND_DOMAIN}` so employer replies
- *   land in Hermes instead of a personal inbox.
+ * - Reply-To is `{username}@inbound.doneunder.ai` when that domain can receive,
+ *   otherwise hello@doneunder.ai. Never *.resend.app.
  */
 export function resolveSenderIdentity(
   userEmail: string,
@@ -105,7 +123,7 @@ export function resolveSenderIdentity(
 
   const userDomain = emailDomain(accountEmail);
   const canSendAsUser = Boolean(allowedDomain && userDomain === allowedDomain);
-  const replyTo = inboundReplyToAddress(username, userId);
+  const replyTo = contractorReplyToAddress(username, userId);
 
   if (canSendAsUser) {
     return {
@@ -147,6 +165,9 @@ export async function sendEmailAsLoggedInUser(
     input.username,
     input.userId,
   );
+  const replyTo = stripQuotes(input.replyTo || "").includes("@")
+    ? stripQuotes(input.replyTo || "").toLowerCase()
+    : identity.replyTo;
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
   const attached = (input.attachments ?? [])
     .filter((item) => item.filename && item.content.length > 0)
@@ -156,11 +177,11 @@ export async function sendEmailAsLoggedInUser(
       contentType: item.contentType,
     }));
 
-  const text = withInboundReplyFooter(body, identity.replyTo);
+  const text = withInboundReplyFooter(body, replyTo);
   const { data, error } = await resend.emails.send({
     from: identity.from,
     to: [to],
-    replyTo: identity.replyTo,
+    replyTo,
     subject,
     text,
     attachments: attached.length > 0 ? attached : undefined,
@@ -174,7 +195,7 @@ export async function sendEmailAsLoggedInUser(
     ok: true,
     id: data?.id ?? "sent",
     from: identity.from,
-    replyTo: identity.replyTo,
+    replyTo,
     attached: attached.map((item) => item.filename),
   };
 }

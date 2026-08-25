@@ -188,6 +188,7 @@ function mapProfileRow(row: Record<string, unknown> | null): DiverProfileScalars
 
 export function syncPolishedCvJson(payload: DiverProfilePayload): PolishedCvJson {
   return {
+    full_name: payload.polished_cv_json?.full_name || undefined,
     location: payload.location || undefined,
     mobilization_notice: payload.mobilization_notice || undefined,
     availability_status: payload.availability_status,
@@ -1119,6 +1120,7 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
 /** Maps AI CV output into a canonical DiverProfilePayload. */
 export function aiCvOutputToPayload(
   output: {
+    full_name?: string;
     professional_headline: string;
     polished_cv_markdown: string;
     polished_cv_json: PolishedCvJson;
@@ -1137,7 +1139,10 @@ export function aiCvOutputToPayload(
     sat_hours: profile.sat_hours ?? 0,
     dive_hours: profile.dive_hours ?? 0,
     polished_cv_markdown: output.polished_cv_markdown,
-    polished_cv_json: profile,
+    polished_cv_json: {
+      ...profile,
+      full_name: output.full_name?.trim() || profile.full_name,
+    },
     ambassador_public_headline: output.ambassador_page.public_headline,
     ambassador_short_bio: output.ambassador_page.short_bio,
     ambassador_key_highlights: output.ambassador_page.key_highlights,

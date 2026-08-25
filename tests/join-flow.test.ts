@@ -5,7 +5,13 @@ import { oauthForwardPath, safeInternalPath } from "../lib/auth-paths";
 import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser, ensureDiverProfileRow } from "../lib/diver-bootstrap";
 import { upsertWorkspaceThread } from "../lib/agent-threads";
-import { inboundReplyToAddress, resolveSenderIdentity } from "../lib/email";
+import {
+  contractorReplyToAddress,
+  inboundReplyToAddress,
+  resolveSenderIdentity,
+  withInboundReplyFooter,
+} from "../lib/email";
+import { livingCvDisplayName } from "../lib/cv-pdf";
 import { pickMainCvFile } from "../lib/document-names";
 import {
   claimPreferredUsername,
@@ -309,5 +315,34 @@ describe("outbound email identity", () => {
     const identity = resolveSenderIdentity("gareth@doneunder.ai", "Gareth Darrin Middleton", "gareth");
     assert.equal(identity.mode, "user");
     assert.equal(identity.from, "Gareth Darrin Middleton <gareth@doneunder.ai>");
+  });
+
+  it("does not put a resend.app address on contractor-facing mail", () => {
+    process.env.RESEND_FROM_EMAIL = "Hermes <hello@doneunder.ai>";
+    process.env.RESEND_FROM_DOMAIN = "doneunder.ai";
+    process.env.RESEND_INBOUND_DOMAIN = "voreek.resend.app";
+
+    const identity = resolveSenderIdentity("velvetorionx@gmail.com", "Alex Holm", "velvetorionx");
+    assert.equal(identity.from, "Alex Holm via doneunder.ai <hello@doneunder.ai>");
+    assert.equal(identity.replyTo, "hello@doneunder.ai");
+    assert.equal(contractorReplyToAddress("velvetorionx"), "hello@doneunder.ai");
+    const footer = withInboundReplyFooter("Kind regards,\nAlex Holm", "velvetorionx@voreek.resend.app");
+    assert.equal(footer.includes("resend.app"), false);
+    assert.match(footer, /Reply to this email/);
+  });
+});
+
+describe("living CV display name", () => {
+  it("prefers the name on the CV over the Google account name", () => {
+    const name = livingCvDisplayName(
+      {
+        profile: {
+          polished_cv_markdown: "# Alex Holm\n\nIMCA Air Diver",
+          polished_cv_json: { full_name: "Alex Holm", experiences: [], certifications: [], references: [] },
+        } as never,
+      },
+      "Velvet Orion X",
+    );
+    assert.equal(name, "Alex Holm");
   });
 });
