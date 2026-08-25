@@ -75,6 +75,7 @@ export const referenceInputSchema = z.object({
 });
 
 export const polishedCvJsonSchema = z.object({
+  full_name: z.string().max(80).optional(),
   location: z.string().optional(),
   mobilization_notice: z.string().optional(),
   availability_status: z.enum(AVAILABILITY_STATUSES).optional(),
@@ -237,6 +238,11 @@ export type ConversationalCvUpdate = z.infer<typeof conversationalCvUpdateSchema
 
 /** AI CV pipeline output — shared between process-cv route and seed scripts. */
 export const aiCvOutputSchema = z.object({
+  full_name: z
+    .string()
+    .min(2)
+    .max(80)
+    .describe("Person's name as printed on the CV, not a Google/account display name."),
   professional_headline: z.string().min(1).max(220),
   polished_cv_markdown: z.string().min(1),
   polished_cv_json: polishedCvJsonSchema,

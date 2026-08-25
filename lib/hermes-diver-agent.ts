@@ -11,7 +11,7 @@ import {
 } from "@/lib/diver-profile-service";
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
-import { buildDiverCvPdf, cvPdfFilename } from "@/lib/cv-pdf";
+import { buildDiverCvPdf, cvPdfFilename, livingCvDisplayName } from "@/lib/cv-pdf";
 import { applyCertificateRead, readCertificateBytes } from "@/lib/cert-text";
 import {
   buildCertificateAttachments,
@@ -435,6 +435,7 @@ async function sendDiverFollowUpEmail(input: {
   attachCertificates?: boolean;
   pendingInbound?: PendingInbound | null;
 }) {
+  const displayName = livingCvDisplayName(input.profile, input.displayName);
   const attachments: EmailAttachment[] = [];
   const attachCertificates = shouldAttachCertificates({
     attachCertificates: input.attachCertificates,
@@ -451,8 +452,8 @@ async function sendDiverFollowUpEmail(input: {
   });
 
   if (attachCv) {
-    const filename = cvPdfFilename(input.displayName);
-    const content = buildDiverCvPdf(input.profile, input.displayName);
+    const filename = cvPdfFilename(displayName);
+    const content = buildDiverCvPdf(input.profile, displayName);
     if (content.length < 100 || !content.subarray(0, 5).toString("utf8").startsWith("%PDF")) {
       return { ok: false as const, error: "Could not build a CV PDF to attach.", attachCv, attachCertificates };
     }
@@ -462,7 +463,7 @@ async function sendDiverFollowUpEmail(input: {
   if (attachCertificates) {
     const certs = await buildCertificateAttachments(input.supabase, {
       diverId: input.diverId,
-      displayName: input.displayName,
+      displayName,
       profile: input.profile,
     });
     if (certs.length === 0) {
@@ -484,7 +485,7 @@ async function sendDiverFollowUpEmail(input: {
 
   const result = await sendEmailAsLoggedInUser({
     userEmail: input.userEmail,
-    userDisplayName: input.displayName,
+    userDisplayName: displayName,
     username: input.username,
     userId: input.diverId,
     to: input.to,
@@ -774,7 +775,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             open: match.open,
           },
           match,
-          apply: applicationDraft(job, input.displayName),
+          apply: applicationDraft(job, livingCvDisplayName(state.profile, input.displayName)),
         };
       },
     }),
@@ -791,7 +792,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         if (!job) {
           return { ok: false, error: "That campaign is not on the board." };
         }
-        const draft = applicationDraft(job, input.displayName);
+        const draft = applicationDraft(job, livingCvDisplayName(state.profile, input.displayName));
         const match = matchProfileToJob(job, state.profile);
         const blocked = applyBlockReason(match);
         if (blocked) {
@@ -835,7 +836,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           supabase: input.supabase,
           diverId: input.diverId,
           username: input.username,
-          displayName: input.displayName,
+          displayName: livingCvDisplayName(state.profile, input.displayName),
           userEmail: input.userEmail,
           profile: state.profile,
           to: draft.to,

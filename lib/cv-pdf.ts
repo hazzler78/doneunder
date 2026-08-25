@@ -30,6 +30,33 @@ export function certificatesPdfFilename(displayName: string) {
   return `${sanitizeFilenamePart(displayName)}-Certificates.pdf`;
 }
 
+function looksLikePersonName(value: string) {
+  const text = value.trim();
+  if (text.length < 4 || text.length > 70) return false;
+  if (/test document|professional|summary|certification|experience|commercial diver/i.test(text)) {
+    return false;
+  }
+  return /^[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,4}$/.test(text);
+}
+
+/** Prefer the name printed on the living CV over the Google account name. */
+export function livingCvDisplayName(
+  profile: Pick<DiverProfileFull, "profile">,
+  fallback: string,
+) {
+  const stored = profile.profile.polished_cv_json?.full_name?.trim();
+  if (stored && looksLikePersonName(stored)) return stored;
+  const markdown = profile.profile.polished_cv_markdown ?? "";
+  const heading = markdown.match(/^#\s+([^\n]+)/m)?.[1]?.trim();
+  if (heading && looksLikePersonName(heading)) return heading;
+  for (const line of markdown.split("\n")) {
+    const text = line.replace(/^#+\s*/, "").trim();
+    if (looksLikePersonName(text)) return text;
+  }
+  const fallbackName = fallback.trim();
+  return fallbackName || "Commercial Diver";
+}
+
 function wrapWords(text: string, maxChars: number) {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
