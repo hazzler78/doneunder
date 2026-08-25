@@ -10,6 +10,7 @@ import {
   isJobOpen,
   isTicketExpired,
   listCatalogJobs,
+  applyPromptForJob,
   matchPromptForJob,
   scoreDiverAgainstJob,
 } from "../lib/jobs";
@@ -60,6 +61,8 @@ describe("job expiry", () => {
     assert.equal(match.canApply, false);
     assert.ok(matchPromptForJob(job).includes(job.id));
     assert.ok(matchPromptForJob(job).includes("match_job"));
+    assert.ok(applyPromptForJob(job).includes(`job_id="${job.id}"`));
+    assert.ok(applyPromptForJob(job).includes("confirmed=true"));
   });
 
   it("treats an expired required ticket as expired, not current", () => {
