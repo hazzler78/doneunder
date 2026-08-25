@@ -12,6 +12,7 @@ import {
   listCatalogJobs,
   applyPromptForJob,
   matchPromptForJob,
+  resolveJobRef,
   scoreDiverAgainstJob,
 } from "../lib/jobs";
 
@@ -63,6 +64,14 @@ describe("job expiry", () => {
     assert.ok(matchPromptForJob(job).includes("match_job"));
     assert.ok(applyPromptForJob(job).includes(`job_id="${job.id}"`));
     assert.ok(applyPromptForJob(job).includes("confirmed=true"));
+  });
+
+  it("resolves a campaign from a title fragment so Hermes need not ask for an id", () => {
+    const jobs = listCatalogJobs(new Date("2026-08-23T12:00:00.000Z"));
+    const sat = resolveJobRef(jobs, "saturation");
+    assert.equal(sat?.id, "job-ncs-sat-2026-09");
+    const byId = resolveJobRef(jobs, "job-wind-gbf-2026-10");
+    assert.equal(byId?.title.includes("offshore wind"), true);
   });
 
   it("treats an expired required ticket as expired, not current", () => {

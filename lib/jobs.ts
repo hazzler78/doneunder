@@ -34,6 +34,26 @@ export function findCatalogJob(id: string) {
   return JOB_CATALOG.find((job) => job.id === id) ?? null;
 }
 
+/** Resolve a board job from an id, a full title, or a short name like "saturation". */
+export function resolveJobRef(jobs: PublicJob[], ref: string) {
+  const needle = ref.trim().toLowerCase();
+  if (!needle) return null;
+  const byId =
+    jobs.find((job) => job.id.toLowerCase() === needle) ?? findCatalogJob(ref);
+  if (byId) return jobs.find((job) => job.id === byId.id) ?? byId;
+  const titled = jobs.filter(
+    (job) => job.title.toLowerCase().includes(needle) || needle.includes(job.title.toLowerCase()),
+  );
+  if (titled.length === 1) return titled[0]!;
+  const tokens = needle.split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
+  if (tokens.length === 0) return null;
+  const hits = jobs.filter((job) => {
+    const title = job.title.toLowerCase();
+    return tokens.every((token) => title.includes(token) || job.id.toLowerCase().includes(token));
+  });
+  return hits.length === 1 ? hits[0]! : null;
+}
+
 export function workspaceMatchHref(jobId: string) {
   return `/workspace?job=${encodeURIComponent(jobId)}`;
 }

@@ -23,10 +23,10 @@ import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
 import {
   applicationDraft,
   applyBlockReason,
-  findCatalogJob,
   formatMatchReason,
   isJobOpen,
   loadOpenJobs,
+  resolveJobRef,
   scoreDiverAgainstJob,
   type PublicJob,
 } from "@/lib/jobs";
@@ -115,6 +115,7 @@ function buildProfileContext(
   displayName: string,
   userEmail: string | null,
   pendingInbound?: PendingInbound | null,
+  openJobs: PublicJob[] = [],
 ) {
   const p = profile.profile;
   const validation = validateDiverProfile({
@@ -203,6 +204,12 @@ function buildProfileContext(
       errors: validation.errors,
       warnings: validation.warnings,
     },
+    open_campaigns: openJobs.map((job) => ({
+      id: job.id,
+      title: job.title,
+      location: job.location,
+      requiredCerts: job.requiredCerts,
+    })),
   };
 }
 
@@ -242,7 +249,9 @@ Updating the CV from chat (this is the main way to edit):
 Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
 - find_matching_jobs when they want several open campaigns.
-- match_job when they name one campaign or the message includes a job id. Always call it before saying they fit or do not fit.
+- match_job when they name one campaign, say yes to one you just offered, or the message includes a job id. Always call it before saying they fit or do not fit.
+- NEVER ask the diver to type a job ID. IDs are in open_campaigns. If they say "yes" after you offered the saturation role, call match_job with that campaign's id (title match is enough).
+- match_job accepts a job id or a title fragment such as "saturation" or "German Bight".
 - match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo.
 - After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft and wait for a clear yes.
 - apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
@@ -594,12 +603,14 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     };
   }
 
+  const openJobs = await loadOpenJobs(input.supabase);
   const context = buildProfileContext(
     profile,
     input.username,
     input.displayName,
     input.userEmail,
     input.pendingInbound,
+    openJobs,
   );
   const system = buildSystemPrompt(context);
 
@@ -742,15 +753,19 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     match_job: tool({
       description:
-        "Score the logged-in diver against one campaign. Use when they click Match in Hermes or name a listing.",
+        "Score the logged-in diver against one campaign. Use when they click Match, name a listing, or say yes to a campaign you just offered. job_id may be an id or a title fragment (saturation, German Bight).",
       inputSchema: z.object({
-        job_id: z.string().describe("Public job id from the jobs board"),
+        job_id: z.string().describe("Public job id, or a title fragment such as saturation"),
       }),
       execute: async ({ job_id: jobId }) => {
         const openJobs = await loadOpenJobs(input.supabase);
-        const job = openJobs.find((item) => item.id === jobId) ?? findCatalogJob(jobId);
+        const job = resolveJobRef(openJobs, jobId);
         if (!job) {
-          return { ok: false, error: "That campaign is not on the board." };
+          return {
+            ok: false,
+            error: "I could not tell which campaign. Name the title from the list — do not ask the diver for an id.",
+            campaigns: openJobs.map((item) => ({ id: item.id, title: item.title })),
+          };
         }
         const match = matchProfileToJob(job, state.profile);
         state.suggestions = [
@@ -788,9 +803,13 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       }),
       execute: async ({ job_id: jobId, confirmed }) => {
         const openJobs = await loadOpenJobs(input.supabase);
-        const job = openJobs.find((item) => item.id === jobId) ?? findCatalogJob(jobId);
+        const job = resolveJobRef(openJobs, jobId);
         if (!job) {
-          return { ok: false, error: "That campaign is not on the board." };
+          return {
+            ok: false,
+            error: "I could not tell which campaign. Name the title from the list — do not ask the diver for an id.",
+            campaigns: openJobs.map((item) => ({ id: item.id, title: item.title })),
+          };
         }
         const draft = applicationDraft(job, livingCvDisplayName(state.profile, input.displayName));
         const match = matchProfileToJob(job, state.profile);
