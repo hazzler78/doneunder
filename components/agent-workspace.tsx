@@ -20,7 +20,9 @@ type ChatResponse = {
     location: string;
     reason: string;
     score: number;
+    applied?: boolean;
   }>;
+  appliedJobIds?: string[];
   profileStatus?: "draft" | "published";
   cvUpdated?: boolean;
   updatedParts?: string[];
@@ -87,6 +89,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [suggestions, setSuggestions] = useState<ChatResponse["suggestions"]>([]);
+  const [appliedJobIds, setAppliedJobIds] = useState<string[]>([]);
   const [profileStatus, setProfileStatus] = useState<"draft" | "published">("draft");
   const [documents, setDocuments] = useState<DocumentEntry[]>([]);
   const [livingCv, setLivingCv] = useState<LivingCvInfo>({ present: false, updatedAt: null });
@@ -150,9 +153,11 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       const data = (await response.json()) as {
         messages?: StoredChatMessage[];
         pendingInbound?: PendingInboundNotice | null;
+        appliedJobIds?: string[];
       };
       if (response.ok) {
         setPendingInbound(data.pendingInbound?.status === "pending" ? data.pendingInbound : null);
+        if (data.appliedJobIds) setAppliedJobIds(data.appliedJobIds);
       }
       if (!response.ok || !data.messages?.length) {
         if (!options?.silent) {
@@ -250,6 +255,9 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       setSuggestions((prev) =>
         data.suggestions && data.suggestions.length > 0 ? data.suggestions : prev,
       );
+      if (data.appliedJobIds?.length) {
+        setAppliedJobIds((prev) => [...new Set([...prev, ...data.appliedJobIds!])]);
+      }
       if (data.profileStatus) setProfileStatus(data.profileStatus);
       if (data.cvUpdated) {
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
@@ -588,7 +596,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                     {pendingInbound.subject ? ` — ${pendingInbound.subject}` : ""}.
                     {pendingInbound.intent === "certificates"
                       ? " They asked for your certificates. Reply yes and I will send them."
-                      : " Reply here if you want me to follow up."}
+                      : " They wrote back — likely interest. Ask Hermes what they said."}
                   </p>
                 </div>
               ) : null}
@@ -650,7 +658,9 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                   <p className="text-xs font-semibold tracking-wide text-primary uppercase">
                     Job matches
                   </p>
-                  {suggestions.map((item) => (
+                  {suggestions.map((item) => {
+                    const applied = Boolean(item.applied) || appliedJobIds.includes(item.id);
+                    return (
                     <div
                       key={item.id}
                       className="rounded-lg border border-border/50 bg-[#050f18] px-3 py-2.5"
@@ -661,7 +671,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                           <p className="text-[11px] text-muted-foreground">{item.location}</p>
                         </div>
                         <span className="shrink-0 text-xs font-semibold text-success">
-                          {item.score}%
+                          {applied ? "Applied" : `${item.score}%`}
                         </span>
                       </div>
                       <p className="mt-1.5 text-xs text-muted-foreground">{item.reason}</p>
@@ -680,18 +690,19 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                         </Button>
                         <Button
                           size="sm"
-                          disabled={sending || uploading}
+                          disabled={sending || uploading || applied}
                           onClick={() =>
                             void sendMessage(applyPromptForJob(item), {
                               display: `Apply to ${item.title}`,
                             })
                           }
                         >
-                          Apply
+                          {applied ? "Applied" : "Apply"}
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
 

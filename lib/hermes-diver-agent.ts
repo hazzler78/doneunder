@@ -25,6 +25,7 @@ import {
   applyBlockReason,
   formatMatchReason,
   isJobOpen,
+  loadAppliedJobIds,
   loadOpenJobs,
   resolveJobRef,
   scoreDiverAgainstJob,
@@ -45,6 +46,7 @@ export type JobSuggestion = {
   location: string;
   reason: string;
   score: number;
+  applied?: boolean;
 };
 
 export type HermesChatMessage = {
@@ -70,6 +72,7 @@ export type HermesDiverTurnResult = {
   cvUpdated: boolean;
   updatedParts: string[];
   pendingInboundStatus?: PendingInboundStatus;
+  appliedJobIds?: string[];
 };
 
 function truncateText(value: string | null | undefined, max = 280) {
@@ -93,7 +96,11 @@ function matchProfileToJob(job: PublicJob, profile: DiverProfileFull) {
   });
 }
 
-function scoreJobsForDiver(jobs: PublicJob[], profile: DiverProfileFull): JobSuggestion[] {
+function scoreJobsForDiver(
+  jobs: PublicJob[],
+  profile: DiverProfileFull,
+  appliedJobIds: Set<string> = new Set(),
+): JobSuggestion[] {
   return jobs
     .map((job) => {
       const match = matchProfileToJob(job, profile);
@@ -103,6 +110,7 @@ function scoreJobsForDiver(jobs: PublicJob[], profile: DiverProfileFull): JobSug
         location: job.location,
         reason: formatMatchReason(match),
         score: match.score,
+        applied: appliedJobIds.has(job.id),
       };
     })
     .sort((a, b) => b.score - a.score)
@@ -257,7 +265,7 @@ Other tools:
 - apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
 - For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
-- If pending_inbound.status is pending, an employer emailed the diver. Summarize it if they ask what is new.
+- If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
 - If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos. Do not say "not provided" if a stored scan has a date. If unreadable is true, ask the diver to type the date.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
@@ -530,6 +538,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   } catch (error) {
     console.error("Failed to restore CV rows from polished JSON:", error);
   }
+  const appliedJobIds = await loadAppliedJobIds(input.supabase, input.diverId);
   const suggestions: JobSuggestion[] = [];
 
   if (isInboundFollowUpDecline(input.message, input.pendingInbound ?? null)) {
@@ -744,7 +753,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       inputSchema: z.object({}),
       execute: async () => {
         const openJobs = await loadOpenJobs(input.supabase);
-        state.suggestions = scoreJobsForDiver(openJobs, state.profile);
+        state.suggestions = scoreJobsForDiver(openJobs, state.profile, appliedJobIds);
         return {
           count: state.suggestions.length,
           suggestions: state.suggestions,
@@ -775,6 +784,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             location: job.location,
             reason: formatMatchReason(match),
             score: match.score,
+            applied: appliedJobIds.has(job.id),
           },
         ];
         return {
@@ -876,6 +886,10 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         if (!result.ok) {
           return { ok: false, error: result.error, draft };
         }
+        appliedJobIds.add(job.id);
+        state.suggestions = state.suggestions.map((item) =>
+          item.id === job.id ? { ...item, applied: true } : item,
+        );
         return {
           ok: true,
           to: draft.to,
@@ -883,6 +897,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           attached: result.attached,
           jobId: job.id,
           title: job.title,
+          applied: true,
         };
       },
     }),
@@ -1000,5 +1015,6 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     cvUpdated: state.cvUpdated,
     updatedParts: state.updatedParts,
     pendingInboundStatus: state.pendingInboundStatus,
+    appliedJobIds: [...appliedJobIds],
   };
 }
