@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
+import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -218,10 +219,10 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
     }
   }
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, options?: { display?: string }) {
     if (!text.trim()) return;
     setSending(true);
-    const userMsg: Message = { id: crypto.randomUUID(), from: "user", text };
+    const userMsg: Message = { id: crypto.randomUUID(), from: "user", text: options?.display ?? text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
 
@@ -662,6 +663,31 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                         </span>
                       </div>
                       <p className="mt-1.5 text-xs text-muted-foreground">{item.reason}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={sending || uploading}
+                          onClick={() =>
+                            void sendMessage(listedJobMatchPrompt(item), {
+                              display: `Match ${item.title}`,
+                            })
+                          }
+                        >
+                          Match
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={sending || uploading}
+                          onClick={() =>
+                            void sendMessage(applyPromptForJob(item), {
+                              display: `Apply to ${item.title}`,
+                            })
+                          }
+                        >
+                          Apply
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

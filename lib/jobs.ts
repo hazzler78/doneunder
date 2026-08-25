@@ -56,6 +56,23 @@ export function matchPromptForJob(job: PublicJob) {
     .join("\n");
 }
 
+export function listedJobMatchPrompt(job: Pick<PublicJob, "id" | "title">) {
+  return [
+    `Match me to this campaign (job id ${job.id}).`,
+    `Title: ${job.title}`,
+    `You MUST call match_job with job_id="${job.id}". Tell me the fit and whether I can apply.`,
+  ].join("\n");
+}
+
+export function applyPromptForJob(job: Pick<PublicJob, "id" | "title">) {
+  return [
+    `Apply me to this campaign (job id ${job.id}).`,
+    `Title: ${job.title}`,
+    `I confirm this application. You MUST call apply_job with job_id="${job.id}" and confirmed=true.`,
+    `If required tickets are expired or missing, do not send — tell me what is blocking. Do not invent a company email.`,
+  ].join("\n");
+}
+
 export type DiverTicket = {
   name: string;
   expiryDate?: string | null;
