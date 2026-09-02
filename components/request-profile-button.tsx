@@ -34,7 +34,7 @@ export function RequestProfileButton({ username }: Props) {
       <Button size="lg" onClick={onRequest} disabled={loading} className="w-full sm:w-auto">
         {loading ? "Sending request..." : "Request full profile and contact"}
       </Button>
-      {message ? <p className="text-xs text-cyan-200">{message}</p> : null}
+      {message ? <p className="text-xs text-heading-muted">{message}</p> : null}
     </div>
   );
 }

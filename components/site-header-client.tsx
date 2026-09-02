@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { logoutAction } from "@/app/auth/actions";
 
 const links = [
@@ -28,7 +29,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
   const hasMail = Boolean(pendingMail);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/50 bg-[#03070d]/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border/50 bg-header backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between section-pad py-3">
         <Link
           href="/"
@@ -43,7 +44,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
             className="h-9 w-9 rounded-full object-cover"
             priority
           />
-          <span className="font-display text-lg font-semibold tracking-tight text-cyan-100">
+          <span className="font-display text-lg font-semibold tracking-tight text-heading-muted">
             doneunder.ai
           </span>
         </Link>
@@ -53,7 +54,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-cyan-50"
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-heading"
             >
               {link.label}
             </Link>
@@ -61,6 +62,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           {isLoggedIn ? (
             <>
               <Link href={onWorkspace ? "/" : dashboardHref} className="hidden sm:block">
@@ -94,7 +96,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
 
           <button
             type="button"
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 text-cyan-100 md:hidden"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/70 text-heading-muted md:hidden"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
@@ -106,13 +108,13 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
       </div>
 
       {open ? (
-        <div className="border-t border-border/50 bg-[#050b14] md:hidden">
+        <div className="border-t border-border/50 bg-muted md:hidden">
           <nav className="mx-auto flex w-full max-w-6xl flex-col gap-1 section-pad py-3">
             {links.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-md px-3 py-3 text-sm text-cyan-50/90 hover:bg-muted/50"
+                className="rounded-md px-3 py-3 text-sm text-heading/90 hover:bg-muted/50"
                 onClick={() => setOpen(false)}
               >
                 {link.label}
@@ -122,7 +124,7 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
               {isLoggedIn ? (
                 <>
                   {hasMail ? (
-                    <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-cyan-50">
+                    <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-heading">
                       New mail from {pendingMail?.from}. Open workspace to reply.
                     </p>
                   ) : null}

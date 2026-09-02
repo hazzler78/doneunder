@@ -381,7 +381,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <div>
         <div className="flex items-center justify-between gap-2">
-          <p className="font-display text-lg font-semibold text-cyan-50">Workspace</p>
+          <p className="font-display text-lg font-semibold text-heading">Workspace</p>
           <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-medium capitalize text-primary">
             {role}
           </span>
@@ -389,12 +389,12 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
         <p className="mt-1 text-sm text-muted-foreground">{displayName}</p>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-[#050f18] p-3 text-xs text-muted-foreground">
+      <div className="rounded-xl border border-border/60 bg-card p-3 text-xs text-muted-foreground">
         <p>Account · {userId.slice(0, 8)}…</p>
         {username ? <p className="mt-1">Public · @{username}</p> : null}
         {role === "diver" ? (
           <p className="mt-1">
-            Profile · <span className="capitalize text-cyan-200">{profileStatus}</span>
+            Profile · <span className="capitalize text-heading-muted">{profileStatus}</span>
           </p>
         ) : null}
         {role === "diver" ? (
@@ -414,8 +414,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       </div>
 
       {role === "diver" ? (
-        <div className="space-y-2 rounded-xl border border-border/60 bg-[#050f18] p-3">
-          <p className="text-sm font-medium text-cyan-50">Upload CV & certificates</p>
+        <div className="space-y-2 rounded-xl border border-border/60 bg-card p-3">
+          <p className="text-sm font-medium text-heading">Upload CV & certificates</p>
           <p className="text-[11px] text-muted-foreground">
             {hasStoredCv
               ? "Hermes already keeps your living CV. Add a new or renewed certificate scan — no new CV file needed."
@@ -429,7 +429,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               type="file"
               accept="application/pdf"
               onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
-              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-cyan-50"
+              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-heading"
             />
           </label>
           <label className="block space-y-1">
@@ -439,7 +439,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               accept="application/pdf,image/png,image/jpeg"
               multiple
               onChange={(event) => setCerts(Array.from(event.target.files ?? []))}
-              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-cyan-50"
+              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-heading"
             />
           </label>
           <Button
@@ -451,15 +451,15 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             {uploading ? "Uploading…" : mainCv ? "Process files" : "Store certificates"}
           </Button>
           {certs.length > 0 ? (
-            <p className="text-[11px] text-cyan-200">{certs.length} certificate file{certs.length === 1 ? "" : "s"} selected</p>
+            <p className="text-[11px] text-heading-muted">{certs.length} certificate file{certs.length === 1 ? "" : "s"} selected</p>
           ) : null}
-          {uploadError ? <p className="text-xs text-amber-300">{uploadError}</p> : null}
+          {uploadError ? <p className="text-xs text-amber-800 dark:text-amber-300">{uploadError}</p> : null}
         </div>
       ) : null}
 
-      <div className="space-y-2 rounded-xl border border-border/60 bg-[#050f18] p-3">
+      <div className="space-y-2 rounded-xl border border-border/60 bg-card p-3">
         <div className="flex items-center justify-between">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-cyan-50">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-heading">
             <FileText className="h-3.5 w-3.5" />
             Files
           </p>
@@ -480,7 +480,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
           <ul className="space-y-2">
             {livingCv.present ? (
               <li className="rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-2 text-xs">
-                <p className="font-medium text-cyan-50">Living CV</p>
+                <p className="font-medium text-heading">Living CV</p>
                 <p className="text-muted-foreground">
                   Hermes keeps this updated
                   {livingCv.updatedAt ? ` · ${new Date(livingCv.updatedAt).toLocaleString("en-GB")}` : ""}
@@ -489,7 +489,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             ) : null}
             {documents.map((doc) => (
               <li key={doc.path} className="rounded-lg border border-border/50 px-2.5 py-2 text-xs">
-                <p className="font-medium text-cyan-50">{doc.name}</p>
+                <p className="font-medium text-heading">{doc.name}</p>
                 <p className="text-muted-foreground">
                   Certificate
                   {doc.created_at ? ` · ${new Date(doc.created_at).toLocaleString("en-GB")}` : ""}
@@ -505,7 +505,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   return (
     <div className="relative mx-auto flex h-[calc(100dvh-3.75rem)] w-full max-w-7xl overflow-hidden lg:h-[calc(100dvh-4rem)]">
       {/* Desktop side panel */}
-      <aside className="hidden w-[300px] shrink-0 border-r border-border/50 bg-[#050b12]/80 lg:block xl:w-[320px]">
+      <aside className="hidden w-[300px] shrink-0 border-r border-border/50 bg-muted/80 lg:block xl:w-[320px]">
         {sidePanel}
       </aside>
 
@@ -518,12 +518,12 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             aria-label="Close panel"
             onClick={() => setPanelOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-[min(100%,320px)] border-r border-border/50 bg-[#050b12] shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 w-[min(100%,320px)] border-r border-border/50 bg-muted shadow-2xl">
             <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
-              <p className="text-sm font-medium text-cyan-50">Workspace</p>
+              <p className="text-sm font-medium text-heading">Workspace</p>
               <button
                 type="button"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-cyan-50"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-heading"
                 onClick={() => setPanelOpen(false)}
                 aria-label="Close"
               >
@@ -536,12 +536,12 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       ) : null}
 
       {/* Chat main */}
-      <section className="flex min-w-0 flex-1 flex-col bg-[#03070d]">
+      <section className="flex min-w-0 flex-1 flex-col bg-surface-inset">
         <div className="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-3 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 text-cyan-100 lg:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 text-heading-muted lg:hidden"
               onClick={() => setPanelOpen(true)}
               aria-label="Open workspace panel"
             >
@@ -551,7 +551,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               H
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-cyan-50">Hermes</p>
+              <p className="truncate text-sm font-semibold text-heading">Hermes</p>
               <p className="truncate text-[11px] text-muted-foreground">
                 {role === "diver"
                   ? firstRun
@@ -589,9 +589,9 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
           ) : (
             <>
               {pendingInbound ? (
-                <div className="rounded-xl border border-primary/35 bg-primary/10 px-3.5 py-3 text-sm text-cyan-50">
+                <div className="rounded-xl border border-primary/35 bg-primary/10 px-3.5 py-3 text-sm text-heading">
                   <p className="font-medium">You have a new email</p>
-                  <p className="mt-1 text-cyan-50/90">
+                  <p className="mt-1 text-heading/90">
                     From {pendingInbound.from}
                     {pendingInbound.subject ? ` — ${pendingInbound.subject}` : ""}.
                     {pendingInbound.intent === "certificates"
@@ -603,8 +603,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               {messages.length <= 1 ? (
                 <div className="mb-3 space-y-3">
                   {role === "diver" ? (
-                    <div className="rounded-xl border border-border/60 bg-[#07111c] px-3.5 py-3 text-sm text-muted-foreground">
-                      <p className="font-medium text-cyan-50">
+                    <div className="rounded-xl border border-border/60 bg-card px-3.5 py-3 text-sm text-muted-foreground">
+                      <p className="font-medium text-heading">
                         {firstRun ? "First: get your pack on file" : "Update your CV in this chat"}
                       </p>
                       <p className="mt-1">
@@ -621,7 +621,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                         type="button"
                         disabled={sending || uploading}
                         onClick={() => sendMessage(starter)}
-                        className="rounded-full border border-border/60 bg-[#07111c] px-3 py-1.5 text-left text-xs text-cyan-100/90 transition hover:border-primary/40 hover:bg-muted/40 disabled:opacity-50"
+                        className="rounded-full border border-border/60 bg-card px-3 py-1.5 text-left text-xs text-heading-muted/90 transition hover:border-primary/40 hover:bg-muted/40 disabled:opacity-50"
                       >
                         {starter}
                       </button>
@@ -635,8 +635,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                   key={item.id}
                   className={
                     item.from === "user"
-                      ? "ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-[#0d3a4a] px-3.5 py-2.5 text-sm text-cyan-50 sm:max-w-[75%]"
-                      : "max-w-[92%] rounded-2xl rounded-bl-md border border-border/55 bg-[#07111c] px-3.5 py-2.5 text-sm text-cyan-50/95 sm:max-w-[80%]"
+                      ? "ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-chat-user px-3.5 py-2.5 text-sm text-heading sm:max-w-[75%]"
+                      : "max-w-[92%] rounded-2xl rounded-bl-md border border-border/55 bg-card px-3.5 py-2.5 text-sm text-heading/95 sm:max-w-[80%]"
                   }
                 >
                   {item.from === "agent" ? (
@@ -647,14 +647,14 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               ))}
 
               {sending || uploading ? (
-                <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-border/55 bg-[#07111c] px-3.5 py-2.5 text-sm text-muted-foreground">
+                <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-border/55 bg-card px-3.5 py-2.5 text-sm text-muted-foreground">
                   <p className="mb-1 text-[11px] font-medium text-primary/80">Hermes</p>
                   <p className="animate-pulse-soft">{uploading ? "Processing your CV…" : "Thinking…"}</p>
                 </div>
               ) : null}
 
               {suggestions && suggestions.length > 0 ? (
-                <div className="space-y-2 rounded-xl border border-border/60 bg-[#07111c]/80 p-3">
+                <div className="space-y-2 rounded-xl border border-border/60 bg-card/80 p-3">
                   <p className="text-xs font-semibold tracking-wide text-primary uppercase">
                     Job matches
                   </p>
@@ -663,11 +663,11 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                     return (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-border/50 bg-[#050f18] px-3 py-2.5"
+                      className="rounded-lg border border-border/50 bg-card px-3 py-2.5"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-cyan-50">{item.title}</p>
+                          <p className="truncate text-sm font-medium text-heading">{item.title}</p>
                           <p className="text-[11px] text-muted-foreground">{item.location}</p>
                         </div>
                         <span className="shrink-0 text-xs font-semibold text-success">
@@ -707,7 +707,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               ) : null}
 
               {cvUpdatedParts.length > 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2.5 text-sm text-cyan-50">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2.5 text-sm text-heading">
                   <p>
                     Saved to your CV
                     {cvUpdatedParts[0] === "CV upload"
@@ -726,13 +726,13 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
         </div>
 
         <form
-          className="border-t border-border/50 bg-[#050b12]/90 p-3 sm:p-4"
+          className="border-t border-border/50 bg-muted/90 p-3 sm:p-4"
           onSubmit={(event) => {
             event.preventDefault();
             void sendMessage(input);
           }}
         >
-          <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-[#07111c] p-2 focus-within:border-primary/40">
+          <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-card p-2 focus-within:border-primary/40">
             {role === "diver" ? (
               <>
                 <input
@@ -749,7 +749,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                 />
                 <button
                   type="button"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-cyan-100/80 transition hover:bg-muted/50 hover:text-cyan-50 disabled:opacity-50"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-heading-muted/80 transition hover:bg-muted/50 hover:text-heading disabled:opacity-50"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading || sending}
                   aria-label="Attach CV or certificates"
@@ -769,7 +769,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                 }
               }}
               rows={1}
-              className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-cyan-50 outline-none placeholder:text-muted-foreground"
+              className="max-h-32 min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-heading outline-none placeholder:text-muted-foreground"
               placeholder={
                 role === "diver"
                   ? firstRun

@@ -1,6 +1,39 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
+  --background: #f3f7fa;
+  --foreground: #123041;
+  --card: #ffffff;
+  --card-foreground: #123041;
+  --muted: #e4eef4;
+  --muted-foreground: #4a6578;
+  --primary: #1ec8e0;
+  --primary-foreground: #03161c;
+  --accent: #d7eaf1;
+  --border: #c5d6e0;
+  --success: #178a54;
+  --warning: #a67c12;
+  --heading: #0b2433;
+  --heading-muted: #1a4a5e;
+  --surface-muted: #e8f1f6;
+  --surface-inset: #eef4f8;
+  --header: rgba(243, 247, 250, 0.86);
+  --chat-user: #cdeef3;
+  --glow-1: rgba(14, 159, 176, 0.12);
+  --glow-2: rgba(14, 90, 120, 0.07);
+  --selection: rgba(14, 155, 179, 0.22);
+  --product-frame-bg: linear-gradient(180deg, #ffffff, #f4f8fb);
+  --product-frame-border: rgba(11, 143, 166, 0.2);
+  --product-frame-shadow:
+    0 0 0 1px rgba(15, 40, 55, 0.04) inset,
+    0 24px 60px -36px rgba(15, 40, 55, 0.22);
+}
+
+.dark {
+  color-scheme: dark;
   --background: #03070d;
   --foreground: #e8f4fa;
   --card: #07111c;
@@ -13,6 +46,20 @@
   --border: #143047;
   --success: #3dd68c;
   --warning: #e8b84a;
+  --heading: #e8f4fa;
+  --heading-muted: #b7d3e2;
+  --surface-muted: #061018;
+  --surface-inset: #03070d;
+  --header: rgba(3, 7, 13, 0.8);
+  --chat-user: #0d3a4a;
+  --glow-1: rgba(30, 200, 224, 0.09);
+  --glow-2: rgba(14, 60, 90, 0.35);
+  --selection: rgba(30, 200, 224, 0.28);
+  --product-frame-bg: linear-gradient(180deg, rgba(14, 32, 48, 0.95), rgba(5, 14, 24, 0.98));
+  --product-frame-border: rgba(30, 200, 224, 0.14);
+  --product-frame-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 28px 80px -40px rgba(0, 0, 0, 0.85);
 }
 
 @theme inline {
@@ -28,6 +75,12 @@
   --color-border: var(--border);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-heading: var(--heading);
+  --color-heading-muted: var(--heading-muted);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-inset: var(--surface-inset);
+  --color-header: var(--header);
+  --color-chat-user: var(--chat-user);
   --font-sans: var(--font-sans-body);
   --font-display: var(--font-display);
   --font-mono: var(--font-geist-mono);
@@ -48,16 +101,15 @@ body {
 
 body {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(30, 200, 224, 0.09), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 20%, rgba(14, 60, 90, 0.35), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow-1), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 20%, var(--glow-2), transparent 50%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-sans-body), ui-sans-serif, sans-serif;
 }
 
 ::selection {
-  background: rgba(30, 200, 224, 0.28);
-  color: #fff;
+  background: var(--selection);
 }
 
 @keyframes fade-up {
@@ -115,13 +167,9 @@ body {
 }
 
 .product-frame {
-  background:
-    linear-gradient(180deg, rgba(14, 32, 48, 0.95), rgba(5, 14, 24, 0.98)),
-    var(--card);
-  border: 1px solid rgba(30, 200, 224, 0.14);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 28px 80px -40px rgba(0, 0, 0, 0.85);
+  background: var(--product-frame-bg);
+  border: 1px solid var(--product-frame-border);
+  box-shadow: var(--product-frame-shadow);
 }
 
 .section-pad {
