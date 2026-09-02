@@ -29,7 +29,7 @@ export default async function JobsPage() {
     <div className="mx-auto w-full max-w-6xl section-pad py-12 md:py-16">
       <div className="max-w-2xl">
         <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Jobs</p>
-        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
           Open campaigns. Closed when the window closes.
         </h1>
         <p className="mt-4 text-muted-foreground">
@@ -40,8 +40,8 @@ export default async function JobsPage() {
       </div>
 
       {jobs.length === 0 ? (
-        <div className="mt-12 rounded-2xl border border-border/60 bg-[#060e18]/90 p-6">
-          <p className="text-cyan-50">No open campaigns right now.</p>
+        <div className="mt-12 rounded-2xl border border-border/60 bg-card/90 p-6">
+          <p className="text-heading">No open campaigns right now.</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Build your CV with Hermes so you are ready for the next window. Companies: email{" "}
             <a href={CONTACT_MAILTO} className="text-primary hover:underline">
@@ -59,7 +59,7 @@ export default async function JobsPage() {
             return (
               <article
                 key={job.id}
-                className="flex flex-col rounded-2xl border border-border/60 bg-[#060e18]/90 p-5"
+                className="flex flex-col rounded-2xl border border-border/60 bg-card/90 p-5"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md border border-border/70 px-2 py-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -71,11 +71,11 @@ export default async function JobsPage() {
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-3 font-display text-xl font-semibold tracking-tight text-cyan-50">
+                <h2 className="mt-3 font-display text-xl font-semibold tracking-tight text-heading">
                   {job.title}
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">{job.description}</p>
-                <dl className="mt-4 space-y-1 text-sm text-cyan-100/80">
+                <dl className="mt-4 space-y-1 text-sm text-heading-muted/80">
                   <div>
                     <dt className="sr-only">Location</dt>
                     <dd>{job.location}</dd>
@@ -104,7 +104,7 @@ export default async function JobsPage() {
                     {job.requiredCerts.map((cert) => (
                       <li
                         key={cert}
-                        className="rounded-md border border-border/70 bg-muted/20 px-2 py-0.5 text-[11px] text-cyan-100/80"
+                        className="rounded-md border border-border/70 bg-muted/20 px-2 py-0.5 text-[11px] text-heading-muted/80"
                       >
                         {cert}
                       </li>

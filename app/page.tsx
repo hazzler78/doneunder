@@ -57,7 +57,7 @@ export default async function Home() {
               doneunder.ai
             </p>
           </div>
-          <h1 className="animate-fade-up-delay-1 mt-4 font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-cyan-50 sm:text-5xl md:text-[3.25rem]">
+          <h1 className="animate-fade-up-delay-1 mt-4 font-display text-[2.15rem] font-semibold leading-[1.08] tracking-tight text-heading sm:text-5xl md:text-[3.25rem]">
             Your commercial diving agent. Built for Offshore and Inshore work.
           </h1>
           <p className="animate-fade-up-delay-2 mx-auto mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -79,7 +79,7 @@ export default async function Home() {
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
             Free for divers. Companies:{" "}
-            <a href={CONTACT_MAILTO} className="text-cyan-100/80 hover:text-cyan-50">
+            <a href={CONTACT_MAILTO} className="text-heading-muted/80 hover:text-heading">
               {CONTACT_EMAIL}
             </a>
           </p>
@@ -91,13 +91,13 @@ export default async function Home() {
       </section>
 
       {/* Pipeline */}
-      <section id="pipeline" className="border-t border-border/40 bg-[#040a12]/60">
+      <section id="pipeline" className="border-t border-border/40 bg-surface-muted">
         <div className="mx-auto w-full max-w-6xl section-pad py-16 md:py-24">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
               The pipeline
             </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
               Four stages. One agent. Zero spreadsheets.
             </h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
@@ -118,7 +118,7 @@ export default async function Home() {
                   <p className="font-mono text-xs text-primary/80">
                     {item.id} · {item.key}
                   </p>
-                  <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight text-cyan-50">
+                  <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight text-heading">
                     {item.title}
                   </h3>
                   <p className="mt-3 text-muted-foreground">{item.body}</p>
@@ -137,7 +137,7 @@ export default async function Home() {
             <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
               Live example
             </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
               Matches that speak contractor language.
             </h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
@@ -155,7 +155,7 @@ export default async function Home() {
                 className="object-cover object-center"
                 sizes="(max-width: 768px) 100vw, 1152px"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#03070d] via-[#03070d]/40 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
             </div>
             <div className="grid gap-px bg-border/40 sm:grid-cols-3">
               {[
@@ -163,8 +163,8 @@ export default async function Home() {
                 { label: "Wind inspection team", meta: "North Sea · 88% fit", detail: "PCN NDT" },
                 { label: "Pipeline tie-in", meta: "Baltic · 81% fit", detail: "ADCI + BOSIET" },
               ].map((row) => (
-                <div key={row.label} className="bg-[#060e18] p-5">
-                  <p className="font-medium text-cyan-50">{row.label}</p>
+                <div key={row.label} className="bg-card p-5">
+                  <p className="font-medium text-heading">{row.label}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{row.meta}</p>
                   <p className="mt-3 text-xs text-primary/90">{row.detail}</p>
                 </div>
@@ -175,13 +175,13 @@ export default async function Home() {
       </section>
 
       {/* Agent */}
-      <section id="agent" className="border-t border-border/40 bg-[#040a12]/60">
+      <section id="agent" className="border-t border-border/40 bg-surface-muted">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 section-pad py-16 md:grid-cols-2 md:gap-14 md:py-24">
           <div>
             <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
               Agent experience
             </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
               Talk to Hermes like a dedicated diving recruiter.
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -189,7 +189,7 @@ export default async function Home() {
             campaigns — or just tell Hermes what to change on your CV. The whole thread stays in
             English.
             </p>
-            <ul className="mt-6 space-y-3 text-sm text-cyan-50/90">
+            <ul className="mt-6 space-y-3 text-sm text-heading/90">
               <li className="flex gap-3">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 Thread-scoped to your account — update your CV by talking, not filling forms
@@ -220,7 +220,7 @@ export default async function Home() {
             <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">
               Ambassadors
             </p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
               Profiles contractors can trust at a glance.
             </h2>
             <p className="mt-4 text-base text-muted-foreground sm:text-lg">
@@ -238,11 +238,11 @@ export default async function Home() {
                 <Link
                   key={diver.username}
                   href={`/${diver.username}`}
-                  className="group block rounded-xl border border-border/60 bg-[#060e18]/80 p-5 transition hover:border-primary/35 hover:bg-[#081422]"
+                  className="group block rounded-xl border border-border/60 bg-card/80 p-5 transition hover:border-primary/35 hover:bg-accent"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-display text-lg font-semibold text-cyan-50 group-hover:text-white">
+                      <p className="font-display text-lg font-semibold text-heading group-hover:text-foreground">
                         {diver.fullName}
                       </p>
                       <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{diver.headline}</p>
@@ -274,10 +274,10 @@ export default async function Home() {
       {/* Final CTA */}
       <section className="border-t border-border/40">
         <div className="mx-auto w-full max-w-6xl section-pad py-16 md:py-24">
-          <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-[#06111c] px-6 py-12 text-center sm:px-10 md:py-16">
+          <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card px-6 py-12 text-center sm:px-10 md:py-16">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(30,200,224,0.12),transparent_55%)]" />
             <div className="relative">
-              <h2 className="font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+              <h2 className="font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
                 Get mobilization-ready tonight.
               </h2>
               <p className="mx-auto mt-4 max-w-lg text-muted-foreground">

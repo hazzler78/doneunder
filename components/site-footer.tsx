@@ -22,7 +22,7 @@ export function SiteFooter() {
               height={32}
               className="h-8 w-8 rounded-full object-cover"
             />
-            <span className="font-display text-lg font-semibold tracking-tight text-cyan-100">
+            <span className="font-display text-lg font-semibold tracking-tight text-heading-muted">
               doneunder.ai
             </span>
           </Link>
@@ -31,14 +31,14 @@ export function SiteFooter() {
             Inshore teams.
           </p>
           <p className="mt-3 text-sm">
-            <a href={CONTACT_MAILTO} className="text-cyan-100/90 transition hover:text-cyan-50">
+            <a href={CONTACT_MAILTO} className="text-heading-muted/90 transition hover:text-heading">
               {CONTACT_EMAIL}
             </a>
           </p>
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
           {footerLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="transition hover:text-cyan-100">
+            <Link key={link.href} href={link.href} className="transition hover:text-heading-muted">
               {link.label}
             </Link>
           ))}

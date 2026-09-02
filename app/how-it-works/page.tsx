@@ -34,7 +34,7 @@ export default function HowItWorksPage() {
     <div className="mx-auto w-full max-w-6xl section-pad py-12 md:py-16">
       <div className="max-w-2xl">
         <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">How it works</p>
-        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
           From CV to campaign — one agent thread.
         </h1>
         <p className="mt-4 text-muted-foreground">
@@ -55,7 +55,7 @@ export default function HowItWorksPage() {
               <p className="font-mono text-xs text-primary/80">
                 {step.id} · {step.key}
               </p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-cyan-50">{step.title}</h2>
+              <h2 className="mt-2 font-display text-2xl font-semibold text-heading">{step.title}</h2>
               <p className="mt-3 text-muted-foreground">{step.body}</p>
             </div>
             <PipelineVisual step={step.key} />

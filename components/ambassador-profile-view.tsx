@@ -68,7 +68,7 @@ export function AmbassadorProfileView({
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">{displayName}</h1>
-              <p className="mt-2 text-cyan-200">{headline}</p>
+              <p className="mt-2 text-heading-muted">{headline}</p>
             </div>
             <Badge className={availabilityStatus === "available" ? "bg-emerald-900/60" : ""}>
               {availabilityStatus === "available" ? "Available Now" : "Deployed"}
@@ -80,7 +80,7 @@ export function AmbassadorProfileView({
           <p className="text-muted-foreground">
             Sat hours: {satHoursLabel} • Dive hours: {diveHoursLabel} • {location || "Location not provided"}
           </p>
-          <p className="text-cyan-200">{mobilizationNotice || "Mobilization notice not provided"}</p>
+          <p className="text-heading-muted">{mobilizationNotice || "Mobilization notice not provided"}</p>
           {highlights.length > 0 ? (
             <ul className="list-disc space-y-1 pl-5">
               {highlights.map((item) => (

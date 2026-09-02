@@ -174,14 +174,14 @@ export default async function DiverCvPage({
       {polishedMarkdown && (!hasStructuredCv || polishedMarkdown.length > 80) ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">{hasStructuredCv ? "AI Polished CV Draft" : "CV draft"}</h2>
-          <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
+          <pre className="whitespace-pre-wrap rounded-lg border bg-muted p-4 font-sans text-sm">
             {polishedMarkdown}
           </pre>
         </section>
       ) : null}
 
       <section>
-        <p className="text-xs text-amber-300">AI-generated - always verify details before sending to clients.</p>
+        <p className="text-xs text-amber-800 dark:text-amber-300">AI-generated - always verify details before sending to clients.</p>
       </section>
     </main>
   );

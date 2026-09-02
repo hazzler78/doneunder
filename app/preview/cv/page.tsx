@@ -149,14 +149,14 @@ export default async function CvPreviewPage() {
       {p.polished_cv_markdown ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">AI Polished CV Draft</h2>
-          <pre className="whitespace-pre-wrap rounded-lg border bg-[#071725] p-4 font-sans text-sm">
+          <pre className="whitespace-pre-wrap rounded-lg border bg-muted p-4 font-sans text-sm">
             {p.polished_cv_markdown}
           </pre>
         </section>
       ) : null}
 
       <section>
-        <p className="text-xs text-amber-300">AI-generated — always verify details before sending to clients.</p>
+        <p className="text-xs text-amber-800 dark:text-amber-300">AI-generated — always verify details before sending to clients.</p>
       </section>
     </main>
   );

@@ -74,7 +74,7 @@ function isMissingValue(value?: string | null) {
 function fieldClass(isMissing: boolean, extra?: string) {
   return cn(
     "w-full rounded-md border bg-transparent p-2",
-    isMissing && "border-amber-500/70 bg-amber-500/10 text-amber-100",
+    isMissing && "border-amber-500/70 bg-amber-500/10 text-amber-950 dark:text-amber-100",
     extra,
   );
 }
@@ -675,7 +675,7 @@ export function DiverProfileEditor({
               <Button type="button" size="sm" onClick={() => mainCvInputRef.current?.click()}>
                 Start here
               </Button>
-              <span className="text-xs text-cyan-200">{mainCv?.name ?? "No CV selected"}</span>
+              <span className="text-xs text-heading-muted">{mainCv?.name ?? "No CV selected"}</span>
             </div>
           </div>
           <div
@@ -698,7 +698,7 @@ export function DiverProfileEditor({
               Continue here
             </Button>
             {certFiles.length > 0 ? (
-              <div className="space-y-1 text-xs text-cyan-200">
+              <div className="space-y-1 text-xs text-heading-muted">
                 {certFiles.map((file, index) => (
                   <p key={`${file.name}-${index}`}>{file.name}</p>
                 ))}
@@ -722,7 +722,7 @@ export function DiverProfileEditor({
           <div className="space-y-1">
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-cyan-400 transition-all duration-500"
+                className="h-full bg-primary transition-all duration-500"
                 style={{ width: `${processingProgress}%` }}
               />
             </div>
@@ -840,12 +840,12 @@ export function DiverProfileEditor({
 
       <section className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="CV Preview" />
-        <p className="text-xs text-amber-300">
+        <p className="text-xs text-amber-800 dark:text-amber-300">
           Presentation-ready CV generated from your profile data. Minimal editing needed before saving.
         </p>
-        <div className="rounded-md border border-cyan-900/60 bg-cyan-950/20 p-3">
+        <div className="rounded-md border border-primary/20 bg-primary/10 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-cyan-100">CV quality score: {cvChecklist.score}%</p>
+            <p className="text-sm font-medium text-heading-muted">CV quality score: {cvChecklist.score}%</p>
             <Button size="sm" variant="secondary" onClick={applyQuickFixes}>
               Auto-fill missing basics
             </Button>
@@ -862,7 +862,7 @@ export function DiverProfileEditor({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="border-amber-500/50 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20"
+                    className="border-amber-500/50 bg-amber-500/10 text-amber-950 hover:bg-amber-500/20 dark:text-amber-100"
                     onClick={() => jumpToSection(missingSectionTargets[item] ?? "core-profile")}
                   >
                     Quick edit: {item}
@@ -873,28 +873,28 @@ export function DiverProfileEditor({
           ) : null}
           <ul className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
             {cvChecklist.checks.map((item) => (
-              <li key={item.label} className={item.ok ? "text-emerald-300" : "text-amber-300"}>
+              <li key={item.label} className={item.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}>
                 {item.ok ? "✓" : "•"} {item.label}
               </li>
             ))}
           </ul>
         </div>
-        <div className="max-h-96 overflow-y-auto rounded-md border bg-[#071725] p-4 text-sm">
+        <div className="max-h-96 overflow-y-auto rounded-md border bg-muted p-4 text-sm">
           {presentationCvMarkdown.trim() ? (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                h1: ({ children }) => <h1 className="mb-3 mt-5 text-xl font-semibold text-cyan-100">{children}</h1>,
-                h2: ({ children }) => <h2 className="mb-2 mt-4 text-lg font-semibold text-cyan-100">{children}</h2>,
-                h3: ({ children }) => <h3 className="mb-2 mt-3 text-base font-semibold text-cyan-100">{children}</h3>,
-                p: ({ children }) => <p className="mb-3 leading-relaxed text-slate-100">{children}</p>,
-                ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 text-slate-100">{children}</ul>,
-                ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 text-slate-100">{children}</ol>,
+                h1: ({ children }) => <h1 className="mb-3 mt-5 text-xl font-semibold text-heading-muted">{children}</h1>,
+                h2: ({ children }) => <h2 className="mb-2 mt-4 text-lg font-semibold text-heading-muted">{children}</h2>,
+                h3: ({ children }) => <h3 className="mb-2 mt-3 text-base font-semibold text-heading-muted">{children}</h3>,
+                p: ({ children }) => <p className="mb-3 leading-relaxed text-foreground">{children}</p>,
+                ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5 text-foreground">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5 text-foreground">{children}</ol>,
                 li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-                strong: ({ children }) => <strong className="font-semibold text-cyan-100">{children}</strong>,
-                em: ({ children }) => <em className="italic text-slate-200">{children}</em>,
+                strong: ({ children }) => <strong className="font-semibold text-heading-muted">{children}</strong>,
+                em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
                 code: ({ children }) => (
-                  <code className="rounded bg-slate-900/80 px-1 py-0.5 font-mono text-xs text-cyan-200">
+                  <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-heading-muted">
                     {children}
                   </code>
                 ),
@@ -922,7 +922,7 @@ export function DiverProfileEditor({
 
       <section id="professional-experience" className="space-y-3 rounded-lg border p-4">
         <SectionTitle title="Ambassador Page Preview" />
-        <p className="text-xs text-amber-300">This public view may contain AI-generated text. Verify before publishing.</p>
+        <p className="text-xs text-amber-800 dark:text-amber-300">This public view may contain AI-generated text. Verify before publishing.</p>
         <label className="space-y-1">
           <span className="text-xs text-muted-foreground">Public headline</span>
           <input
@@ -1133,7 +1133,7 @@ export function DiverProfileEditor({
           ))}
         </div>
         {actionRequiredCerts.length > 0 ? (
-          <p className="text-xs text-amber-300">
+          <p className="text-xs text-amber-800 dark:text-amber-300">
             Action required: {actionRequiredCerts.map((cert) => cert.name || "Unnamed certification").join(", ")} missing
             expiry date.
           </p>
@@ -1227,13 +1227,13 @@ export function DiverProfileEditor({
           {profileStatus === "published" ? "Published" : publishing ? "Publishing..." : "Publish profile"}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Status: <span className="text-cyan-200">{profileStatus}</span>
+          Status: <span className="text-heading-muted">{profileStatus}</span>
           {publishedAt ? ` • ${new Date(publishedAt).toLocaleString("en-GB")}` : ""}
         </p>
         <p className="w-full text-xs text-muted-foreground">
           Publish saves your latest edits first. You need a Headline (or Ambassador headline) in the editor.
         </p>
-        {message ? <p className="w-full text-sm text-cyan-200">{message}</p> : null}
+        {message ? <p className="w-full text-sm text-heading-muted">{message}</p> : null}
       </div>
     </div>
   );

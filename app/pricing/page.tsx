@@ -7,7 +7,7 @@ export default function PricingPage() {
     <div className="mx-auto w-full max-w-6xl section-pad py-12 md:py-16">
       <div className="mx-auto max-w-2xl text-center">
         <p className="text-xs font-semibold tracking-[0.16em] text-primary uppercase">Companies</p>
-        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-cyan-50 sm:text-4xl">
+        <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
           Hiring teams — talk to us.
         </h1>
         <p className="mt-4 text-muted-foreground">

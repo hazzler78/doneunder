@@ -3,6 +3,7 @@ import { Geist_Mono, Outfit, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { ConditionalSiteFooter } from "@/components/conditional-site-footer";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/site";
 
@@ -68,12 +69,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${outfit.variable} ${sourceSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
-        <ConditionalSiteFooter />
-        <Analytics />
+        <ThemeProvider>
+          <SiteHeader />
+          <main className="flex-1">{children}</main>
+          <ConditionalSiteFooter />
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   );
