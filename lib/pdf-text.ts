@@ -31,9 +31,8 @@ async function rewritePdf(bytes: Buffer) {
 
 async function extractWithUnpdf(bytes: Buffer) {
   const pdf = await getDocumentProxy(new Uint8Array(bytes));
-  const result = await extractText(pdf, { mergePages: true });
-  const raw = typeof result.text === "string" ? result.text : result.text.join("\n");
-  return cleanText(joinSingleCharacterLines(raw || ""));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return cleanText(joinSingleCharacterLines(text || ""));
 }
 
 async function extractWithPdfParse(bytes: Buffer) {
