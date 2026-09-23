@@ -3,7 +3,7 @@ import { generateObject } from "ai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createWorker } from "tesseract.js";
-import { extractPdfText as readPdfBytes } from "@/lib/pdf-text";
+import { extractPdfTextOrOcr } from "@/lib/pdf-ocr";
 import { z } from "zod";
 import { AI_DISCLAIMER, ENGLISH_ONLY_INSTRUCTION, aiModel } from "@/lib/ai";
 import { appendAgentTurn } from "@/lib/agent-messages";
@@ -20,7 +20,7 @@ import {
 import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const BUCKET_NAME = "diver-documents";
 const MAX_MAIN_CV_MB = 12;
@@ -68,7 +68,8 @@ function splitTextIntoChunks(input: string, size = CHUNK_SIZE, overlap = CHUNK_O
 }
 
 async function extractPdfText(buffer: Buffer) {
-  return readPdfBytes(buffer);
+  const result = await extractPdfTextOrOcr(buffer);
+  return result.text;
 }
 
 async function extractImageText(buffer: Buffer) {
@@ -259,10 +260,11 @@ export async function POST(req: Request) {
       });
     }
 
-    const cvText = truncateText(await extractPdfText(cvBuffer));
+    const cvRead = await extractPdfTextOrOcr(cvBuffer);
+    const cvText = truncateText(cvRead.text);
     if (!cvText) {
       extractionWarnings.push(
-        "Could not read text from the CV PDF. The file is stored — paste the CV text in this chat and Hermes will build it.",
+        "Could not read text from the CV PDF (no text layer and page scan OCR returned nothing). The file is stored — paste the CV text in this chat and Hermes will build it.",
       );
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,

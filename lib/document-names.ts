@@ -1,6 +1,7 @@
 const CERT_NAME_HINT =
   /\b(cert|certificate|ticket|bosiet|medical|imca|huet|ebs|oguk|oeuk|hse|ndt|alst|first.?aid)\b/i;
-const CV_NAME_HINT = /\b(cv|curriculum|resume|r[eé]sum[eé])\b/;
+const CV_NAME_HINT =
+  /\b(cv|curriculum|resume|r[eé]sum[eé]|seaman|seamansbook|cdc|logbook)\b/i;
 
 function spacedFilename(name: string) {
   return name.toLowerCase().replace(/[_-]+/g, " ");
