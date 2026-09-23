@@ -38,6 +38,7 @@
     "stripe": "^22.1.1",
     "tailwind-merge": "^3.5.0",
     "tesseract.js": "^7.0.0",
+    "unpdf": "^1.8.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

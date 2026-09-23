@@ -70,12 +70,25 @@ async function readPdfText(bytes: Buffer): Promise<CertificateRead> {
     const dates = extractCertificateDates(text);
     const excerpt = text.replace(/\s+/g, " ").trim();
     const hasDates = Boolean(dates.expiry_date || dates.issue_date);
-    return normalizeRead({
-      ...dates,
-      excerpt,
-      source: hasDates ? "pdf-text" : "none",
-      unreadable: !hasDates && excerpt.length < 40,
-    });
+    if (hasDates || excerpt.length >= 40) {
+      return normalizeRead({
+        ...dates,
+        excerpt,
+        source: "pdf-text",
+        unreadable: false,
+      });
+    }
+  } catch {
+    // Fall through to a rendered first-page vision read.
+  }
+
+  try {
+    const { renderPdfPagesAsImages } = await import("@/lib/pdf-ocr");
+    const pages = await renderPdfPagesAsImages(bytes, { maxPages: 1, scale: 1.6 });
+    const first = pages[0];
+    if (!first) return emptyRead();
+    const mediaType = first.length >= 2 && first[0] === 0xff && first[1] === 0xd8 ? "image/jpeg" : "image/png";
+    return readImageWithVision(first, mediaType);
   } catch {
     return emptyRead();
   }
@@ -127,9 +140,7 @@ export async function readCertificateBytes(
 ): Promise<CertificateRead> {
   const kind = classifyCertificateFile(filename, contentType);
   if (kind === "pdf") {
-    const fromText = await readPdfText(bytes);
-    if (fromText.expiry_date || fromText.issue_date || !fromText.unreadable) return fromText;
-    return fromText;
+    return readPdfText(bytes);
   }
   if (kind === "jpg" || kind === "png") {
     return readImageWithVision(bytes, kind === "png" ? "image/png" : "image/jpeg");

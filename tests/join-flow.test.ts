@@ -238,6 +238,14 @@ describe("upload classification", () => {
     const cv = pickMainCvFile(files);
     assert.equal(cv?.name, "CV_Alex_Holm_TEST.pdf");
   });
+
+  it("treats a seaman's book PDF as the main CV when no named CV is present", () => {
+    const cv = pickMainCvFile([
+      { name: "seamansbook.pdf" },
+      { name: "OPITO_BOSIET_TEST.pdf" },
+    ]);
+    assert.equal(cv?.name, "seamansbook.pdf");
+  });
 });
 
 describe("preferred usernames", () => {
