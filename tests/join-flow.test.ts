@@ -255,8 +255,12 @@ describe("preferred usernames", () => {
     assert.equal(isIndexableAmbassadorUsername("qa-test"), false);
   });
 
-  it("uses the Gmail local-part when metadata has no handle", () => {
-    assert.equal(preferredUsernameFromIdentity({ email: "jane.diver@gmail.com" }), "jane.diver");
+  it("slugifies the Gmail local-part when metadata has no handle", () => {
+    assert.equal(preferredUsernameFromIdentity({ email: "jane.diver@gmail.com" }), "jane-diver");
+    assert.equal(
+      preferredUsernameFromIdentity({ email: "sergioortuno36@gmail.com" }),
+      "sergioortuno36",
+    );
   });
 
   it("claims the Gmail handle for a new fallback username", async () => {
@@ -273,14 +277,14 @@ describe("preferred usernames", () => {
       email: "jane.diver@gmail.com",
       currentUsername: "diver-user-1",
     });
-    assert.equal(claimed, "jane.diver");
-    assert.equal(db.users[0]?.username, "jane.diver");
+    assert.equal(claimed, "jane-diver");
+    assert.equal(db.users[0]?.username, "jane-diver");
   });
 
   it("does not steal a real diver username", async () => {
     const db = fakeUsersClient([
       { id: "user-1", role: "diver", email: "jane.diver@gmail.com", username: "diver-user-1" },
-      { id: "user-2", role: "diver", email: "other@doneunder.ai", username: "jane.diver" },
+      { id: "user-2", role: "diver", email: "other@doneunder.ai", username: "jane-diver" },
     ]);
     const claimed = await claimPreferredUsername(db as never, {
       userId: "user-1",
