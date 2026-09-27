@@ -72,6 +72,8 @@ const diverFirstRunPrompts = ["Match me to open campaigns"];
 
 const diverStarterPrompts = [
   "How does my CV look?",
+  "What should I improve before publishing?",
+  "Publish my profile",
   "Match me to open campaigns",
   "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
   "Set my sat hours to 2100 and say I'm available on short notice",
@@ -96,6 +98,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   const [docLoading, setDocLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [suggestPublish, setSuggestPublish] = useState(false);
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certs, setCerts] = useState<File[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -295,10 +299,13 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
     const certFiles = classified.certFiles;
     if (!cvFile && certFiles.length === 0) {
       setUploadError("Select a CV PDF and/or certificate files (PDF, JPG, PNG).");
+      setPanelOpen(true);
       return;
     }
     setUploading(true);
     setUploadError(null);
+    setUploadNotice(null);
+    setSuggestPublish(false);
     if (dropped.length > 0 || selected.length > 0) {
       const names = selected.map((file) => file.name).join(", ");
       setMessages((prev) => [
@@ -322,13 +329,38 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
           method: "POST",
           body: form,
         });
-        const data = (await response.json()) as { error?: string; detail?: string };
-        if (!response.ok) {
+        const data = (await response.json()) as {
+          ok?: boolean;
+          error?: string;
+          detail?: string;
+          warnings?: string[];
+          unreadablePdf?: boolean;
+          suggestPublish?: boolean;
+          profileStatus?: "draft" | "published";
+        };
+        if (data.unreadablePdf || data.ok === false) {
+          cvFailed = true;
+          const message =
+            data.error ??
+            data.warnings?.[0] ??
+            "Could not read text from that PDF. File saved — paste CV text in chat or upload a text-based PDF.";
+          setUploadError(message);
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+        } else if (!response.ok) {
           cvFailed = true;
           const message = `${data.error ?? "Failed to process CV upload."}${data.detail ? ` ${data.detail}` : ""}`;
           setUploadError(message);
           if (fileOverride) {
             setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+          }
+        } else {
+          if (data.profileStatus) setProfileStatus(data.profileStatus);
+          if (data.suggestPublish || data.profileStatus === "draft") {
+            setSuggestPublish(true);
+            setUploadNotice("CV processed. Preview your page, then ask Hermes to publish when ready.");
+          }
+          if (data.warnings?.length) {
+            setUploadNotice((prev) => [prev, ...data.warnings!].filter(Boolean).join(" "));
           }
         }
       }
@@ -416,10 +448,20 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
       {role === "diver" ? (
         <div className="space-y-2 rounded-xl border border-border/60 bg-card p-3">
           <p className="text-sm font-medium text-heading">Upload CV & certificates</p>
-          <p className="text-[11px] text-muted-foreground">
-            {hasStoredCv
-              ? "Hermes already keeps your living CV. Add a new or renewed certificate scan — no new CV file needed."
-              : "Drop the CV PDF and ticket scans together (paperclip below). Hermes will pick the CV out of the pile."}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            {hasStoredCv ? (
+              <>
+                Hermes already keeps your living CV. Add <strong className="text-heading">certificate</strong>{" "}
+                scans (IMCA, BOSIET, medical) — PDF/JPG/PNG. Only replace the main CV if you have a brand-new
+                PDF.
+              </>
+            ) : (
+              <>
+                <strong className="text-heading">Main CV:</strong> one full diving CV PDF.{" "}
+                <strong className="text-heading">Certificates:</strong> separate ticket photos — not as the
+                main CV. On phone use the paperclip under chat, or Files → PDF.
+              </>
+            )}
           </p>
           <label className="block space-y-1">
             <span className="text-[11px] text-muted-foreground">
@@ -427,19 +469,31 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             </span>
             <input
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,.pdf"
               onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
-              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-heading"
+              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1.5 file:text-xs file:text-heading"
             />
+            {mainCv ? <p className="truncate text-[11px] text-primary">Selected: {mainCv.name}</p> : null}
           </label>
           <label className="block space-y-1">
-            <span className="text-[11px] text-muted-foreground">Certificates</span>
+            <span className="text-[11px] text-muted-foreground">Certificates (PDF/JPG/PNG)</span>
             <input
               type="file"
-              accept="application/pdf,image/png,image/jpeg"
+              accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png"
               multiple
-              onChange={(event) => setCerts(Array.from(event.target.files ?? []))}
-              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs file:text-heading"
+              onChange={(event) => {
+                const next = Array.from(event.target.files ?? []);
+                setCerts((prev) => {
+                  const merged = [...prev];
+                  for (const file of next) {
+                    if (!merged.some((existing) => existing.name === file.name && existing.size === file.size)) {
+                      merged.push(file);
+                    }
+                  }
+                  return merged;
+                });
+              }}
+              className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1.5 file:text-xs file:text-heading"
             />
           </label>
           <Button
@@ -451,9 +505,47 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             {uploading ? "Uploading…" : mainCv ? "Process files" : "Store certificates"}
           </Button>
           {certs.length > 0 ? (
-            <p className="text-[11px] text-heading-muted">{certs.length} certificate file{certs.length === 1 ? "" : "s"} selected</p>
+            <ul className="space-y-0.5 text-[11px] text-heading-muted">
+              {certs.map((file, index) => (
+                <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2">
+                  <span className="truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 underline"
+                    onClick={() => setCerts((prev) => prev.filter((_, i) => i !== index))}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
           {uploadError ? <p className="text-xs text-amber-800 dark:text-amber-300">{uploadError}</p> : null}
+          {uploadNotice ? <p className="text-xs text-success">{uploadNotice}</p> : null}
+          {suggestPublish && profileStatus === "draft" ? (
+            <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-2">
+              <p className="text-[11px] text-heading">
+                Profile is still a draft. Preview it, then publish when it looks right.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/preview" target="_blank">
+                  <Button size="sm" variant="outline">
+                    Preview page
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    void sendMessage("Publish my profile");
+                    setSuggestPublish(false);
+                  }}
+                  disabled={sending || uploading}
+                >
+                  Ask Hermes to publish
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -609,9 +701,14 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
                       </p>
                       <p className="mt-1">
                         {firstRun
-                          ? "Use the paperclip under the chat, or Upload in the side panel. CV PDF plus ticket photos (IMCA, BOSIET, medical). I'll extract jobs and expiry dates."
+                          ? "Use the paperclip under the chat, or open Upload in the side panel. Main CV PDF plus ticket photos (IMCA, BOSIET, medical) — don't upload a seaman's book as your only CV."
                           : "Type a change, paste CV text, or attach a ticket scan. Everything is saved in English."}
                       </p>
+                      {firstRun ? (
+                        <Button size="sm" className="mt-2 lg:hidden" onClick={() => setPanelOpen(true)}>
+                          Open upload panel
+                        </Button>
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="flex flex-wrap gap-2">

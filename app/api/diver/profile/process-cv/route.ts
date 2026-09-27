@@ -263,18 +263,21 @@ export async function POST(req: Request) {
     const cvRead = await extractPdfTextOrOcr(cvBuffer);
     const cvText = truncateText(cvRead.text);
     if (!cvText) {
-      extractionWarnings.push(
-        "Could not read text from the CV PDF (no text layer and page scan OCR returned nothing). The file is stored — paste the CV text in this chat and Hermes will build it.",
-      );
+      const unreadableReply =
+        "I saved your PDF, but I could not read usable text from it (common with scanned seaman's books or photo-PDFs). " +
+        "Please either: (1) upload a text-based CV PDF, (2) paste your CV text in this chat, or (3) attach ticket photos as JPG/PNG under certificates. " +
+        "Then upload again or say “build my CV from this text”.";
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,
         userContent: `Please process this CV PDF: ${mainCvFile.name}`,
-        assistantContent: extractionWarnings.join(" "),
+        assistantContent: unreadableReply,
         metadata: { source: "process-cv", importBatchId, unreadablePdf: true },
       });
       return NextResponse.json({
-        ok: true,
-        warnings: extractionWarnings,
+        ok: false,
+        unreadablePdf: true,
+        error: unreadableReply,
+        warnings: [unreadableReply, ...extractionWarnings],
         importBatchId,
         uploaded: { cv: cvPath, certificates: certUploadResults.map((item) => item.path) },
       });
@@ -333,10 +336,13 @@ export async function POST(req: Request) {
       await serviceSupabase.from("users").update({ full_name: extractedName }).eq("id", diverId);
     }
 
+    const experienceCount = payload.experiences?.length ?? 0;
+    const certCount = payload.certifications?.length ?? 0;
     const cvReply =
-      "CV processed in English. Preview at /preview/cv. " +
+      `CV processed in English. Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
+      "Your profile is still a draft — open Preview page, then say “publish my profile” when ready. " +
       (extractionWarnings.length
-        ? `Some OCR parts were skipped: ${extractionWarnings.join(" ")} `
+        ? `Notes: ${extractionWarnings.join(" ")} `
         : "") +
       "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";
 
@@ -344,13 +350,15 @@ export async function POST(req: Request) {
       threadId: thread.id,
       userContent: `Please process this CV PDF: ${mainCvFile.name}`,
       assistantContent: cvReply,
-      metadata: { source: "process-cv", importBatchId },
+      metadata: { source: "process-cv", importBatchId, suggestPublish: true },
     });
 
     return NextResponse.json({
       ok: true,
       disclaimer: AI_DISCLAIMER,
       warnings: extractionWarnings,
+      suggestPublish: true,
+      profileStatus: "draft",
       importBatchId,
       uploaded: {
         cv: cvPath,

@@ -68,12 +68,15 @@ export default async function RegisterPage({
               type="text"
               name="username"
               required
+              pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{2,29}"
+              title="3–30 characters: letters, numbers, underscore or hyphen. Not an email."
               autoComplete="username"
               className="w-full rounded-lg border border-border/70 bg-surface-inset px-3 py-2.5 text-sm text-heading outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
               placeholder="janediver"
             />
             <span className="block text-xs text-muted-foreground/80">
-              Public handle for your ambassador page (doneunder.ai/janediver).
+              Public handle for your ambassador page (doneunder.ai/janediver). Letters, numbers, _
+              or - only — not your email.
             </span>
           </label>
           <label className="block space-y-1.5">

@@ -7,6 +7,14 @@ export function normalizeUsername(value?: string | null) {
   return trimmed ? trimmed : null;
 }
 
+/** Public ambassador slug: 3–30 chars, no email addresses. */
+export function isValidPublicUsername(value?: string | null) {
+  const username = normalizeUsername(value);
+  if (!username) return false;
+  if (username.includes("@")) return false;
+  return /^[a-z0-9][a-z0-9_-]{2,29}$/.test(username);
+}
+
 /** Demo/test handles stay off Google and the homepage. */
 export function isIndexableAmbassadorUsername(username?: string | null) {
   const handle = normalizeUsername(username);

@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { safeInternalPath } from "@/lib/auth-paths";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { claimPreferredUsername } from "@/lib/usernames";
+import { claimPreferredUsername, isValidPublicUsername, normalizeUsername } from "@/lib/usernames";
 
 function withMessage(path: string, message: string) {
   const query = new URLSearchParams({ message }).toString();
@@ -105,12 +105,22 @@ export async function loginAction(formData: FormData) {
 
 export async function registerAction(formData: FormData) {
   const fullName = String(formData.get("fullName") ?? "").trim();
-  const username = String(formData.get("username") ?? "").trim().toLowerCase();
+  const usernameRaw = String(formData.get("username") ?? "");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const username = normalizeUsername(usernameRaw);
 
-  if (!fullName || !username || !email || !password) {
+  if (!fullName || !usernameRaw.trim() || !email || !password) {
     redirect(withMessage("/register", "Full name, username, email, and password are required."));
+  }
+
+  if (!username || !isValidPublicUsername(username)) {
+    redirect(
+      withMessage(
+        "/register",
+        "Username must be 3–30 characters: letters, numbers, _ or - only. Do not use an email address.",
+      ),
+    );
   }
 
   if (password.length < 8) {
