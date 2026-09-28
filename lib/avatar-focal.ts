@@ -1,16 +1,25 @@
-/** Framing stored on avatar_url query params: fy (0–100), z (100–250 = 1.0x–2.5x). */
+/** Framing on avatar_url: fx/fy (0–100), z (100–250 = 1.0x–2.5x). */
 
 export type AvatarFraming = {
+  fx: number;
   fy: number;
   z: number;
 };
 
-export const DEFAULT_AVATAR_FRAMING: AvatarFraming = { fy: 30, z: 100 };
+export const DEFAULT_AVATAR_FRAMING: AvatarFraming = { fx: 50, fy: 30, z: 100 };
 
-export function clampFocalY(value: unknown, fallback = DEFAULT_AVATAR_FRAMING.fy) {
+function clampPercent(value: unknown, fallback: number) {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+export function clampFocalX(value: unknown, fallback = DEFAULT_AVATAR_FRAMING.fx) {
+  return clampPercent(value, fallback);
+}
+
+export function clampFocalY(value: unknown, fallback = DEFAULT_AVATAR_FRAMING.fy) {
+  return clampPercent(value, fallback);
 }
 
 /** Zoom percent: 100 = fit, 250 = 2.5×. */
@@ -25,6 +34,7 @@ export function readAvatarFraming(avatarUrl?: string | null): AvatarFraming {
   try {
     const parsed = new URL(avatarUrl);
     return {
+      fx: clampFocalX(parsed.searchParams.get("fx")),
       fy: clampFocalY(parsed.searchParams.get("fy")),
       z: clampZoom(parsed.searchParams.get("z")),
     };
@@ -44,11 +54,13 @@ export function withAvatarFraming(
 ) {
   const base = current ?? readAvatarFraming(avatarUrl);
   const next: AvatarFraming = {
+    fx: framing.fx !== undefined ? clampFocalX(framing.fx) : base.fx,
     fy: framing.fy !== undefined ? clampFocalY(framing.fy) : base.fy,
     z: framing.z !== undefined ? clampZoom(framing.z) : base.z,
   };
   try {
     const parsed = new URL(avatarUrl);
+    parsed.searchParams.set("fx", String(next.fx));
     parsed.searchParams.set("fy", String(next.fy));
     parsed.searchParams.set("z", String(next.z));
     if (!parsed.searchParams.get("v")) {
@@ -57,7 +69,7 @@ export function withAvatarFraming(
     return parsed.toString();
   } catch {
     const join = avatarUrl.includes("?") ? "&" : "?";
-    return `${avatarUrl}${join}fy=${next.fy}&z=${next.z}`;
+    return `${avatarUrl}${join}fx=${next.fx}&fy=${next.fy}&z=${next.z}`;
   }
 }
 
@@ -77,8 +89,8 @@ export function avatarFramingStyle(framing: AvatarFraming): {
 } {
   const scale = framing.z / 100;
   return {
-    objectPosition: `50% ${framing.fy}%`,
+    objectPosition: `${framing.fx}% ${framing.fy}%`,
     transform: scale === 1 ? "none" : `scale(${scale})`,
-    transformOrigin: `50% ${framing.fy}%`,
+    transformOrigin: `${framing.fx}% ${framing.fy}%`,
   };
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
-import { clampFocalY, clampZoom, withAvatarFraming } from "@/lib/avatar-focal";
+import { clampFocalX, clampFocalY, clampZoom, withAvatarFraming } from "@/lib/avatar-focal";
 
 export const runtime = "nodejs";
 
@@ -44,8 +44,11 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const file = form.get("avatar");
-    const focalY = clampFocalY(form.get("fy"), 30);
-    const zoom = clampZoom(form.get("z"), 100);
+    const framing = {
+      fx: clampFocalX(form.get("fx"), 50),
+      fy: clampFocalY(form.get("fy"), 30),
+      z: clampZoom(form.get("z"), 100),
+    };
     if (!(file instanceof File) || file.size < 1) {
       return NextResponse.json({ error: "Choose a photo (JPG, PNG, or WebP)." }, { status: 400 });
     }
@@ -80,7 +83,7 @@ export async function POST(request: Request) {
 
     const avatarUrl = withAvatarFraming(
       `${publicAvatarUrl(authResult.diverId, ext)}?v=${Date.now()}`,
-      { fy: focalY, z: zoom },
+      framing,
     );
     const { error: updateError } = await service
       .from("users")
@@ -102,8 +105,13 @@ export async function PATCH(request: Request) {
     const authResult = await getAuthenticatedDiverContext();
     if ("error" in authResult) return authResult.error;
 
-    const body = (await request.json().catch(() => ({}))) as { fy?: unknown; z?: unknown };
+    const body = (await request.json().catch(() => ({}))) as {
+      fx?: unknown;
+      fy?: unknown;
+      z?: unknown;
+    };
     const framing = {
+      fx: body.fx !== undefined ? clampFocalX(body.fx) : undefined,
       fy: body.fy !== undefined ? clampFocalY(body.fy) : undefined,
       z: body.z !== undefined ? clampZoom(body.z) : undefined,
     };

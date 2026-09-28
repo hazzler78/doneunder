@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   avatarFramingStyle,
+  clampFocalX,
   clampFocalY,
   clampZoom,
+  DEFAULT_AVATAR_FRAMING,
   readAvatarFraming,
   withAvatarFraming,
   type AvatarFraming,
@@ -44,6 +46,7 @@ export function AmbassadorPhotoUpload({ currentUrl, onUploaded }: Props) {
 
     const form = new FormData();
     form.append("avatar", file);
+    form.append("fx", String(framing.fx));
     form.append("fy", String(framing.fy));
     form.append("z", String(framing.z));
     const response = await fetch("/api/diver/avatar", { method: "POST", body: form });
@@ -91,14 +94,18 @@ export function AmbassadorPhotoUpload({ currentUrl, onUploaded }: Props) {
     }, 350);
   }
 
-  function onMove(nextFy: number) {
-    const next = { ...framing, fy: clampFocalY(nextFy) };
+  function patchFraming(partial: Partial<AvatarFraming>) {
+    const next: AvatarFraming = {
+      fx: partial.fx !== undefined ? clampFocalX(partial.fx) : framing.fx,
+      fy: partial.fy !== undefined ? clampFocalY(partial.fy) : framing.fy,
+      z: partial.z !== undefined ? clampZoom(partial.z) : framing.z,
+    };
     setFraming(next);
     scheduleFramingSave(next);
   }
 
-  function onZoom(nextZ: number) {
-    const next = { ...framing, z: clampZoom(nextZ) };
+  function resetFraming() {
+    const next = { ...DEFAULT_AVATAR_FRAMING };
     setFraming(next);
     scheduleFramingSave(next);
   }
@@ -138,22 +145,42 @@ export function AmbassadorPhotoUpload({ currentUrl, onUploaded }: Props) {
             className="hidden"
             onChange={(event) => onFile(event.target.files?.[0] ?? null)}
           />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() => inputRef.current?.click()}
-          >
-            {busy ? "Saving…" : preview ? "Change photo" : "Add photo"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+            >
+              {busy ? "Saving…" : preview ? "Change photo" : "Add photo"}
+            </Button>
+            {canFrame ? (
+              <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={resetFraming}>
+                Reset framing
+              </Button>
+            ) : null}
+          </div>
 
           {preview ? (
             <div className="space-y-3">
               <label className="block space-y-1.5">
                 <span className="flex justify-between text-xs text-muted-foreground">
-                  <span>Move</span>
-                  <span>up ↔ down</span>
+                  <span>Left ↔ right</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={framing.fx}
+                  disabled={busy || !canFrame}
+                  onChange={(event) => patchFraming({ fx: Number(event.target.value) })}
+                  className="w-full accent-primary"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="flex justify-between text-xs text-muted-foreground">
+                  <span>Up ↔ down</span>
                 </span>
                 <input
                   type="range"
@@ -161,7 +188,7 @@ export function AmbassadorPhotoUpload({ currentUrl, onUploaded }: Props) {
                   max={100}
                   value={framing.fy}
                   disabled={busy || !canFrame}
-                  onChange={(event) => onMove(Number(event.target.value))}
+                  onChange={(event) => patchFraming({ fy: Number(event.target.value) })}
                   className="w-full accent-primary"
                 />
               </label>
@@ -177,7 +204,7 @@ export function AmbassadorPhotoUpload({ currentUrl, onUploaded }: Props) {
                   step={5}
                   value={framing.z}
                   disabled={busy || !canFrame}
-                  onChange={(event) => onZoom(Number(event.target.value))}
+                  onChange={(event) => patchFraming({ z: Number(event.target.value) })}
                   className="w-full accent-primary"
                 />
               </label>
