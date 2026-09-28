@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 
@@ -11,6 +12,28 @@ const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
 function publicAvatarUrl(userId: string, ext: string) {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   return `${base}/storage/v1/object/public/${BUCKET}/${userId}/avatar.${ext}`;
+}
+
+async function ensureAvatarBucket(supabase: SupabaseClient) {
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+  if (listError) throw new Error(listError.message);
+  const exists = (buckets ?? []).some((bucket) => bucket.id === BUCKET || bucket.name === BUCKET);
+  if (exists) {
+    await supabase.storage.updateBucket(BUCKET, {
+      public: true,
+      fileSizeLimit: "5MB",
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+    });
+    return;
+  }
+  const { error } = await supabase.storage.createBucket(BUCKET, {
+    public: true,
+    fileSizeLimit: "5MB",
+    allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+  });
+  if (error && !/already exists/i.test(error.message)) {
+    throw new Error(error.message);
+  }
 }
 
 export async function POST(request: Request) {
@@ -36,6 +59,8 @@ export async function POST(request: Request) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const service = createServiceSupabaseClient();
 
+    await ensureAvatarBucket(service);
+
     for (const oldExt of ["jpg", "jpeg", "png", "webp"]) {
       if (oldExt === ext) continue;
       await service.storage.from(BUCKET).remove([`${authResult.diverId}/avatar.${oldExt}`]);
@@ -60,7 +85,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true, avatarUrl });
-  } catch {
-    return NextResponse.json({ error: "Unable to upload photo." }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to upload photo.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
