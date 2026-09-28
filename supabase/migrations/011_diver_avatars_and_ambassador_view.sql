@@ -44,12 +44,14 @@ for select
 to public
 using (bucket_id = 'diver-avatars');
 
-create or replace view public.public_diver_ambassador as
+-- CREATE OR REPLACE cannot insert a column mid-list (headline would shift to avatar_url).
+drop view if exists public.public_diver_ambassador;
+
+create view public.public_diver_ambassador as
 select
   u.id as user_id,
   u.username,
   u.full_name,
-  u.avatar_url,
   d.headline,
   d.bio,
   d.sat_hours,
@@ -62,7 +64,8 @@ select
   d.ambassador_short_bio,
   d.ambassador_key_highlights,
   d.profile_status,
-  d.published_at
+  d.published_at,
+  u.avatar_url
 from public.users u
 join public.diver_profiles d on d.user_id = u.id
 where u.role = 'diver'
