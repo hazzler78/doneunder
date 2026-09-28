@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
-import { clampFocalY, withAvatarFocalY } from "@/lib/avatar-focal";
+import { clampFocalY, clampZoom, withAvatarFraming } from "@/lib/avatar-focal";
 
 export const runtime = "nodejs";
 
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("avatar");
     const focalY = clampFocalY(form.get("fy"), 30);
+    const zoom = clampZoom(form.get("z"), 100);
     if (!(file instanceof File) || file.size < 1) {
       return NextResponse.json({ error: "Choose a photo (JPG, PNG, or WebP)." }, { status: 400 });
     }
@@ -77,9 +78,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const avatarUrl = withAvatarFocalY(
+    const avatarUrl = withAvatarFraming(
       `${publicAvatarUrl(authResult.diverId, ext)}?v=${Date.now()}`,
-      focalY,
+      { fy: focalY, z: zoom },
     );
     const { error: updateError } = await service
       .from("users")
@@ -101,8 +102,11 @@ export async function PATCH(request: Request) {
     const authResult = await getAuthenticatedDiverContext();
     if ("error" in authResult) return authResult.error;
 
-    const body = (await request.json().catch(() => ({}))) as { fy?: unknown };
-    const focalY = clampFocalY(body.fy, 30);
+    const body = (await request.json().catch(() => ({}))) as { fy?: unknown; z?: unknown };
+    const framing = {
+      fy: body.fy !== undefined ? clampFocalY(body.fy) : undefined,
+      z: body.z !== undefined ? clampZoom(body.z) : undefined,
+    };
     const service = createServiceSupabaseClient();
     const { data: userRow, error: loadError } = await service
       .from("users")
@@ -116,7 +120,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Upload a photo first." }, { status: 400 });
     }
 
-    const avatarUrl = withAvatarFocalY(userRow.avatar_url, focalY);
+    const avatarUrl = withAvatarFraming(userRow.avatar_url, framing);
     const { error: updateError } = await service
       .from("users")
       .update({ avatar_url: avatarUrl })

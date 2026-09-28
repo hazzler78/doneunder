@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { RequestProfileButton } from "@/components/request-profile-button";
 import { buttonVariants } from "@/components/ui/button";
-import { avatarImageSrc, readAvatarFocalY } from "@/lib/avatar-focal";
+import { avatarFramingStyle, avatarImageSrc, readAvatarFraming } from "@/lib/avatar-focal";
 import { SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -75,7 +75,8 @@ export function AmbassadorProfileView({
   const available = availabilityStatus === "available";
   const shareUrl = `${SITE_URL}/${username}`;
   const photoSrc = avatarImageSrc(avatarUrl);
-  const focalY = readAvatarFocalY(avatarUrl);
+  const framing = readAvatarFraming(avatarUrl);
+  const frameStyle = avatarFramingStyle(framing);
 
   return (
     <div className="relative mx-auto w-full max-w-lg section-pad py-8 md:py-12">
@@ -109,7 +110,7 @@ export function AmbassadorProfileView({
                   fill
                   priority
                   className="object-cover"
-                  style={{ objectPosition: `50% ${focalY}%` }}
+                  style={frameStyle}
                   sizes="208px"
                 />
               ) : (
