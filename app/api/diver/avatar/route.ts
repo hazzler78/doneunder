@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/admin";
+import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
+
+export const runtime = "nodejs";
+
+const BUCKET = "diver-avatars";
+const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+function publicAvatarUrl(userId: string, ext: string) {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  return `${base}/storage/v1/object/public/${BUCKET}/${userId}/avatar.${ext}`;
+}
+
+export async function POST(request: Request) {
+  try {
+    const authResult = await getAuthenticatedDiverContext();
+    if ("error" in authResult) return authResult.error;
+
+    const form = await request.formData();
+    const file = form.get("avatar");
+    if (!(file instanceof File) || file.size < 1) {
+      return NextResponse.json({ error: "Choose a photo (JPG, PNG, or WebP)." }, { status: 400 });
+    }
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json({ error: "Photo must be under 5 MB." }, { status: 400 });
+    }
+    const type = (file.type || "").toLowerCase();
+    if (!ALLOWED.has(type)) {
+      return NextResponse.json({ error: "Use JPG, PNG, or WebP." }, { status: 400 });
+    }
+
+    const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
+    const path = `${authResult.diverId}/avatar.${ext}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const service = createServiceSupabaseClient();
+
+    for (const oldExt of ["jpg", "jpeg", "png", "webp"]) {
+      if (oldExt === ext) continue;
+      await service.storage.from(BUCKET).remove([`${authResult.diverId}/avatar.${oldExt}`]);
+    }
+
+    const { error: uploadError } = await service.storage.from(BUCKET).upload(path, bytes, {
+      contentType: type,
+      upsert: true,
+      cacheControl: "3600",
+    });
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
+
+    const avatarUrl = `${publicAvatarUrl(authResult.diverId, ext)}?v=${Date.now()}`;
+    const { error: updateError } = await service
+      .from("users")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", authResult.diverId);
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, avatarUrl });
+  } catch {
+    return NextResponse.json({ error: "Unable to upload photo." }, { status: 500 });
+  }
+}

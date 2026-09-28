@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AmbassadorPhotoUpload } from "@/components/ambassador-photo-upload";
 import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
 import { buttonVariants } from "@/components/ui/button";
 import { getDiverProfile } from "@/lib/diver-profile-service";
@@ -24,7 +25,7 @@ export default async function AmbassadorPreviewPage() {
 
   const { data: userRow } = await supabase
     .from("users")
-    .select("role, full_name, username")
+    .select("role, full_name, username, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -55,15 +56,17 @@ export default async function AmbassadorPreviewPage() {
         name: cert.name,
         expiry_date: cert.expiry_date,
       }))}
+      avatarUrl={userRow?.avatar_url ?? null}
       showRequestButton={false}
       showCvLink
+      photoSlot={<AmbassadorPhotoUpload currentUrl={userRow?.avatar_url ?? null} />}
       previewBanner={
-        <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-4 text-sm">
-          <p className="font-medium text-amber-200">Draft preview — only you can see this page.</p>
+        <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm">
+          <p className="font-medium text-heading">Draft preview — only you can see this page.</p>
           <p className="mt-1 text-muted-foreground">
             {isPublished
-              ? `Your profile is published at /${username}. This preview still shows your current draft data.`
-              : `Your public page is not live yet. Publish from workspace chat when you are ready for https://doneunder.ai/${username}.`}
+              ? `Your profile is published at /${username}. Add a photo so the shared link looks like your business card.`
+              : `Your public page is not live yet. Publish from workspace when you are ready for https://doneunder.ai/${username}.`}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/workspace" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
