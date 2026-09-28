@@ -8,6 +8,7 @@ import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
+import { FEEDBACK_TELEGRAM_URL } from "@/lib/site";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -429,6 +430,17 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
             Profile · <span className="capitalize text-heading-muted">{profileStatus}</span>
           </p>
         ) : null}
+        <a
+          href={FEEDBACK_TELEGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 block rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-heading hover:bg-primary/15"
+        >
+          Feedback on Telegram
+          <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">
+            What broke, or what should be easier.
+          </span>
+        </a>
         {role === "diver" ? (
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/preview" target="_blank">

@@ -8,6 +8,7 @@ import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { logoutAction } from "@/app/auth/actions";
+import { FEEDBACK_TELEGRAM_URL } from "@/lib/site";
 
 const links = [
   { href: "/#pipeline", label: "Pipeline" },
@@ -65,6 +66,14 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
           <ThemeToggle />
           {isLoggedIn ? (
             <>
+              <a
+                href={FEEDBACK_TELEGRAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden rounded-md px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/10 sm:inline"
+              >
+                Feedback
+              </a>
               <Link href={onWorkspace ? "/" : dashboardHref} className="hidden sm:block">
                 <Button size="sm" variant={onWorkspace ? "outline" : "default"}>
                   {onWorkspace ? "Close workspace" : "Open workspace"}
@@ -123,6 +132,15 @@ export function SiteHeaderClient({ isLoggedIn, dashboardHref, pendingMail }: Pro
             <div className="mt-2 flex flex-col gap-2 border-t border-border/40 pt-3">
               {isLoggedIn ? (
                 <>
+                  <a
+                    href={FEEDBACK_TELEGRAM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-md px-3 py-3 text-sm font-medium text-primary hover:bg-primary/10"
+                    onClick={() => setOpen(false)}
+                  >
+                    Feedback on Telegram
+                  </a>
                   {hasMail ? (
                     <p className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-heading">
                       New mail from {pendingMail?.from}. Open workspace to reply.
