@@ -3,9 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { oauthForwardPath } from "@/lib/auth-paths";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
 
+/** Keep well under Vercel's middleware limit so a hung Auth call cannot 504 the site. */
+const AUTH_REFRESH_MS = 2500;
+
 /**
  * Refreshes the Supabase session from cookies on each request.
  * Required for reliable server-side auth after sign-in (see Supabase Next.js SSR guide).
+ *
+ * Auth is raced against a short timeout: if Supabase is slow/unreachable from the
+ * edge region, the page still loads (session may be stale until the next request).
  */
 export async function middleware(request: NextRequest) {
   const forwarded = oauthForwardPath(request.nextUrl.pathname, request.nextUrl.searchParams);
@@ -38,7 +44,16 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  try {
+    await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("supabase_auth_timeout")), AUTH_REFRESH_MS);
+      }),
+    ]);
+  } catch {
+    // Fail open: never turn Auth latency into MIDDLEWARE_INVOCATION_TIMEOUT.
+  }
 
   return supabaseResponse;
 }
@@ -46,8 +61,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static assets and image optimization.
+     * Match page navigations and cookie-auth APIs. Skip static assets, image
+     * optimization, and bearer/webhook/cron APIs that do not need a session refresh.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/resend|api/agent|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
