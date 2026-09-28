@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { RequestProfileButton } from "@/components/request-profile-button";
 import { buttonVariants } from "@/components/ui/button";
+import { avatarImageSrc, readAvatarFocalY } from "@/lib/avatar-focal";
 import { SITE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -73,7 +74,8 @@ export function AmbassadorProfileView({
   const topCerts = certifications.filter((c) => c.name?.trim()).slice(0, 6);
   const available = availabilityStatus === "available";
   const shareUrl = `${SITE_URL}/${username}`;
-  const hasPhoto = Boolean(avatarUrl?.trim());
+  const photoSrc = avatarImageSrc(avatarUrl);
+  const focalY = readAvatarFocalY(avatarUrl);
 
   return (
     <div className="relative mx-auto w-full max-w-lg section-pad py-8 md:py-12">
@@ -86,50 +88,43 @@ export function AmbassadorProfileView({
       {photoSlot ? <div className="mb-4 animate-fade-up">{photoSlot}</div> : null}
 
       <article className="product-frame animate-fade-up-delay-1 overflow-hidden rounded-2xl">
-        <div className="relative aspect-[5/4] w-full overflow-hidden bg-surface-muted sm:aspect-[4/3]">
-          {hasPhoto ? (
-            <Image
-              src={avatarUrl!}
-              alt={displayName}
-              fill
-              priority
-              className="object-cover object-top"
-              sizes="(max-width: 512px) 100vw, 512px"
-            />
-          ) : (
-            <div className="absolute inset-0">
-              <Image
-                src="/images/ambassador-profile-shot.jpeg"
-                alt=""
-                fill
-                priority
-                className="object-cover opacity-35"
-                sizes="(max-width: 512px) 100vw, 512px"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-[var(--card)] via-[color-mix(in_srgb,var(--card)_55%,transparent)] to-transparent">
-                <span className="font-display text-5xl font-semibold tracking-tight text-heading/90 sm:text-6xl">
-                  {initialsFromName(displayName)}
-                </span>
-              </div>
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--card)] to-transparent" />
-          <div className="absolute left-4 top-4">
+        <div className="relative px-5 pb-2 pt-6 sm:px-6">
+          <div className="absolute left-5 top-5 z-10 sm:left-6">
             <span
               className={cn(
                 "inline-flex items-center rounded-md px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                available
-                  ? "bg-success/20 text-success"
-                  : "bg-muted text-muted-foreground",
+                available ? "bg-success/20 text-success" : "bg-muted text-muted-foreground",
               )}
             >
               {available ? "Available" : "Deployed"}
             </span>
           </div>
+
+          <div className="mx-auto mt-4 flex justify-center">
+            <div className="relative h-44 w-44 overflow-hidden rounded-full border border-border/80 bg-surface-muted shadow-[0_12px_40px_-24px_rgba(11,36,51,0.55)] sm:h-52 sm:w-52">
+              {photoSrc ? (
+                <Image
+                  src={photoSrc}
+                  alt={displayName}
+                  fill
+                  priority
+                  className="object-cover"
+                  style={{ objectPosition: `50% ${focalY}%` }}
+                  sizes="208px"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-surface-muted to-card">
+                  <span className="font-display text-4xl font-semibold tracking-tight text-heading/80 sm:text-5xl">
+                    {initialsFromName(displayName)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-5 px-5 pb-6 pt-1 sm:px-6">
-          <header className="animate-fade-up-delay-2 space-y-2">
+        <div className="space-y-5 px-5 pb-6 pt-5 sm:px-6">
+          <header className="animate-fade-up-delay-2 space-y-2 text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
               doneunder.ai/{username}
             </p>
@@ -137,16 +132,14 @@ export function AmbassadorProfileView({
               {displayName}
             </h1>
             {headline ? (
-              <p className="text-base text-heading-muted sm:text-lg">{headline}</p>
+              <p className="mx-auto max-w-md text-base text-heading-muted sm:text-lg">{headline}</p>
             ) : null}
           </header>
 
           <dl className="grid grid-cols-3 gap-2 border-y border-border/60 py-3 text-center">
             <div>
               <dt className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Based</dt>
-              <dd className="mt-1 text-sm font-medium text-heading">
-                {location?.trim() || "—"}
-              </dd>
+              <dd className="mt-1 text-sm font-medium text-heading">{location?.trim() || "—"}</dd>
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Sat</dt>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
+import { clampFocalY, withAvatarFocalY } from "@/lib/avatar-focal";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
 
     const form = await request.formData();
     const file = form.get("avatar");
+    const focalY = clampFocalY(form.get("fy"), 30);
     if (!(file instanceof File) || file.size < 1) {
       return NextResponse.json({ error: "Choose a photo (JPG, PNG, or WebP)." }, { status: 400 });
     }
@@ -75,7 +77,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const avatarUrl = `${publicAvatarUrl(authResult.diverId, ext)}?v=${Date.now()}`;
+    const avatarUrl = withAvatarFocalY(
+      `${publicAvatarUrl(authResult.diverId, ext)}?v=${Date.now()}`,
+      focalY,
+    );
     const { error: updateError } = await service
       .from("users")
       .update({ avatar_url: avatarUrl })
@@ -87,6 +92,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, avatarUrl });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload photo.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const authResult = await getAuthenticatedDiverContext();
+    if ("error" in authResult) return authResult.error;
+
+    const body = (await request.json().catch(() => ({}))) as { fy?: unknown };
+    const focalY = clampFocalY(body.fy, 30);
+    const service = createServiceSupabaseClient();
+    const { data: userRow, error: loadError } = await service
+      .from("users")
+      .select("avatar_url")
+      .eq("id", authResult.diverId)
+      .maybeSingle();
+    if (loadError) {
+      return NextResponse.json({ error: loadError.message }, { status: 500 });
+    }
+    if (!userRow?.avatar_url) {
+      return NextResponse.json({ error: "Upload a photo first." }, { status: 400 });
+    }
+
+    const avatarUrl = withAvatarFocalY(userRow.avatar_url, focalY);
+    const { error: updateError } = await service
+      .from("users")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", authResult.diverId);
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, avatarUrl });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to save framing.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

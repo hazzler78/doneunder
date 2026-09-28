@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AmbassadorPhotoUpload } from "@/components/ambassador-photo-upload";
-import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
+import { AmbassadorPreviewShell } from "@/components/ambassador-preview-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { getDiverProfile } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -41,7 +40,7 @@ export default async function AmbassadorPreviewPage() {
   const isPublished = p.profile_status === "published";
 
   return (
-    <AmbassadorProfileView
+    <AmbassadorPreviewShell
       displayName={displayName}
       username={username}
       headline={p.ambassador_public_headline || p.headline || "Commercial Diver"}
@@ -57,15 +56,12 @@ export default async function AmbassadorPreviewPage() {
         expiry_date: cert.expiry_date,
       }))}
       avatarUrl={userRow?.avatar_url ?? null}
-      showRequestButton={false}
-      showCvLink
-      photoSlot={<AmbassadorPhotoUpload currentUrl={userRow?.avatar_url ?? null} />}
       previewBanner={
         <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm">
           <p className="font-medium text-heading">Draft preview — only you can see this page.</p>
           <p className="mt-1 text-muted-foreground">
             {isPublished
-              ? `Your profile is published at /${username}. Add a photo so the shared link looks like your business card.`
+              ? `Your profile is published at /${username}. Frame your photo so your face sits in the circle.`
               : `Your public page is not live yet. Publish from workspace when you are ready for https://doneunder.ai/${username}.`}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
