@@ -79,6 +79,7 @@ const diverStarterPrompts = [
   "Should I add a photo to my profile?",
   "My papers are not in English — translate and update my CV",
   "Publish my profile",
+  "Unpublish my profile",
   "Match me to open campaigns",
   "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
   "Set my sat hours to 2100 and say I'm available on short notice",
@@ -112,6 +113,7 @@ export function AgentWorkspace({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [suggestPublish, setSuggestPublish] = useState(false);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certs, setCerts] = useState<File[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -434,6 +436,41 @@ export function AgentWorkspace({
     }
   }
 
+  async function setProfileVisibility(next: "published" | "draft") {
+    setVisibilityBusy(true);
+    setUploadError(null);
+    setUploadNotice(null);
+    try {
+      const response = await fetch(
+        next === "published" ? "/api/diver/profile/publish" : "/api/diver/profile/unpublish",
+        { method: "POST" },
+      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        profile?: { profile_status?: "draft" | "published" };
+      };
+      if (!response.ok || data.ok === false) {
+        setUploadError(data.error ?? (next === "published" ? "Could not publish." : "Could not unpublish."));
+        return;
+      }
+      const status = data.profile?.profile_status ?? next;
+      setProfileStatus(status);
+      setSuggestPublish(false);
+      setUploadNotice(
+        status === "published"
+          ? username
+            ? `Published. Live at /${username}.`
+            : "Published."
+          : "Unpublished. Your public page is offline; @username and previews stay for testing.",
+      );
+    } catch {
+      setUploadError(next === "published" ? "Could not publish." : "Could not unpublish.");
+    } finally {
+      setVisibilityBusy(false);
+    }
+  }
+
   const sidePanel = (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <div>
@@ -453,6 +490,41 @@ export function AgentWorkspace({
           <p className="mt-1">
             Profile · <span className="capitalize text-heading-muted">{profileStatus}</span>
           </p>
+        ) : null}
+        {role === "diver" ? (
+          <div className="mt-3 space-y-2">
+            {profileStatus === "published" ? (
+              <>
+                <p className="text-[11px] leading-relaxed">
+                  Your page is live{username ? ` at /${username}` : ""}. Unpublish to take it offline
+                  without losing your username or draft.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={visibilityBusy || sending}
+                  onClick={() => void setProfileVisibility("draft")}
+                >
+                  {visibilityBusy ? "Working…" : "Unpublish page"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] leading-relaxed">
+                  Draft only — preview works, public URL stays offline until you publish.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={visibilityBusy || sending}
+                  onClick={() => void setProfileVisibility("published")}
+                >
+                  {visibilityBusy ? "Working…" : "Publish page"}
+                </Button>
+              </>
+            )}
+          </div>
         ) : null}
         <a
           href={FEEDBACK_TELEGRAM_URL}

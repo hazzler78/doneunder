@@ -71,6 +71,11 @@ export default async function AmbassadorPreviewPage() {
             </Link>
             , highlight the text, and ask Hermes to fix it. Non-English papers are fine — Hermes translates.
           </p>
+          <p className="mt-2 text-muted-foreground">
+            {isPublished
+              ? "To take the public page offline, open workspace and use Unpublish page (keeps your username)."
+              : "When you are ready for the public URL, open workspace and use Publish page."}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/workspace" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
               Back to workspace

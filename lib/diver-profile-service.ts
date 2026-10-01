@@ -1117,6 +1117,44 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
   return { ok: true as const, validation, profile };
 }
 
+/** Take the ambassador page offline. Username is kept; /{username} goes back to 404 until republished. */
+export async function unpublishDiverProfile(supabase: DbClient, diverId: string) {
+  const current = await getDiverProfile(supabase, diverId);
+
+  const { data: existingRow } = await supabase.from("diver_profiles").select("user_id").eq("user_id", diverId).maybeSingle();
+  if (!existingRow) {
+    return {
+      ok: false as const,
+      error: "No saved profile yet.",
+      profile: current,
+    };
+  }
+
+  if (current.profile.profile_status !== "published") {
+    return {
+      ok: true as const,
+      profile: current,
+      already_draft: true as const,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("diver_profiles")
+    .update({
+      profile_status: "draft",
+      updated_at: nowIso,
+    })
+    .eq("user_id", diverId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const profile = await getDiverProfile(supabase, diverId);
+  return { ok: true as const, profile, already_draft: false as const };
+}
+
 /** Maps AI CV output into a canonical DiverProfilePayload. */
 export function aiCvOutputToPayload(
   output: {

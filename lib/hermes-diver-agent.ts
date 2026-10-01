@@ -7,6 +7,7 @@ import {
   getDiverProfile,
   persistMissingChildRowsFromJson,
   publishDiverProfile,
+  unpublishDiverProfile,
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
@@ -262,6 +263,7 @@ Updating the CV from chat (this is the main way to edit):
 
 Other tools:
 - publish_profile when they want to go live. Confirm first if their intent is ambiguous.
+- unpublish_profile when they want the public page taken down (keep account and username; /{username} returns 404 until they publish again). Confirm if intent is ambiguous.
 - find_matching_jobs when they want several open campaigns.
 - match_job when they name one campaign, say yes to one you just offered, or the message includes a job id. Always call it before saying they fit or do not fit.
 - NEVER ask the diver to type a job ID. IDs are in open_campaigns. If they say "yes" after you offered the saturation role, call match_job with that campaign's id (title match is enough).
@@ -282,6 +284,7 @@ Other tools:
 - If profile_status is draft, preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
 - If profile_status is published, the public ambassador URL is /{username}.
 - Before publish_profile, if diver.has_photo is false, mention that a photo on /preview makes the public card look finished — then publish if they still clearly want to go live.
+- Testers and non-divers who keep a username for demos should unpublish when they do not want a public page.
 - Never invent certifications, roles, or hours that are not in the profile context or the diver's latest message.
 
 Current profile context (source of truth):
@@ -709,6 +712,31 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           profile_status: result.profile.profile.profile_status,
           public_path: input.username ? `/${input.username}` : null,
           preview_path: "/preview",
+        };
+      },
+    }),
+    unpublish_profile: tool({
+      description:
+        "Take the public ambassador page offline. Keeps the account, CV draft, and username. /{username} returns 404 until they publish again.",
+      inputSchema: z.object({
+        confirmed: z.boolean().describe("True when the diver clearly wants to unpublish now."),
+      }),
+      execute: async ({ confirmed }) => {
+        if (!confirmed) {
+          return { ok: false, message: "Unpublish not confirmed." };
+        }
+        const result = await unpublishDiverProfile(input.supabase, input.diverId);
+        state.profile = result.profile;
+        if (!result.ok) {
+          return { ok: false, error: result.error };
+        }
+        return {
+          ok: true,
+          profile_status: result.profile.profile.profile_status,
+          already_draft: result.already_draft,
+          preview_path: "/preview",
+          public_path: input.username ? `/${input.username}` : null,
+          note: "Public page is offline. Username is kept. Preview still works at /preview.",
         };
       },
     }),
