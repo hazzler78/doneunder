@@ -60,7 +60,8 @@ async function transcribePdfPages(images: Buffer[]) {
               text:
                 `${ENGLISH_ONLY_INSTRUCTION}\n` +
                 "These are scanned pages of a commercial diving CV, seaman's book, CDC, or similar document. " +
-                "Transcribe all readable text in reading order. Keep names, dates, vessels, ports, employers, and certificate titles. " +
+                "The source may be in any language. Transcribe all readable text in reading order, then provide the transcription in English " +
+                "(translate non-English passages; keep names, dates, vessels, ports, employers, and official certificate titles). " +
                 "Do not invent missing fields. Skip blank or unreadable pages.",
             },
             ...images.map((image) => ({

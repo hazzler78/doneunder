@@ -124,6 +124,7 @@ function buildProfileContext(
   userEmail: string | null,
   pendingInbound?: PendingInbound | null,
   openJobs: PublicJob[] = [],
+  hasPhoto = false,
 ) {
   const p = profile.profile;
   const validation = validateDiverProfile({
@@ -152,6 +153,8 @@ function buildProfileContext(
       publicPath: username ? `/${username}` : null,
       previewPath: "/preview",
       cvPreviewPath: "/preview/cv",
+      has_photo: hasPhoto,
+      photo_upload_path: "/preview",
     },
     email_capability: {
       configured: isEmailConfigured(),
@@ -243,15 +246,18 @@ One living CV:
 Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
 - They can talk in plain English: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
+- If they paste or attach text/documents in another language, translate into English before saving. Confirm briefly that you translated.
+- If the message starts with "Please fix this part of my CV:" and quotes a passage, treat that quote as the target. Call update_cv to correct that section. Do not rewrite unrelated parts unless they ask.
 - Use add_* for new rows, update_* for existing rows (match by id, company, role, or certificate name), remove_* to delete, and replace_* only when they paste a full CV or clearly want a whole section rewritten.
 - For a new job, always call update_cv with add_experiences. Put company, a short role_title (extract one from the job description if they did not label it), dates, and summary. Do not send them to re-upload a PDF when they already typed the job in chat.
 - Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
-- If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos (IMCA, BOSIET/FOET, medical) in this chat. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
+- If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
+- Business card photo: if diver.has_photo is false, nudge them to add a clear face photo on /preview (Business card photo / Add photo). Do this when they ask what is missing, before publishing, after a CV is in decent shape, or when reviewing the ambassador page. Keep it to one short reminder — do not nag every turn, and do not block CV work for it. You cannot upload the photo in chat; send them to /preview. If diver.has_photo is true, do not ask for another photo unless they want to change it.
 - Never invent that a company or role is on the CV unless it appears in the profile context or a successful update_cv result.
 
 Other tools:
@@ -275,6 +281,7 @@ Other tools:
 - If email_capability.configured is false, explain that outbound email is not configured yet — do not pretend you sent mail.
 - If profile_status is draft, preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
 - If profile_status is published, the public ambassador URL is /{username}.
+- Before publish_profile, if diver.has_photo is false, mention that a photo on /preview makes the public card look finished — then publish if they still clearly want to go live.
 - Never invent certifications, roles, or hours that are not in the profile context or the diver's latest message.
 
 Current profile context (source of truth):
@@ -613,6 +620,14 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   }
 
   const openJobs = await loadOpenJobs(input.supabase);
+  const { data: userPhotoRow } = await input.supabase
+    .from("users")
+    .select("avatar_url")
+    .eq("id", input.diverId)
+    .maybeSingle();
+  const hasPhoto = Boolean(
+    typeof userPhotoRow?.avatar_url === "string" && userPhotoRow.avatar_url.trim(),
+  );
   const context = buildProfileContext(
     profile,
     input.username,
@@ -620,6 +635,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     input.userEmail,
     input.pendingInbound,
     openJobs,
+    hasPhoto,
   );
   const system = buildSystemPrompt(context);
 

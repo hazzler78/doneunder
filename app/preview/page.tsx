@@ -64,6 +64,13 @@ export default async function AmbassadorPreviewPage() {
               ? `Your profile is published at /${username}. Frame your photo so your face sits in the circle.`
               : `Your public page is not live yet. Publish from workspace when you are ready for https://doneunder.ai/${username}.`}
           </p>
+          <p className="mt-2 text-muted-foreground">
+            To edit wording: open{" "}
+            <Link href="/preview/cv" className="text-primary hover:underline">
+              Preview CV
+            </Link>
+            , highlight the text, and ask Hermes to fix it. Non-English papers are fine — Hermes translates.
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/workspace" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
               Back to workspace

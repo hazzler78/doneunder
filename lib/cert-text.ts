@@ -109,6 +109,8 @@ async function readImageWithVision(bytes: Buffer, mediaType: "image/jpeg" | "ima
               text:
                 `${ENGLISH_ONLY_INSTRUCTION}\n` +
                 "This is a photo of a commercial diving certificate or medical. " +
+                "The document may be in any language. Read it carefully and translate field values into English where needed, " +
+                "but keep official certificate titles and proper names as printed when that is clearer. " +
                 "Extract only what is clearly printed. Do not guess. " +
                 "Dates are usually day/month/year (European). Return issue_date and expiry_date as YYYY-MM-DD. " +
                 "If a field is blurry or missing, use null and set unreadable true if you cannot read the document.",

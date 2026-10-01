@@ -34,6 +34,7 @@ const IS_VERCEL_RUNTIME = Boolean(process.env.VERCEL);
 const cvSystemPrompt = `You are a specialist commercial diving CV and profile writer for doneunder.ai.
 Turn raw CVs and certification documents into a polished, accurate profile for offshore recruiters.
 ${ENGLISH_ONLY_INSTRUCTION}
+Source documents are often not in English — translate fully into professional English while keeping proper names and official certificate titles.
 Return factual outputs only from provided material. Use "Not provided" when unknown.
 Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
 full_name must be the person's name as printed on the CV (not a Google account or email handle).
@@ -293,7 +294,7 @@ export async function POST(req: Request) {
         model: aiModel,
         schema: cvChunkSchema,
         system:
-          "You extract normalized, factual profile data from commercial diving CV fragments. Return concise English output and no hallucinations. Translate non-English source text into English.",
+          "You extract normalized, factual profile data from commercial diving CV fragments. Source may be any language. Return concise English output and no hallucinations. Translate non-English source text into English while keeping proper names and official certificate titles.",
         prompt: `Chunk ${index + 1}/${cvChunks.length} from CV "${mainCvFile.name}":\n${chunk}`,
       });
       chunkSummaries.push(chunkResult.object.summary);
@@ -339,8 +340,8 @@ export async function POST(req: Request) {
     const experienceCount = payload.experiences?.length ?? 0;
     const certCount = payload.certifications?.length ?? 0;
     const cvReply =
-      `CV processed in English. Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
-      "Your profile is still a draft — open Preview page, then say “publish my profile” when ready. " +
+      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
+      "Your profile is still a draft — open Preview page, highlight any line you want changed and ask Hermes to fix it, then publish when ready. " +
       (extractionWarnings.length
         ? `Notes: ${extractionWarnings.join(" ")} `
         : "") +

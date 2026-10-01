@@ -14,16 +14,16 @@ export const metadata: Metadata = {
 export default async function WorkspacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ job?: string }>;
+  searchParams: Promise<{ job?: string; fix?: string }>;
 }) {
-  const { job: jobId } = await searchParams;
+  const { job: jobId, fix: fixPrompt } = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const next = jobId ? workspaceMatchHref(jobId) : "/workspace";
+    const next = jobId ? workspaceMatchHref(jobId) : fixPrompt ? `/workspace?fix=${encodeURIComponent(fixPrompt)}` : "/workspace";
     redirect(`/login?next=${encodeURIComponent(next)}`);
   }
 
@@ -47,6 +47,7 @@ export default async function WorkspacePage({
   }
 
   const matchJob = jobId ? findCatalogJob(jobId) : null;
+  const initialFixPrompt = typeof fixPrompt === "string" && fixPrompt.trim() ? fixPrompt.trim().slice(0, 4000) : null;
 
   return (
     <AgentWorkspace
@@ -55,6 +56,7 @@ export default async function WorkspacePage({
       displayName={userRow?.full_name ?? "User"}
       username={userRow?.username ?? null}
       initialMatchPrompt={matchJob ? matchPromptForJob(matchJob) : null}
+      initialFixPrompt={initialFixPrompt}
     />
   );
 }

@@ -8,7 +8,7 @@ import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
-import { FEEDBACK_TELEGRAM_URL } from "@/lib/site";
+import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -47,6 +47,8 @@ type Props = {
   displayName: string;
   username: string | null;
   initialMatchPrompt?: string | null;
+  /** Prefill chat from CV preview highlight (`/workspace?fix=…`). */
+  initialFixPrompt?: string | null;
 };
 
 type Message = {
@@ -74,6 +76,8 @@ const diverFirstRunPrompts = ["Match me to open campaigns"];
 const diverStarterPrompts = [
   "How does my CV look?",
   "What should I improve before publishing?",
+  "Should I add a photo to my profile?",
+  "My papers are not in English — translate and update my CV",
   "Publish my profile",
   "Match me to open campaigns",
   "Add this job to my CV: North Sea IRM, air diver, 2024–2025",
@@ -86,7 +90,14 @@ const companyStarterPrompts = [
   "Screen candidates available in 7 days.",
 ];
 
-export function AgentWorkspace({ role, userId, displayName, username, initialMatchPrompt = null }: Props) {
+export function AgentWorkspace({
+  role,
+  userId,
+  displayName,
+  username,
+  initialMatchPrompt = null,
+  initialFixPrompt = null,
+}: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState("");
@@ -109,6 +120,8 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const matchSentRef = useRef(false);
+  const fixPrefillRef = useRef(false);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   const firstRun = role === "diver" && !livingCv.present && documents.length === 0;
   const starters = useMemo(
@@ -149,6 +162,17 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, initialMatchPrompt, historyLoading, sending]);
 
+  useEffect(() => {
+    if (role !== "diver" || !initialFixPrompt || historyLoading) return;
+    if (fixPrefillRef.current) return;
+    fixPrefillRef.current = true;
+    setInput(initialFixPrompt);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/workspace");
+    }
+    window.setTimeout(() => chatInputRef.current?.focus(), 50);
+  }, [role, initialFixPrompt, historyLoading]);
+
   async function loadChatHistory(options?: { silent?: boolean }) {
     if (!options?.silent) {
       setHistoryLoading(true);
@@ -172,7 +196,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               from: "agent",
               text:
                 role === "diver"
-                  ? "Hi — I'm Hermes. Attach your CV PDF and photos or PDFs of your tickets (IMCA, BOSIET, medical). I'll build one living CV and a certificate pack. Then we can match you to open campaigns."
+                  ? "Hi — I'm Hermes. Attach your CV PDF and ticket photos (any language is fine — I'll save your living CV in English). Then we can match you to open campaigns."
                   : "Welcome. I can help draft job requests and shortlist matching diver profiles.",
             },
           ]);
@@ -465,13 +489,13 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               <>
                 Hermes already keeps your living CV. Add <strong className="text-heading">certificate</strong>{" "}
                 scans (IMCA, BOSIET, medical) — PDF/JPG/PNG. Only replace the main CV if you have a brand-new
-                PDF.
+                PDF. {MULTILINGUAL_UPLOAD_HINT}
               </>
             ) : (
               <>
                 <strong className="text-heading">Main CV:</strong> one full diving CV PDF.{" "}
                 <strong className="text-heading">Certificates:</strong> separate ticket photos — not as the
-                main CV. On phone use the paperclip under chat, or Files → PDF.
+                main CV. On phone use the paperclip under chat, or Files → PDF. {MULTILINGUAL_UPLOAD_HINT}
               </>
             )}
           </p>
@@ -869,6 +893,7 @@ export function AgentWorkspace({ role, userId, displayName, username, initialMat
               </>
             ) : null}
             <textarea
+              ref={chatInputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
