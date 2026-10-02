@@ -53,7 +53,7 @@ values
   ('deep-tidenham', 'DEEP', 1, 'Tidenham', 'UK', null, 'HSE Closed Bell — advanced / sat path (later wave)', 'todo'),
   ('bc-opleidingen', 'BC-opleidingen', 2, 'Enkhuizen', 'Netherlands', 'https://www.bc-opleidingen.nl', 'NDC-RI / Hobéon-SKO; IMCA-recognised Dutch scheme; English courses', 'todo'),
   ('foundation-nok', 'Foundation NOK', 2, 'Netherlands', 'Netherlands', null, 'IDSA Level 3 full member', 'todo'),
-  ('nyd', 'Norwegian Commercial Diving School (NYD)', 2, 'Oslo area', 'Norway', null, 'IDSA Level 4; Havtil/NPD path', 'todo'),
+  ('nyd', 'Norsk Yrkesdykkerskole (NYD)', 1, 'Fagerstrand (Oslo area)', 'Norway', 'https://nyd.no/', 'IDSA Level 4; Havtil/NPD path. Gareth trained here — strong personal intro. Contact: info@nyd.no', 'todo'),
   ('hvl-diver-education', 'HVL Diver Education', 2, 'Western Norway', 'Norway', null, 'Western Norway University of Applied Sciences; IDSA Level 3', 'todo'),
   ('yrgo', 'YRGO Commercial Diving School of Gothenburg', 2, 'Gothenburg', 'Sweden', null, 'IDSA Level 3; Swedish B50 VK path', 'todo'),
   ('ens', 'Ecole Nationale des Scaphandriers (ENS)', 2, 'France', 'France', null, 'IDSA Level 3', 'todo'),

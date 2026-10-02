@@ -31,7 +31,7 @@ Natural fit for Gareth / ADC network. Fresh HSE tickets, CV help already part of
 | --- | --- | --- | --- | --- |
 | BC-opleidingen | Netherlands | NDC-RI / Hobéon-SKO path; IMCA-recognised Dutch scheme; English courses | https://www.bc-opleidingen.nl | todo |
 | Foundation NOK | Netherlands | IDSA Level 3 full member | — | todo |
-| Norwegian Commercial Diving School (NYD) | Norway / Oslo area | IDSA Level 4; Havtil/NPD path | — | todo |
+| Norsk Yrkesdykkerskole (NYD) | Fagerstrand (Oslo area) | IDSA Level 4; Havtil/NPD. **Gareth trained here.** Contact info@nyd.no | https://nyd.no/ | todo |
 | HVL Diver Education | Norway | Western Norway University of Applied Sciences; IDSA Level 3 | — | todo |
 | YRGO Commercial Diving School of Gothenburg | Sweden | IDSA Level 3; Swedish B50 VK path | — | todo |
 | Ecole Nationale des Scaphandriers (ENS) | France | IDSA Level 3 | — | todo |
