@@ -245,10 +245,18 @@ export function AgentWorkspace({
         documents?: DocumentEntry[];
         certificates?: DocumentEntry[];
         livingCv?: LivingCvInfo;
+        profileStatus?: "draft" | "published";
       };
       if (response.ok) {
         setDocuments(data.certificates ?? data.documents ?? []);
         if (data.livingCv) setLivingCv(data.livingCv);
+        if (data.profileStatus) setProfileStatus(data.profileStatus);
+        if (
+          data.profileStatus !== "published" &&
+          (data.livingCv?.present || (data.certificates ?? data.documents ?? []).length > 0)
+        ) {
+          setSuggestPublish(true);
+        }
       }
     } finally {
       setDocLoading(false);
@@ -384,7 +392,8 @@ export function AgentWorkspace({
           if (data.profileStatus) setProfileStatus(data.profileStatus);
           if (data.suggestPublish || data.profileStatus === "draft") {
             setSuggestPublish(true);
-            setUploadNotice("CV processed. Preview your page, then ask Hermes to publish when ready.");
+            setPanelOpen(true);
+            setUploadNotice("CV processed. Still a draft — tap Publish page when it looks right.");
           }
           if (data.warnings?.length) {
             setUploadNotice((prev) => [prev, ...data.warnings!].filter(Boolean).join(" "));
@@ -633,7 +642,7 @@ export function AgentWorkspace({
           {suggestPublish && profileStatus === "draft" ? (
             <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-2">
               <p className="text-[11px] text-heading">
-                Profile is still a draft. Preview it, then publish when it looks right.
+                Your CV is still a draft — contractors cannot see it until you publish.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link href="/preview" target="_blank">
@@ -643,13 +652,10 @@ export function AgentWorkspace({
                 </Link>
                 <Button
                   size="sm"
-                  onClick={() => {
-                    void sendMessage("Publish my profile");
-                    setSuggestPublish(false);
-                  }}
-                  disabled={sending || uploading}
+                  disabled={visibilityBusy || sending || uploading}
+                  onClick={() => void setProfileVisibility("published")}
                 >
-                  Ask Hermes to publish
+                  {visibilityBusy ? "Working…" : "Publish page"}
                 </Button>
               </div>
             </div>
@@ -765,9 +771,21 @@ export function AgentWorkspace({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {role === "diver" ? (
-              <span className="hidden rounded-md border border-border/60 px-2 py-1 text-[11px] capitalize text-muted-foreground sm:inline">
-                Profile {profileStatus}
-              </span>
+              profileStatus === "draft" && (livingCv.present || suggestPublish) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="hidden sm:inline-flex"
+                  disabled={visibilityBusy || sending || uploading}
+                  onClick={() => void setProfileVisibility("published")}
+                >
+                  {visibilityBusy ? "Publishing…" : "Publish"}
+                </Button>
+              ) : (
+                <span className="hidden rounded-md border border-border/60 px-2 py-1 text-[11px] capitalize text-muted-foreground sm:inline">
+                  Profile {profileStatus}
+                </span>
+              )
             ) : null}
             <Link href="/" className="hidden sm:inline">
               <Button type="button" size="sm" variant="outline">
@@ -798,6 +816,29 @@ export function AgentWorkspace({
                       ? " They asked for your certificates. Reply yes and I will send them."
                       : " They wrote back — likely interest. Ask Hermes what they said."}
                   </p>
+                </div>
+              ) : null}
+              {role === "diver" && suggestPublish && profileStatus === "draft" ? (
+                <div className="rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-sm text-heading">
+                  <p className="font-medium">Ready to go live?</p>
+                  <p className="mt-1 text-heading/90">
+                    Your CV is saved as a draft. Contractors cannot see it until you publish.
+                    Preview first if you want — publishing keeps your username.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href="/preview" target="_blank">
+                      <Button size="sm" variant="outline">
+                        Preview page
+                      </Button>
+                    </Link>
+                    <Button
+                      size="sm"
+                      disabled={visibilityBusy || sending || uploading}
+                      onClick={() => void setProfileVisibility("published")}
+                    >
+                      {visibilityBusy ? "Publishing…" : "Publish page"}
+                    </Button>
+                  </div>
                 </div>
               ) : null}
               {messages.length <= 1 ? (

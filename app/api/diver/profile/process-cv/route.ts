@@ -341,7 +341,7 @@ export async function POST(req: Request) {
     const certCount = payload.certifications?.length ?? 0;
     const cvReply =
       `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
-      "Your profile is still a draft — open Preview page, highlight any line you want changed and ask Hermes to fix it, then publish when ready. " +
+      "Your page is still a draft — contractors cannot see it yet. Open Preview to check, then say Publish my profile (or use Publish page in the workspace panel) when it looks right. " +
       (extractionWarnings.length
         ? `Notes: ${extractionWarnings.join(" ")} `
         : "") +

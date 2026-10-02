@@ -24,7 +24,7 @@ export async function GET() {
       listDiverDocumentFiles(supabase, authResult.diverId),
       supabase
         .from("diver_profiles")
-        .select("headline, updated_at")
+        .select("headline, updated_at, profile_status, cv_last_processed_at")
         .eq("user_id", authResult.diverId)
         .maybeSingle(),
     ]);
@@ -35,12 +35,15 @@ export async function GET() {
     }));
     const headline = (profileResult.data?.headline ?? "").trim();
     const livingCv = {
-      present: headline.length > 0,
+      present: headline.length > 0 || Boolean(profileResult.data?.cv_last_processed_at),
       updatedAt: profileResult.data?.updated_at ?? null,
     };
+    const profileStatus =
+      profileResult.data?.profile_status === "published" ? "published" : "draft";
 
     return NextResponse.json({
       livingCv,
+      profileStatus,
       certificates,
       documents: certificates,
     });
