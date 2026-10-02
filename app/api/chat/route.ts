@@ -188,6 +188,7 @@ export async function POST(req: Request) {
       suggestions: agentResult.suggestions,
       appliedJobIds: agentResult.appliedJobIds ?? [],
       profileStatus: agentResult.profile.profile.profile_status,
+      needsPhoto: Boolean(agentResult.needsPhoto),
       cvUpdated: agentResult.cvUpdated,
       updatedParts: agentResult.updatedParts,
     });

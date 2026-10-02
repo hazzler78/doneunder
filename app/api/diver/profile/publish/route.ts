@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { publishDiverProfile } from "@/lib/diver-profile-service";
+import { nudgeMissingPhotoAfterPublish } from "@/lib/photo-nudge";
 
 export async function POST() {
   try {
@@ -19,10 +21,19 @@ export async function POST() {
       );
     }
 
+    const service = createServiceSupabaseClient();
+    const photo = await nudgeMissingPhotoAfterPublish(service, {
+      diverId: authResult.diverId,
+      role: "diver",
+    });
+
     return NextResponse.json({
       ok: true,
       validation: result.validation,
       profile: result.profile.profile,
+      hasPhoto: photo.hasPhoto,
+      needsPhoto: !photo.hasPhoto,
+      photoNudged: photo.nudged,
     });
   } catch {
     return NextResponse.json({ error: "Unable to publish profile." }, { status: 500 });

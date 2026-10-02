@@ -149,8 +149,12 @@ export default async function CvPreviewPage() {
         </section>
 
         {p.polished_cv_markdown ? (
-          <section className="mt-6 space-y-3">
-            <h2 className="text-xl font-semibold">AI Polished CV Draft</h2>
+          <section className="mt-6 space-y-3 print:hidden">
+            <h2 className="text-xl font-semibold">Working draft (private)</h2>
+            <p className="text-xs text-muted-foreground">
+              Internal Hermes draft — not shown on your public CV. Highlight text above to fix the
+              structured sections instead.
+            </p>
             <pre className="whitespace-pre-wrap rounded-lg border bg-muted p-4 font-sans text-sm">
               {p.polished_cv_markdown}
             </pre>

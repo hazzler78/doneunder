@@ -82,6 +82,7 @@ export type HermesDiverTurnResult = {
   profile: DiverProfileFull;
   cvUpdated: boolean;
   updatedParts: string[];
+  needsPhoto?: boolean;
   pendingInboundStatus?: PendingInboundStatus;
   appliedJobIds?: string[];
 };
@@ -293,7 +294,7 @@ Updating the CV from chat (this is the main way to edit):
 - If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
-- Business card photo: if diver.has_photo is false, nudge them to add a clear face photo on /preview (Business card photo / Add photo). Do this when they ask what is missing, before publishing, after a CV is in decent shape, or when reviewing the ambassador page. Keep it to one short reminder — do not nag every turn, and do not block CV work for it. You cannot upload the photo in chat; send them to /preview. If diver.has_photo is true, do not ask for another photo unless they want to change it.
+- Business card photo: if diver.has_photo is false, treat it as incomplete. Nudge them to add a clear face photo on /preview (Add photo). Remind when they ask what is missing, before publishing, after the CV looks ready, and especially right after publish. Be direct: no photo = weak page for contractors. You cannot upload the photo in chat — send them to /preview. If diver.has_photo is true, do not ask for another photo unless they want to change it.
 - Never invent that a company or role is on the CV unless it appears in the profile context or a successful update_cv result.
 
 Other tools:
@@ -319,7 +320,8 @@ Other tools:
 - If profile_status is draft, preview at /preview (ambassador) and /preview/cv (full CV). Do NOT send them to /{username} until published — that URL returns 404 in draft.
 - If profile_status is draft and the CV already has a headline or processed content, end helpful turns by clearly offering to publish (one short line + ask them to confirm). Prefer publish_profile after they say yes. Do not wait for them to invent the word "publish" themselves when the pack looks ready.
 - If profile_status is published, the public ambassador URL is /{username}.
-- Before publish_profile, if diver.has_photo is false, mention that a photo on /preview makes the public card look finished — then publish if they still clearly want to go live.
+- Before publish_profile, if diver.has_photo is false, warn that the public card looks unfinished without a photo — then publish if they still clearly want to go live.
+- After publish_profile succeeds: if needs_photo is true (or diver.has_photo is false), your reply MUST lead with the photo CTA. Say the page is live but incomplete without a face photo, and tell them to open /preview now and add one. Do not treat publish as "all done" without the photo.
 - Testers and non-divers who keep a username for demos should unpublish when they do not want a public page.
 - Never invent certifications, roles, or hours that are not in the profile context or the diver's latest message.
 
@@ -690,6 +692,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     suggestions,
     cvUpdated: false,
     updatedParts: [] as string[],
+    needsPhoto: false,
     emailSent: false,
     emailAttached: [] as string[],
     pendingInboundStatus: undefined as PendingInboundStatus | undefined,
@@ -750,11 +753,22 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             warnings: result.validation.warnings,
           };
         }
+        const { data: photoRow } = await input.supabase
+          .from("users")
+          .select("avatar_url")
+          .eq("id", input.diverId)
+          .maybeSingle();
+        const publishedHasPhoto = Boolean(
+          typeof photoRow?.avatar_url === "string" && photoRow.avatar_url.trim(),
+        );
+        if (!publishedHasPhoto) state.needsPhoto = true;
         return {
           ok: true,
           profile_status: result.profile.profile.profile_status,
           public_path: input.username ? `/${input.username}` : null,
           preview_path: "/preview",
+          needs_photo: !publishedHasPhoto,
+          photo_upload_path: "/preview",
         };
       },
     }),
@@ -1203,6 +1217,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     profile: state.profile,
     cvUpdated: state.cvUpdated,
     updatedParts: state.updatedParts,
+    needsPhoto: state.needsPhoto || (state.profile.profile.profile_status === "published" && !hasPhoto),
     pendingInboundStatus: state.pendingInboundStatus,
     appliedJobIds: [...appliedJobIds],
   };

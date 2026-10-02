@@ -25,6 +25,7 @@ type ChatResponse = {
   }>;
   appliedJobIds?: string[];
   profileStatus?: "draft" | "published";
+  needsPhoto?: boolean;
   cvUpdated?: boolean;
   updatedParts?: string[];
 };
@@ -122,6 +123,8 @@ export function AgentWorkspace({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [suggestPublish, setSuggestPublish] = useState(false);
+  const [hasPhoto, setHasPhoto] = useState(true);
+  const [suggestPhoto, setSuggestPhoto] = useState(false);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certs, setCerts] = useState<File[]>([]);
@@ -288,11 +291,15 @@ export function AgentWorkspace({
         certificates?: DocumentEntry[];
         livingCv?: LivingCvInfo;
         profileStatus?: "draft" | "published";
+        hasPhoto?: boolean;
+        needsPhoto?: boolean;
       };
       if (response.ok) {
         setDocuments(data.certificates ?? data.documents ?? []);
         if (data.livingCv) setLivingCv(data.livingCv);
         if (data.profileStatus) setProfileStatus(data.profileStatus);
+        if (typeof data.hasPhoto === "boolean") setHasPhoto(data.hasPhoto);
+        setSuggestPhoto(Boolean(data.needsPhoto) || (data.profileStatus === "published" && data.hasPhoto === false));
         if (
           data.profileStatus !== "published" &&
           (data.livingCv?.present || (data.certificates ?? data.documents ?? []).length > 0)
@@ -340,9 +347,14 @@ export function AgentWorkspace({
         setAppliedJobIds((prev) => [...new Set([...prev, ...data.appliedJobIds!])]);
       }
       if (data.profileStatus) setProfileStatus(data.profileStatus);
+      if (data.needsPhoto) {
+        setSuggestPhoto(true);
+        setHasPhoto(false);
+      }
       if (data.cvUpdated) {
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
       }
+      void loadDocuments();
       void loadChatHistory({ silent: true });
       if (schoolOutreachEnabled) void loadSchoolOutreach();
     } catch {
@@ -501,6 +513,8 @@ export function AgentWorkspace({
         ok?: boolean;
         error?: string;
         profile?: { profile_status?: "draft" | "published" };
+        hasPhoto?: boolean;
+        needsPhoto?: boolean;
       };
       if (!response.ok || data.ok === false) {
         setUploadError(data.error ?? (next === "published" ? "Could not publish." : "Could not unpublish."));
@@ -509,13 +523,26 @@ export function AgentWorkspace({
       const status = data.profile?.profile_status ?? next;
       setProfileStatus(status);
       setSuggestPublish(false);
-      setUploadNotice(
-        status === "published"
-          ? username
-            ? `Published. Live at /${username}.`
-            : "Published."
-          : "Unpublished. Your public page is offline; @username and previews stay for testing.",
-      );
+      if (status === "published") {
+        const needsPhoto = data.needsPhoto === true || data.hasPhoto === false;
+        if (typeof data.hasPhoto === "boolean") setHasPhoto(data.hasPhoto);
+        setSuggestPhoto(needsPhoto);
+        setUploadNotice(
+          needsPhoto
+            ? username
+              ? `Published at /${username} — add a face photo next (required for a strong page).`
+              : "Published — add a face photo next (required for a strong page)."
+            : username
+              ? `Published. Live at /${username}.`
+              : "Published.",
+        );
+        void loadChatHistory({ silent: true });
+      } else {
+        setSuggestPhoto(false);
+        setUploadNotice(
+          "Unpublished. Your public page is offline; @username and previews stay for testing.",
+        );
+      }
     } catch {
       setUploadError(next === "published" ? "Could not publish." : "Could not unpublish.");
     } finally {
@@ -548,9 +575,18 @@ export function AgentWorkspace({
             {profileStatus === "published" ? (
               <>
                 <p className="text-[11px] leading-relaxed">
-                  Your page is live{username ? ` at /${username}` : ""}. Unpublish to take it offline
-                  without losing your username or draft.
+                  Your page is live{username ? ` at /${username}` : ""}.
+                  {!hasPhoto
+                    ? " Add a face photo on Preview — without it the page looks unfinished."
+                    : " Unpublish to take it offline without losing your username or draft."}
                 </p>
+                {!hasPhoto ? (
+                  <Link href="/preview" target="_blank">
+                    <Button size="sm" className="w-full">
+                      Add face photo
+                    </Button>
+                  </Link>
+                ) : null}
                 <Button
                   size="sm"
                   variant="outline"
@@ -855,6 +891,12 @@ export function AgentWorkspace({
                 >
                   {visibilityBusy ? "Publishing…" : "Publish"}
                 </Button>
+              ) : profileStatus === "published" && suggestPhoto ? (
+                <Link href="/preview" target="_blank" className="hidden sm:inline">
+                  <Button type="button" size="sm">
+                    Add photo
+                  </Button>
+                </Link>
               ) : (
                 <span className="hidden rounded-md border border-border/60 px-2 py-1 text-[11px] capitalize text-muted-foreground sm:inline">
                   Profile {profileStatus}
@@ -912,6 +954,20 @@ export function AgentWorkspace({
                     >
                       {visibilityBusy ? "Publishing…" : "Publish page"}
                     </Button>
+                  </div>
+                </div>
+              ) : null}
+              {role === "diver" && suggestPhoto && profileStatus === "published" ? (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm text-heading">
+                  <p className="font-medium">Add a face photo — next step</p>
+                  <p className="mt-1 text-heading/90">
+                    Your page is live, but without a photo it looks unfinished to contractors.
+                    Open Preview and upload a clear head-and-shoulders shot.
+                  </p>
+                  <div className="mt-3">
+                    <Link href="/preview" target="_blank">
+                      <Button size="sm">Add photo on Preview</Button>
+                    </Link>
                   </div>
                 </div>
               ) : null}

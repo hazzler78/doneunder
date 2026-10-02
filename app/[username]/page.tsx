@@ -116,7 +116,7 @@ export default async function AmbassadorPage({
       }
       certifications={certRows}
       avatarUrl={avatarUrl}
-      showCvLink={Boolean(publicAmbassador.polished_cv_markdown || username === "gareth")}
+      showCvLink
     />
   );
 

@@ -20,13 +20,14 @@ export async function GET() {
     if ("error" in authResult) return authResult.error;
 
     const supabase = createServiceSupabaseClient();
-    const [allFiles, profileResult] = await Promise.all([
+    const [allFiles, profileResult, userResult] = await Promise.all([
       listDiverDocumentFiles(supabase, authResult.diverId),
       supabase
         .from("diver_profiles")
         .select("headline, updated_at, profile_status, cv_last_processed_at")
         .eq("user_id", authResult.diverId)
         .maybeSingle(),
+      supabase.from("users").select("avatar_url").eq("id", authResult.diverId).maybeSingle(),
     ]);
 
     const certificates = listCertificateDocumentFiles(allFiles).map((file) => ({
@@ -40,10 +41,15 @@ export async function GET() {
     };
     const profileStatus =
       profileResult.data?.profile_status === "published" ? "published" : "draft";
+    const hasPhoto = Boolean(
+      typeof userResult.data?.avatar_url === "string" && userResult.data.avatar_url.trim(),
+    );
 
     return NextResponse.json({
       livingCv,
       profileStatus,
+      hasPhoto,
+      needsPhoto: profileStatus === "published" && !hasPhoto,
       certificates,
       documents: certificates,
     });
