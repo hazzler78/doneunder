@@ -4,6 +4,7 @@ import { AgentWorkspace } from "@/components/agent-workspace";
 import { ensureDiverProfileForAuthUser } from "@/lib/diver-auth";
 import { findCatalogJob, matchPromptForJob, workspaceMatchHref } from "@/lib/jobs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { canUseSchoolOutreach } from "@/lib/school-outreach-access";
 import type { UserRole } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -57,6 +58,7 @@ export default async function WorkspacePage({
       username={userRow?.username ?? null}
       initialMatchPrompt={matchJob ? matchPromptForJob(matchJob) : null}
       initialFixPrompt={initialFixPrompt}
+      schoolOutreachEnabled={canUseSchoolOutreach(userRow?.username, userRow?.email ?? user.email)}
     />
   );
 }

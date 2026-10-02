@@ -49,6 +49,7 @@ type Props = {
   initialMatchPrompt?: string | null;
   /** Prefill chat from CV preview highlight (`/workspace?fix=…`). */
   initialFixPrompt?: string | null;
+  schoolOutreachEnabled?: boolean;
 };
 
 type Message = {
@@ -72,6 +73,13 @@ type PendingInboundNotice = {
 };
 
 const diverFirstRunPrompts = ["Match me to open campaigns"];
+
+const garethSchoolOutreachPrompts = [
+  "Who should I contact next on the school list?",
+  "Mark PDA as contacted — I emailed their careers address today",
+  "List UK schools still todo",
+  "Draft a short intro email to a diving school about DoneUnder for graduates",
+];
 
 const diverStarterPrompts = [
   "How does my CV look?",
@@ -98,6 +106,7 @@ export function AgentWorkspace({
   username,
   initialMatchPrompt = null,
   initialFixPrompt = null,
+  schoolOutreachEnabled = false,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -117,6 +126,11 @@ export function AgentWorkspace({
   const [mainCv, setMainCv] = useState<File | null>(null);
   const [certs, setCerts] = useState<File[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [schoolTargets, setSchoolTargets] = useState<
+    Array<{ slug: string; name: string; status: string; priority: number; country: string | null }>
+  >([]);
+  const [schoolSummary, setSchoolSummary] = useState<Record<string, number> | null>(null);
+  const [schoolListLoading, setSchoolListLoading] = useState(false);
   const [cvUpdatedParts, setCvUpdatedParts] = useState<string[]>([]);
   const [pendingInbound, setPendingInbound] = useState<PendingInboundNotice | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -126,18 +140,46 @@ export function AgentWorkspace({
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   const firstRun = role === "diver" && !livingCv.present && documents.length === 0;
-  const starters = useMemo(
-    () => (role === "diver" ? (firstRun ? diverFirstRunPrompts : diverStarterPrompts) : companyStarterPrompts),
-    [role, firstRun],
-  );
+  const starters = useMemo(() => {
+    if (role === "company") return companyStarterPrompts;
+    if (schoolOutreachEnabled) return garethSchoolOutreachPrompts;
+    return firstRun ? diverFirstRunPrompts : diverStarterPrompts;
+  }, [role, firstRun, schoolOutreachEnabled]);
+
+  async function loadSchoolOutreach() {
+    if (!schoolOutreachEnabled) return;
+    setSchoolListLoading(true);
+    try {
+      const response = await fetch("/api/outreach/schools?status=todo");
+      const data = (await response.json()) as {
+        summary?: { byStatus?: Record<string, number> };
+        targets?: Array<{
+          slug: string;
+          name: string;
+          status: string;
+          priority: number;
+          country: string | null;
+        }>;
+      };
+      if (response.ok && data.targets) {
+        setSchoolTargets(data.targets.slice(0, 12));
+        setSchoolSummary(data.summary?.byStatus ?? null);
+      }
+    } finally {
+      setSchoolListLoading(false);
+    }
+  }
 
   useEffect(() => {
     void loadChatHistory();
     if (role === "diver") {
       void loadDocuments();
     }
+    if (schoolOutreachEnabled) {
+      void loadSchoolOutreach();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role]);
+  }, [role, schoolOutreachEnabled]);
 
   useEffect(() => {
     if (role !== "diver") return;
@@ -302,6 +344,7 @@ export function AgentWorkspace({
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
       }
       void loadChatHistory({ silent: true });
+      if (schoolOutreachEnabled) void loadSchoolOutreach();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -533,6 +576,37 @@ export function AgentWorkspace({
                 </Button>
               </>
             )}
+          </div>
+        ) : null}
+        {schoolOutreachEnabled ? (
+          <div className="mt-3 space-y-2 rounded-lg border border-border/60 bg-card/80 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-heading">School outreach</p>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => void loadSchoolOutreach()}>
+                {schoolListLoading ? "…" : "Refresh"}
+              </Button>
+            </div>
+            {schoolSummary ? (
+              <p className="text-[10px] text-muted-foreground">
+                todo {schoolSummary.todo ?? 0} · contacted {schoolSummary.contacted ?? 0} · replied{" "}
+                {schoolSummary.replied ?? 0} · partner {schoolSummary.partner ?? 0}
+              </p>
+            ) : null}
+            <ul className="max-h-40 space-y-1 overflow-y-auto text-[10px] text-muted-foreground">
+              {schoolTargets.length === 0 ? (
+                <li>{schoolListLoading ? "Loading…" : "No todo schools — ask Hermes for the full list."}</li>
+              ) : (
+                schoolTargets.map((t) => (
+                  <li key={t.slug} className="truncate">
+                    P{t.priority} · {t.name}
+                    {t.country ? ` (${t.country})` : ""}
+                  </li>
+                ))
+              )}
+            </ul>
+            <p className="text-[10px] text-muted-foreground">
+              Tell Hermes when you email a school — e.g. “Mark CDT contacted, emailed careers today.”
+            </p>
           </div>
         ) : null}
         <a

@@ -40,6 +40,16 @@ import {
   type PendingInbound,
   type PendingInboundStatus,
 } from "@/lib/inbound-email";
+import { canUseSchoolOutreach } from "@/lib/school-outreach-access";
+import {
+  addSchoolOutreachTarget,
+  listSchoolOutreachTargets,
+  logSchoolOutreachContact,
+  summarizeSchoolOutreach,
+  updateSchoolOutreachTarget,
+  type SchoolContactChannel,
+  type SchoolOutreachStatus,
+} from "@/lib/school-outreach";
 
 export type JobSuggestion = {
   id: string;
@@ -225,7 +235,32 @@ function buildProfileContext(
   };
 }
 
-function buildSystemPrompt(context: ReturnType<typeof buildProfileContext>) {
+function buildSchoolOutreachSystemAddon(
+  summary: Awaited<ReturnType<typeof summarizeSchoolOutreach>>,
+) {
+  const next = summary.nextTodo
+    .map((t) => `${t.slug} — ${t.name} (P${t.priority}${t.country ? `, ${t.country}` : ""})`)
+    .join("\n");
+  return `
+
+School outreach ops (DoneUnder partnerships — separate from diver CV work):
+- Gareth is building relationships with commercial diving schools so graduates can upload tickets and publish on DoneUnder.
+- Use list_school_targets when he asks who to contact, what's left, or for a pipeline summary.
+- When he reports an email sent, call made, or meeting, call log_school_contact with the school slug or name, channel, and a one-line summary. Default status becomes contacted unless he says they replied (use set_status=replied) or partnership (partner).
+- Use update_school_target to fix contact person/email, notes, website, priority, or status without a new contact log.
+- Use add_school_target if a school is missing from the list.
+- Help draft outreach emails in chat; if he sends via send_email to a school contact, then log_school_contact in the same turn when he confirms it went out.
+
+Pipeline counts: ${JSON.stringify(summary.byStatus)} active targets=${summary.totalActive}
+Next todo (up to 8):
+${next || "(none — check list_school_targets)"}
+`;
+}
+
+function buildSystemPrompt(
+  context: ReturnType<typeof buildProfileContext>,
+  schoolOutreachAddon?: string,
+) {
   return `You are Hermes, the DoneUnder diver profile agent.
 
 You help commercial divers build, refine, review, and publish their CV and ambassador profile, find matching offshore jobs, and send professional emails on their behalf.
@@ -289,7 +324,7 @@ Other tools:
 - Never invent certifications, roles, or hours that are not in the profile context or the diver's latest message.
 
 Current profile context (source of truth):
-${JSON.stringify(context, null, 2)}`;
+${JSON.stringify(context, null, 2)}${schoolOutreachAddon ?? ""}`;
 }
 
 function describeToolFailure(error: unknown): string {
@@ -311,15 +346,14 @@ function outputLooksFailed(output: unknown): string | null {
   return parts.filter(Boolean).join(" ") || "update failed";
 }
 
-function collectToolFailures(result: {
-  steps?: Array<{
-    toolCalls?: Array<{ toolName?: string; invalid?: boolean; error?: unknown }>;
-    toolResults?: Array<{ toolName?: string; output?: unknown }>;
-    content?: Array<{ type?: string; toolName?: string; error?: unknown; output?: unknown }>;
-  }>;
-}): string[] {
+function collectToolFailures(result: { steps?: readonly unknown[] }): string[] {
   const failures: string[] = [];
-  for (const step of result.steps ?? []) {
+  for (const rawStep of result.steps ?? []) {
+    const step = rawStep as {
+      toolCalls?: Array<{ toolName?: string; invalid?: boolean; error?: unknown }>;
+      toolResults?: Array<{ toolName?: string; output?: unknown }>;
+      content?: Array<{ type?: string; toolName?: string; error?: unknown; output?: unknown }>;
+    };
     for (const call of step.toolCalls ?? []) {
       if (call.invalid || call.error) {
         failures.push(`${call.toolName ?? "tool"}: ${describeToolFailure(call.error ?? "invalid tool input")}`);
@@ -632,6 +666,11 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   const hasPhoto = Boolean(
     typeof userPhotoRow?.avatar_url === "string" && userPhotoRow.avatar_url.trim(),
   );
+  const schoolOutreachEnabled = canUseSchoolOutreach(input.username, input.userEmail);
+  const schoolOutreachSummary = schoolOutreachEnabled
+    ? await summarizeSchoolOutreach(input.supabase)
+    : null;
+
   const context = buildProfileContext(
     profile,
     input.username,
@@ -641,7 +680,10 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     openJobs,
     hasPhoto,
   );
-  const system = buildSystemPrompt(context);
+  const system = buildSystemPrompt(
+    context,
+    schoolOutreachSummary ? buildSchoolOutreachSystemAddon(schoolOutreachSummary) : undefined,
+  );
 
   const state = {
     profile,
@@ -1033,6 +1075,108 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         }
       },
     }),
+    ...(schoolOutreachEnabled
+      ? {
+          list_school_targets: tool({
+            description:
+              "List commercial diving school outreach targets and their status (todo, contacted, replied, partner, skip).",
+            inputSchema: z.object({
+              status: z
+                .enum(["todo", "contacted", "replied", "partner", "skip", "active"])
+                .optional()
+                .describe("Filter by status. active = exclude skip."),
+              priority: z.number().int().min(0).max(6).optional(),
+              search: z.string().optional().describe("Search name, slug, country, location."),
+            }),
+            execute: async ({ status, priority, search }) => {
+              const targets = await listSchoolOutreachTargets(input.supabase, {
+                status: status ?? "active",
+                priority,
+                search,
+                limit: 40,
+              });
+              return {
+                ok: true,
+                count: targets.length,
+                targets: targets.map((t) => ({
+                  slug: t.slug,
+                  name: t.name,
+                  status: t.status,
+                  priority: t.priority,
+                  country: t.country,
+                  location: t.location,
+                  website: t.website,
+                  contact_name: t.contact_name,
+                  contact_email: t.contact_email,
+                  last_contacted_at: t.last_contacted_at,
+                })),
+              };
+            },
+          }),
+          log_school_contact: tool({
+            description:
+              "Record that Gareth contacted a school. Updates last_contacted and status (default contacted from todo).",
+            inputSchema: z.object({
+              school: z.string().describe("School slug or distinctive name fragment."),
+              channel: z.enum(["email", "phone", "visit", "other"]).default("email"),
+              summary: z.string().min(1).max(500).describe("What happened — one or two sentences."),
+              contact_email: z.string().email().optional(),
+              set_status: z.enum(["contacted", "replied", "partner", "todo", "skip"]).optional(),
+            }),
+            execute: async ({ school, channel, summary, contact_email, set_status }) => {
+              const result = await logSchoolOutreachContact(input.supabase, {
+                userId: input.diverId,
+                ref: school,
+                channel: channel as SchoolContactChannel,
+                summary,
+                contact_email,
+                set_status: set_status as SchoolOutreachStatus | undefined,
+              });
+              if (!result.ok) return result;
+              return {
+                ok: true,
+                slug: result.target.slug,
+                name: result.target.name,
+                status: result.status,
+                last_contacted_at: result.target.last_contacted_at,
+              };
+            },
+          }),
+          update_school_target: tool({
+            description: "Update a school target metadata without logging a new contact event.",
+            inputSchema: z.object({
+              school: z.string(),
+              status: z.enum(["todo", "contacted", "replied", "partner", "skip"]).optional(),
+              contact_name: z.string().nullable().optional(),
+              contact_email: z.string().email().nullable().optional(),
+              contact_note: z.string().nullable().optional(),
+              notes: z.string().nullable().optional(),
+              website: z.string().url().nullable().optional(),
+              priority: z.number().int().min(0).max(6).optional(),
+            }),
+            execute: async ({ school, ...patch }) => {
+              const result = await updateSchoolOutreachTarget(input.supabase, school, patch);
+              if (!result.ok) return result;
+              return { ok: true, target: result.target };
+            },
+          }),
+          add_school_target: tool({
+            description: "Add a missing commercial diving school to the outreach list.",
+            inputSchema: z.object({
+              name: z.string().min(2),
+              slug: z.string().optional(),
+              priority: z.number().int().min(0).max(6).optional(),
+              location: z.string().optional(),
+              country: z.string().optional(),
+              website: z.string().url().optional(),
+              notes: z.string().optional(),
+            }),
+            execute: async (payload) => {
+              return addSchoolOutreachTarget(input.supabase, payload);
+            },
+          }),
+        }
+      : {}),
   };
 
   const result = await generateText({
