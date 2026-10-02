@@ -12,37 +12,43 @@ Mark status: `todo` | `contacted` | `replied` | `partner` | `skip`.
 
 ## Priority 1 — UK (start here)
 
-Natural fit for Gareth / ADC network. Fresh HSE tickets, CV help already part of some courses.
+Natural fit for Gareth / ADC network. Fresh **Surface Supplied** / Top-Up tickets — the DoneUnder ICP (construction, inshore, offshore air), not HSE SCUBA-only media/scientific paths.
 
 | School | Location | Notes | Website | Status |
 | --- | --- | --- | --- | --- |
 | Professional Diving Academy (PDA) | Scotland | HSE Scuba / Surface Supplied / Top-Up; ADC sister co Shearwater; explicit graduate CV + employer list help | https://www.professionaldivingacademy.com | todo |
 | Commercial Diver Training Ltd (CDT) | Cornwall | Only HSE assessor for all commercial air quals in England & Wales; careers coaching + CV help | https://www.commercialdivertraining.co.uk | todo |
 | Interdive UK Ltd | UK | HSE / IMCA / IDSA / ADC listed training | https://interdive.co.uk | todo |
-| Andark Diving and Watersports | Southampton | HSE Professional Scuba (entry rung) | https://www.andark.co.uk | todo |
-| Bristol Channel Diving Services | Cardiff | HSE SCUBA assessor (HSE list) | — | todo |
+| Norsk Yrkesdykkerskole (NYD) | Fagerstrand (Oslo area) | IDSA Level 4; Havtil/NPD. **Gareth trained here.** Contact info@nyd.no | https://nyd.no/ | todo |
 | DEEP | Tidenham, UK | HSE Closed Bell (advanced / sat path — later wave) | — | todo |
 
 ---
 
-## Priority 2 — Europe (IDSA + strong national schemes)
+## Priority 2 — Europe (IDSA Level 3+ / strong national schemes)
 
 | School | Country | Notes | Website | Status |
 | --- | --- | --- | --- | --- |
 | BC-opleidingen | Netherlands | NDC-RI / Hobéon-SKO path; IMCA-recognised Dutch scheme; English courses | https://www.bc-opleidingen.nl | todo |
 | Foundation NOK | Netherlands | IDSA Level 3 full member | — | todo |
-| Norsk Yrkesdykkerskole (NYD) | Fagerstrand (Oslo area) | IDSA Level 4; Havtil/NPD. **Gareth trained here.** Contact info@nyd.no | https://nyd.no/ | todo |
 | HVL Diver Education | Norway | Western Norway University of Applied Sciences; IDSA Level 3 | — | todo |
 | YRGO Commercial Diving School of Gothenburg | Sweden | IDSA Level 3; Swedish B50 VK path | — | todo |
 | Ecole Nationale des Scaphandriers (ENS) | France | IDSA Level 3 | — | todo |
 | Centro Studi CEDIFOP | Italy (Palermo) | IDSA Level 3; IMCA diving division member; strong alumni / contractor narrative | — | todo |
 | Oceanos Escuela de Buceo Profesional | Spain | IDSA Level 3 | — | todo |
-| CDA Bilbao | Spain | Spanish commercial titles (shallow / medium depth) | — | todo |
+| CDA Bilbao | Spain | Spanish commercial titles (shallow / medium depth) — Gareth to confirm | — | todo |
 | Hellenic Commercial Diving Academy | Greece | IDSA Level 3 | — | todo |
 | SAB AKVO | Belgium | IDSA Level 3 | — | todo |
-| Luksia Sukellusala | Finland | IDSA Level 2 | — | todo |
+
+---
+
+## Priority 2b — Europe second wave (inshore / Level 2)
+
+Real commercial, but IDSA Level 2 / shallower inshore — not first outreach.
+
+| School | Country | Notes | Website | Status |
+| --- | --- | --- | --- | --- |
+| Luksia Sukellusala | Finland | IDSA Level 2 (inshore SS to ~30 m) | — | todo |
 | OSNZ FROG | Poland | IDSA Level 2 | — | todo |
-| Irish Navy Diving School | Ireland | IDSA Level 3 (military school — outreach may differ) | — | todo |
 
 ---
 
@@ -91,13 +97,16 @@ Many DoneUnder divers already Class II / SA-trained. Good second wave after UK.
 
 ---
 
-## Skip / verify before contact
+## Skip / out of scope (or verify before contact)
 
-| Name | Reason |
-| --- | --- |
-| Underwater Centre Fort William | Reported closed / not training (re-verify) |
-| INPP (France) | No longer training divers (re-verify) |
-| Pure recreational PADI/SSI shops | Out of scope |
+| Name | Reason | Status |
+| --- | --- | --- |
+| Andark Diving and Watersports | Primarily PADI leisure centre; **HSE SCUBA only** (media/scientific entry) — not SSDE graduate factory | skip |
+| Bristol Channel Diving Services | **HSE SCUBA only**, media/scientific focus — not surface-supplied construction | skip |
+| Irish Navy Diving School | Military — different outreach | skip |
+| Underwater Centre Fort William | Reported closed / not training (re-verify) | skip |
+| INPP (France) | No longer training divers (re-verify) | skip |
+| Pure recreational PADI/SSI shops | Out of scope | skip |
 
 ---
 
@@ -111,4 +120,4 @@ Many DoneUnder divers already Class II / SA-trained. Good second wave after UK.
 
 ---
 
-*Last updated: 2026-10-02 — starter list from IDSA full members, ADC UK schools page, HSE assessor notes, and common ADAS/ACDE schools. Gareth: edit freely.*
+*Last updated: 2026-10-02 — UK HSE SCUBA-only shops (Andark, Bristol Channel) marked skip after Gareth review; first wave = Surface Supplied / IDSA L3+ / NYD.*
