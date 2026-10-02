@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AmbassadorProfileSwipe } from "@/components/ambassador-profile-swipe";
 import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
+import { loadAmbassadorSwipeContext } from "@/lib/public-ambassadors";
 import { SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
@@ -75,13 +77,14 @@ export default async function AmbassadorPage({
 
   if (!publicAmbassador) notFound();
 
-  const [{ data: certifications }, { data: userRow }] = await Promise.all([
+  const [{ data: certifications }, { data: userRow }, swipe] = await Promise.all([
     supabase
       .from("diver_certifications")
       .select("name,expiry_date")
       .eq("diver_id", publicAmbassador.user_id)
       .order("sort_order", { ascending: true }),
     supabase.from("users").select("avatar_url").eq("id", publicAmbassador.user_id).maybeSingle(),
+    loadAmbassadorSwipeContext(username),
   ]);
 
   const avatarUrl = userRow?.avatar_url ?? null;
@@ -97,7 +100,7 @@ export default async function AmbassadorPage({
       )
     : [];
 
-  return (
+  const profile = (
     <AmbassadorProfileView
       displayName={displayName}
       username={username}
@@ -116,4 +119,8 @@ export default async function AmbassadorPage({
       showCvLink={Boolean(publicAmbassador.polished_cv_markdown || username === "gareth")}
     />
   );
+
+  if (!swipe) return profile;
+
+  return <AmbassadorProfileSwipe swipe={swipe}>{profile}</AmbassadorProfileSwipe>;
 }

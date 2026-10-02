@@ -50,3 +50,53 @@ export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbass
     return [];
   }
 }
+
+export type AmbassadorNeighbor = {
+  username: string;
+  fullName: string;
+};
+
+export type AmbassadorSwipeContext = {
+  index: number;
+  total: number;
+  previous: AmbassadorNeighbor | null;
+  next: AmbassadorNeighbor | null;
+};
+
+/** Ordered published ambassadors for swipe / prev-next on profile pages. */
+export async function loadAmbassadorSwipeContext(
+  currentUsername: string,
+): Promise<AmbassadorSwipeContext | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("public_diver_ambassador")
+      .select("username,full_name")
+      .not("username", "is", null)
+      .order("published_at", { ascending: false })
+      .limit(40);
+    if (error || !data?.length) return null;
+
+    const neighbors = data
+      .filter((row) => isIndexableAmbassadorUsername(row.username))
+      .map((row) => ({
+        username: (row.username as string).trim().toLowerCase(),
+        fullName: (row.full_name as string) || (row.username as string),
+      }));
+
+    const current = currentUsername.trim().toLowerCase();
+    const index = neighbors.findIndex((row) => row.username === current);
+    if (index < 0 || neighbors.length < 2) return null;
+
+    return {
+      index,
+      total: neighbors.length,
+      previous: index > 0 ? neighbors[index - 1] : null,
+      next: index < neighbors.length - 1 ? neighbors[index + 1] : null,
+    };
+  } catch (error) {
+    console.error("Failed to load ambassador swipe context:", error);
+    return null;
+  }
+}
