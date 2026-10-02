@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { CONTACT_EMAIL, CONTACT_MAILTO } from "@/lib/site";
+import { AmbassadorCardCarousel } from "@/components/ambassador-card-carousel";
 import { loadPublicAmbassadorCards } from "@/lib/public-ambassadors";
 import {
   AgentChatMockup,
@@ -233,40 +234,7 @@ export default async function Home() {
               No public ambassador pages yet. Create a free account and publish yours with Hermes.
             </p>
           ) : (
-            <div className="mt-10 grid gap-4 sm:grid-cols-2">
-              {ambassadors.map((diver) => (
-                <Link
-                  key={diver.username}
-                  href={`/${diver.username}`}
-                  className="group block rounded-xl border border-border/60 bg-card/80 p-5 transition hover:border-primary/35 hover:bg-accent"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-display text-lg font-semibold text-heading group-hover:text-foreground">
-                        {diver.fullName}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{diver.headline}</p>
-                    </div>
-                    <span className="shrink-0 rounded-md bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">
-                      Live
-                    </span>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {diver.location ? <span>{diver.location}</span> : null}
-                    {diver.location && diver.availabilityStatus ? <span className="text-border">·</span> : null}
-                    {diver.availabilityStatus ? (
-                      <span className="capitalize">{diver.availabilityStatus}</span>
-                    ) : null}
-                    {diver.mobilizationNotice ? (
-                      <>
-                        <span className="text-border">·</span>
-                        <span>{diver.mobilizationNotice}</span>
-                      </>
-                    ) : null}
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <AmbassadorCardCarousel cards={ambassadors} />
           )}
         </div>
       </section>
