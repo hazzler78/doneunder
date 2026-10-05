@@ -33,6 +33,13 @@ export function certificatesPdfFilename(displayName: string) {
 function looksLikePersonName(value: string) {
   const text = value.trim();
   if (text.length < 4 || text.length > 70) return false;
+  if (
+    /^(key highlights|professional summary|career metrics|professional experience|certifications|references|contact|education|skills|core competencies)$/i.test(
+      text,
+    )
+  ) {
+    return false;
+  }
   if (/test document|professional|summary|certification|experience|commercial diver/i.test(text)) {
     return false;
   }
@@ -50,7 +57,10 @@ export function livingCvDisplayName(
   const heading = markdown.match(/^#\s+([^\n]+)/m)?.[1]?.trim();
   if (heading && looksLikePersonName(heading)) return heading;
   for (const line of markdown.split("\n")) {
-    const text = line.replace(/^#+\s*/, "").trim();
+    // Section titles like "## Key Highlights" are not names.
+    if (/^##\s/.test(line)) break;
+    if (/^#\s/.test(line)) continue;
+    const text = line.trim();
     if (looksLikePersonName(text)) return text;
   }
   const fallbackName = fallback.trim();

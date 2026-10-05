@@ -323,10 +323,12 @@ describe("outbound email identity", () => {
   it("sends as a doneunder.ai mailbox when the account is on that domain", () => {
     process.env.RESEND_FROM_EMAIL = "Hermes <hello@doneunder.ai>";
     process.env.RESEND_FROM_DOMAIN = "doneunder.ai";
+    process.env.RESEND_INBOUND_DOMAIN = "voreek.resend.app";
 
     const identity = resolveSenderIdentity("gareth@doneunder.ai", "Gareth Darrin Middleton", "gareth");
     assert.equal(identity.mode, "user");
     assert.equal(identity.from, "Gareth Darrin Middleton <gareth@doneunder.ai>");
+    assert.equal(identity.replyTo, "gareth@doneunder.ai");
   });
 
   it("does not put a resend.app address on contractor-facing mail", () => {
@@ -356,5 +358,19 @@ describe("living CV display name", () => {
       "Velvet Orion X",
     );
     assert.equal(name, "Alex Holm");
+  });
+
+  it("does not treat Key Highlights as the diver name", () => {
+    const name = livingCvDisplayName(
+      {
+        profile: {
+          polished_cv_markdown:
+            "# Commercial Diver CV\n\n## Key Highlights\n- IMCA ready\n\n## Professional Experience\n",
+          polished_cv_json: { experiences: [], certifications: [], references: [] },
+        } as never,
+      },
+      "Gareth Darrin Middleton",
+    );
+    assert.equal(name, "Gareth Darrin Middleton");
   });
 });
