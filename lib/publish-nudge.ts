@@ -4,12 +4,11 @@ import { appendAgentMessage } from "@/lib/agent-messages";
 import { upsertWorkspaceThread } from "@/lib/agent-threads";
 import { parseEmailAddress, stripQuotes } from "@/lib/email";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import { isPublishNudgeSkipped } from "@/lib/publish-nudge-skip";
 import { SITE_URL } from "@/lib/site";
 
 export const PUBLISH_NUDGE_META = "publish_nudge_email";
-
-/** Accounts we never nudge to publish (testers / non-divers). */
-const SKIP_USERNAMES = new Set(["mikael"]);
+export { isPublishNudgeSkipped };
 
 const NUDGE_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000;
 /** Give divers a day after CV process before the first email. */
@@ -133,9 +132,8 @@ export async function listPublishNudgeCandidates(
 
   for (const diver of divers ?? []) {
     const username = diver.username?.trim().toLowerCase() || null;
-    if (username && SKIP_USERNAMES.has(username)) continue;
-
     const email = diver.email?.trim().toLowerCase() || "";
+    if (isPublishNudgeSkipped({ email, username })) continue;
     if (!email.includes("@")) continue;
 
     const profile = profileBy[diver.id];
