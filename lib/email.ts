@@ -100,10 +100,10 @@ export function withInboundReplyFooter(body: string, replyTo: string) {
  * Resolve the From header so mail appears to come from the logged-in person.
  *
  * - If the user's email domain matches RESEND_FROM_DOMAIN (or the domain of
- *   RESEND_FROM_EMAIL), send as `"Name" <user@domain>`.
- * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>`.
- * - Reply-To is unique per diver (`{username}@{inbound domain}`) so a company
- *   reply lands in that diver's Hermes thread. The visible From stays hello@.
+ *   RESEND_FROM_EMAIL), send as `"Name" <user@domain>` and Reply-To that same
+ *   mailbox (e.g. gareth@doneunder.ai on One.com).
+ * - Otherwise send as `"Name via doneunder.ai" <RESEND_FROM_EMAIL>` with
+ *   Reply-To `{username}@{inbound domain}` so company replies land in Hermes.
  */
 export function resolveSenderIdentity(
   userEmail: string,
@@ -120,19 +120,18 @@ export function resolveSenderIdentity(
 
   const userDomain = emailDomain(accountEmail);
   const canSendAsUser = Boolean(allowedDomain && userDomain === allowedDomain);
-  const replyTo = contractorReplyToAddress(username, userId);
 
   if (canSendAsUser) {
     return {
       from: `${displayName} <${accountEmail}>`,
-      replyTo,
+      replyTo: accountEmail,
       mode: "user" as const,
     };
   }
 
   return {
     from: `${displayName} via doneunder.ai <${platformAddress}>`,
-    replyTo,
+    replyTo: contractorReplyToAddress(username, userId),
     mode: "relay" as const,
   };
 }
