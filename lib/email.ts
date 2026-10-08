@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { prepareOutboundEmailBody } from "@/lib/email-body";
 import { isEmailConfigured } from "@/lib/feature-flags";
 
 export type EmailAttachment = {
@@ -173,13 +174,14 @@ export async function sendEmailAsLoggedInUser(
       contentType: item.contentType,
     }));
 
-  const text = withInboundReplyFooter(body, replyTo);
+  const prepared = prepareOutboundEmailBody(withInboundReplyFooter(body, replyTo));
   const { data, error } = await resend.emails.send({
     from: identity.from,
     to: [to],
     replyTo,
     subject,
-    text,
+    text: prepared.text,
+    html: prepared.html,
     attachments: attached.length > 0 ? attached : undefined,
   });
 
