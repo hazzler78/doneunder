@@ -307,7 +307,7 @@ Other tools:
 - match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo.
 - After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft and wait for a clear yes.
 - apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
-- For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval.
+- For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval. Light markdown in the body (**bold**, bullet lists) is fine — DoneUnder renders it for the recipient. Do not leave raw HTML in the body.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
@@ -1008,7 +1008,13 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       inputSchema: z.object({
         to: z.string().email().describe("Recipient email address"),
         subject: z.string().min(1).max(200),
-        body: z.string().min(1).max(8000).describe("Plain-text email body in English, written in the diver's voice"),
+        body: z
+          .string()
+          .min(1)
+          .max(8000)
+          .describe(
+            "Email body in English, written in the diver's voice. Plain text or light markdown (**bold**, lists). Do not use raw HTML.",
+          ),
         attach_cv: z
           .boolean()
           .optional()
