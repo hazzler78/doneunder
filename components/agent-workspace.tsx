@@ -679,14 +679,15 @@ export function AgentWorkspace({
             {hasStoredCv ? (
               <>
                 Hermes already keeps your living CV. Add <strong className="text-heading">certificate</strong>{" "}
-                scans (IMCA, BOSIET, medical) — PDF/JPG/PNG. Only replace the main CV if you have a brand-new
-                PDF. {MULTILINGUAL_UPLOAD_HINT}
+                scans (IMCA, BOSIET, medical) — PDF/JPG/PNG. One PDF with many tickets is fine. Only replace
+                the main CV if you have a brand-new PDF. {MULTILINGUAL_UPLOAD_HINT}
               </>
             ) : (
               <>
                 <strong className="text-heading">Main CV:</strong> one full diving CV PDF.{" "}
-                <strong className="text-heading">Certificates:</strong> separate ticket photos — not as the
-                main CV. On phone use the paperclip under chat, or Files → PDF. {MULTILINGUAL_UPLOAD_HINT}
+                <strong className="text-heading">Certificates:</strong> ticket photos or PDFs (one file can
+                hold many certs) — not as the main CV. On phone use the paperclip under chat, or Files → PDF.{" "}
+                {MULTILINGUAL_UPLOAD_HINT}
               </>
             )}
           </p>

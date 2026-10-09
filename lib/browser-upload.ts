@@ -6,6 +6,13 @@ export type CertificateUploadItem = {
   ticket?: string | null;
   expiry_date?: string | null;
   issue_date?: string | null;
+  ticketCount?: number;
+  tickets?: Array<{
+    name?: string | null;
+    issue_date?: string | null;
+    expiry_date?: string | null;
+    source?: string | null;
+  }>;
 };
 
 async function compressImageIfNeeded(file: File): Promise<File> {

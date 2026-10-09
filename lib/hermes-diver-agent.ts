@@ -13,7 +13,7 @@ import {
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
 import { buildDiverCvPdf, cvPdfFilename, livingCvDisplayName } from "@/lib/cv-pdf";
-import { applyCertificateRead, readCertificateBytes } from "@/lib/cert-text";
+import { applyCertificateReads, readAllCertificatesFromBytes } from "@/lib/cert-text";
 import {
   buildCertificateAttachments,
   DIVER_DOCUMENTS_BUCKET,
@@ -329,7 +329,7 @@ Conversation style:
 One living CV:
 - There is a single living CV: the profile you maintain. Chat updates via update_cv are the source of truth. When they ask to send their CV, attach that living CV PDF — never an old uploaded file.
 - An uploaded CV PDF is only a first import (or a rare full replace). After a living CV exists, do NOT ask them to upload another CV.
-- Certificates are separate documents. They stay until renewed. If they already have that ticket, do not add a duplicate. If they upload a new scan of the same ticket, treat it as a renewal and replace the old scan.
+- Certificates are separate from the CV. One uploaded PDF may contain many tickets — the upload path extracts each one. They stay until renewed. If they already have that ticket, do not add a duplicate. If they upload a new scan of the same ticket, treat it as a renewal and replace the old scan.
 
 Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
@@ -342,7 +342,7 @@ Updating the CV from chat (this is the main way to edit):
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
-- If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
+- If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos or a multi-ticket PDF (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
 - Business card photo: if diver.has_photo is false, treat it as incomplete. Nudge them to add a clear face photo on /preview (Add photo). Remind when they ask what is missing, before publishing, after the CV looks ready, and especially right after publish. Be direct: no photo = weak page for contractors. You cannot upload the photo in chat — send them to /preview. If diver.has_photo is true, do not ask for another photo unless they want to change it.
@@ -365,7 +365,7 @@ Other tools:
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
-- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos. Do not say "not provided" if a stored scan has a date. If unreadable is true, ask the diver to type the date.
+- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). Do not say "not provided" if a stored scan has a date. If unreadable is true, ask the diver to type the date. Do not tell them to split a multi-cert PDF unless extraction returned nothing.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
 - Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
@@ -855,7 +855,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     inspect_certificates: tool({
       description:
-        "Read stored certificate PDFs and photos (JPEG/PNG). Extract ticket name, issue date, and expiry. Use this when the diver asks about expiry dates or a ticket shows expiry missing.",
+        "Read stored certificate PDFs and photos (JPEG/PNG). Extract every ticket in each file (multi-cert PDFs included): name, issue date, and expiry. Use when the diver asks about expiry dates or a ticket shows expiry missing.",
       inputSchema: z.object({
         apply: z
           .boolean()
@@ -876,18 +876,32 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             continue;
           }
           const bytes = Buffer.from(await data.arrayBuffer());
-          const read = await readCertificateBytes(bytes, file.name);
-          fromFiles.push({
-            file: file.name,
-            name: read.name,
-            issue_date: read.issue_date,
-            expiry_date: read.expiry_date,
-            source: read.source,
-            unreadable: read.unreadable,
-            excerpt: read.excerpt,
-          });
-          if (apply && (read.expiry_date || read.issue_date || read.name)) {
-            const result = await applyCertificateRead(input.supabase, input.diverId, read, file.name);
+          const reads = await readAllCertificatesFromBytes(bytes, file.name);
+          if (reads.length === 0) {
+            fromFiles.push({
+              file: file.name,
+              name: null,
+              issue_date: null,
+              expiry_date: null,
+              source: "none",
+              unreadable: true,
+              excerpt: "",
+            });
+            continue;
+          }
+          for (const read of reads) {
+            fromFiles.push({
+              file: file.name,
+              name: read.name,
+              issue_date: read.issue_date,
+              expiry_date: read.expiry_date,
+              source: read.source,
+              unreadable: read.unreadable,
+              excerpt: read.excerpt,
+            });
+          }
+          if (apply) {
+            const result = await applyCertificateReads(input.supabase, input.diverId, reads, file.name);
             if (result.ok) {
               state.profile = await getDiverProfile(input.supabase, input.diverId);
               state.cvUpdated = true;
@@ -902,6 +916,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             expiry_date: cert.expiry_date ?? null,
           })),
           from_files: fromFiles,
+          tickets_found: fromFiles.filter((item) => item.name || item.expiry_date || item.issue_date).length,
         };
       },
     }),

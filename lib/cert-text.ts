@@ -19,6 +19,9 @@ export type CertificateRead = {
   unreadable: boolean;
 };
 
+const MAX_MULTI_CERTS = 20;
+const MAX_VISION_PAGES = 8;
+
 const visionSchema = z.object({
   name: z.string().nullable(),
   issuing_body: z.string().nullable(),
@@ -27,6 +30,21 @@ const visionSchema = z.object({
   expiry_date: z.string().nullable().describe("YYYY-MM-DD if clearly visible, else null"),
   visible_text: z.string(),
   unreadable: z.boolean(),
+});
+
+const certFieldsSchema = z.object({
+  name: z.string().min(2).describe("Certificate title, e.g. IMCA Diver, FOET with CA-EBS, HSE Diver Medical"),
+  issuing_body: z.string().nullable(),
+  cert_number: z.string().nullable(),
+  issue_date: z.string().nullable().describe("YYYY-MM-DD if clearly visible, else null"),
+  expiry_date: z.string().nullable().describe("YYYY-MM-DD if clearly visible, else null"),
+});
+
+const multiCertSchema = z.object({
+  certificates: z
+    .array(certFieldsSchema)
+    .max(MAX_MULTI_CERTS)
+    .describe("Every distinct certificate found in the document. One entry per ticket."),
 });
 
 function emptyRead(): CertificateRead {
@@ -55,6 +73,103 @@ function normalizeRead(partial: Partial<CertificateRead> & { excerpt?: string })
   };
 }
 
+function dedupeReads(reads: CertificateRead[]): CertificateRead[] {
+  const seen = new Set<string>();
+  const out: CertificateRead[] = [];
+  for (const read of reads) {
+    if (!read.name && !read.expiry_date && !read.issue_date) continue;
+    const key = [
+      (read.name || "").toLowerCase(),
+      read.cert_number || "",
+      read.expiry_date || "",
+      read.issue_date || "",
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(read);
+  }
+  return out;
+}
+
+const MULTI_CERT_INSTRUCTIONS =
+  `${ENGLISH_ONLY_INSTRUCTION}\n` +
+  "This document may contain ONE or MANY commercial diving certificates in a single file " +
+  "(for example IMCA diver ticket, BOSIET/FOET, DMT, OEUK/HSE medical, Escape Chute, and more). " +
+  "Extract EVERY distinct certificate. One array entry per ticket. " +
+  "Do not merge different tickets into one entry. Do not invent missing fields. " +
+  "Dates are usually day/month/year (European). Return issue_date and expiry_date as YYYY-MM-DD. " +
+  "Keep official certificate titles; translate other wording into English when helpful.";
+
+async function extractMultipleFromText(text: string): Promise<CertificateRead[]> {
+  if (!isAiConfigured() || text.trim().length < 40) return [];
+  try {
+    const { object } = await generateObject({
+      model: aiModel,
+      schema: multiCertSchema,
+      prompt:
+        `${MULTI_CERT_INSTRUCTIONS}\n\n` +
+        "OCR / PDF text from the uploaded certificate pack follows:\n\n" +
+        text.slice(0, 24_000),
+    });
+    return dedupeReads(
+      (object.certificates || []).map((item) =>
+        normalizeRead({
+          ...item,
+          excerpt: text.slice(0, 400),
+          source: "pdf-text",
+          unreadable: false,
+        }),
+      ),
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function extractMultipleFromImages(images: Buffer[]): Promise<CertificateRead[]> {
+  if (!isAiConfigured() || images.length === 0) return [];
+  try {
+    const { object } = await generateObject({
+      model: aiModel,
+      schema: multiCertSchema,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                `${MULTI_CERT_INSTRUCTIONS}\n` +
+                `There are ${images.length} page image(s). Read all of them. ` +
+                "If a page is a different certificate from the previous page, add a new entry.",
+            },
+            ...images.map((image) => ({
+              type: "image" as const,
+              image,
+              mediaType:
+                image.length >= 2 && image[0] === 0xff && image[1] === 0xd8
+                  ? ("image/jpeg" as const)
+                  : ("image/png" as const),
+            })),
+          ],
+        },
+      ],
+    });
+    return dedupeReads(
+      (object.certificates || []).map((item) =>
+        normalizeRead({
+          ...item,
+          excerpt: item.name || "",
+          source: "vision",
+          unreadable: false,
+        }),
+      ),
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function extractDatesFromPdfBuffer(bytes: Buffer) {
   const read = await readCertificateBytes(bytes, "document.pdf", "application/pdf");
   return {
@@ -64,7 +179,7 @@ export async function extractDatesFromPdfBuffer(bytes: Buffer) {
   };
 }
 
-async function readPdfText(bytes: Buffer): Promise<CertificateRead> {
+async function readPdfTextSingle(bytes: Buffer): Promise<CertificateRead> {
   try {
     const text = await extractPdfText(bytes);
     const dates = extractCertificateDates(text);
@@ -92,6 +207,32 @@ async function readPdfText(bytes: Buffer): Promise<CertificateRead> {
   } catch {
     return emptyRead();
   }
+}
+
+async function readAllFromPdf(bytes: Buffer): Promise<CertificateRead[]> {
+  let text = "";
+  try {
+    text = await extractPdfText(bytes);
+  } catch {
+    text = "";
+  }
+
+  if (text.trim().length >= 80) {
+    const fromText = await extractMultipleFromText(text);
+    if (fromText.length > 0) return fromText;
+  }
+
+  try {
+    const { renderPdfPagesAsImages } = await import("@/lib/pdf-ocr");
+    const pages = await renderPdfPagesAsImages(bytes, { maxPages: MAX_VISION_PAGES, scale: 1.5 });
+    const fromVision = await extractMultipleFromImages(pages);
+    if (fromVision.length > 0) return fromVision;
+  } catch {
+    // Fall through to legacy single-cert path.
+  }
+
+  const single = await readPdfTextSingle(bytes);
+  return single.unreadable && !single.name && !single.expiry_date && !single.issue_date ? [] : [single];
 }
 
 async function readImageWithVision(bytes: Buffer, mediaType: "image/jpeg" | "image/png"): Promise<CertificateRead> {
@@ -135,19 +276,31 @@ async function readImageWithVision(bytes: Buffer, mediaType: "image/jpeg" | "ima
   }
 }
 
+/** Read every distinct certificate from a PDF/JPG/PNG (multi-ticket packs supported). */
+export async function readAllCertificatesFromBytes(
+  bytes: Buffer,
+  filename: string,
+  contentType?: string,
+): Promise<CertificateRead[]> {
+  const kind = classifyCertificateFile(filename, contentType);
+  if (kind === "pdf") {
+    return readAllFromPdf(bytes);
+  }
+  if (kind === "jpg" || kind === "png") {
+    const read = await readImageWithVision(bytes, kind === "png" ? "image/png" : "image/jpeg");
+    return read.unreadable && !read.name && !read.expiry_date && !read.issue_date ? [] : [read];
+  }
+  return [];
+}
+
+/** Legacy single-cert helper — returns the first ticket found (or an empty read). */
 export async function readCertificateBytes(
   bytes: Buffer,
   filename: string,
   contentType?: string,
 ): Promise<CertificateRead> {
-  const kind = classifyCertificateFile(filename, contentType);
-  if (kind === "pdf") {
-    return readPdfText(bytes);
-  }
-  if (kind === "jpg" || kind === "png") {
-    return readImageWithVision(bytes, kind === "png" ? "image/png" : "image/jpeg");
-  }
-  return emptyRead();
+  const all = await readAllCertificatesFromBytes(bytes, filename, contentType);
+  return all[0] ?? emptyRead();
 }
 
 export async function pdfCopyFromImage(bytes: Buffer, filename: string, contentType?: string) {
@@ -200,4 +353,21 @@ export async function applyCertificateRead(
     { sourceRef: "source: cert-read" },
   );
   return { ok: added.ok, mode: "added" as const, read };
+}
+
+export async function applyCertificateReads(
+  supabase: SupabaseClient,
+  diverId: string,
+  reads: CertificateRead[],
+  fallbackName: string,
+) {
+  const results = [];
+  for (const read of reads) {
+    results.push(await applyCertificateRead(supabase, diverId, read, fallbackName));
+  }
+  return {
+    ok: results.some((item) => item.ok),
+    applied: results.filter((item) => item.ok).length,
+    results,
+  };
 }

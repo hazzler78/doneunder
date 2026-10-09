@@ -3,7 +3,11 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
-import { applyCertificateRead, pdfCopyFromImage, readCertificateBytes } from "@/lib/cert-text";
+import {
+  applyCertificateReads,
+  pdfCopyFromImage,
+  readAllCertificatesFromBytes,
+} from "@/lib/cert-text";
 import {
   listCertificateDocumentFiles,
   listDiverDocumentFiles,
@@ -74,6 +78,10 @@ export async function POST(req: Request) {
           action?: string;
           ticket?: string | null;
           expiry_date?: string | null;
+          tickets?: Array<{
+            name?: string | null;
+            expiry_date?: string | null;
+          }>;
         }>;
       };
       if (!body.complete) {
@@ -83,17 +91,27 @@ export async function POST(req: Request) {
       const added = files.filter((item) => item.action === "added").map((item) => item.name);
       const renewed = files.filter((item) => item.action === "renewed").map((item) => item.name);
       const duplicates = files.filter((item) => item.action === "duplicate").map((item) => item.name);
-      const dated = files
-        .filter((item) => item.ticket || item.expiry_date)
-        .map((item) => {
+      const dated = files.flatMap((item) => {
+        const tickets = Array.isArray(item.tickets) ? item.tickets : null;
+        if (tickets && tickets.length > 0) {
+          return tickets.map((ticket) => {
+            const label = ticket.name || item.ticket || item.name;
+            return ticket.expiry_date ? `${label} (exp ${ticket.expiry_date})` : label;
+          });
+        }
+        if (item.ticket || item.expiry_date) {
           const label = item.ticket || item.name;
-          return item.expiry_date ? `${label} (exp ${item.expiry_date})` : label;
-        });
+          return [item.expiry_date ? `${label} (exp ${item.expiry_date})` : label];
+        }
+        return [] as string[];
+      });
       const parts = [
-        added.length ? `New: ${added.join(", ")}.` : "",
+        added.length ? `New file(s): ${added.join(", ")}.` : "",
         renewed.length ? `Renewed: ${renewed.join(", ")}.` : "",
         duplicates.length ? `Already on file: ${duplicates.join(", ")}.` : "",
-        dated.length ? `Read: ${dated.join("; ")}.` : "",
+        dated.length
+          ? `Read ${dated.length} ticket(s) from the upload: ${dated.join("; ")}.`
+          : "",
       ].filter(Boolean);
       const thread =
         (await getAgentThread(supabase, "web", authResult.diverId)) ??
@@ -108,9 +126,10 @@ export async function POST(req: Request) {
         userContent: `Please store these certificate files: ${files.map((item) => item.name).join(", ") || "batch"}`,
         assistantContent:
           `${parts.join(" ") || `Stored ${files.length} certificate file(s).`} ` +
+          "One PDF can contain many tickets — Hermes reads each one. " +
           "Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. " +
           "If an expiry is missing, type the date. Then say match me to open campaigns.",
-        metadata: { source: "documents-upload", count: files.length },
+        metadata: { source: "documents-upload", count: files.length, ticketsRead: dated.length },
       });
       return NextResponse.json({ ok: true });
     }
@@ -145,9 +164,9 @@ export async function POST(req: Request) {
         created_at: new Date().toISOString(),
         size: bytes.length,
       });
-      const read = await readCertificateBytes(bytes, file.name, file.type);
-      if (read.expiry_date || read.issue_date || read.name) {
-        await applyCertificateRead(supabase, authResult.diverId, read, file.name);
+      const reads = await readAllCertificatesFromBytes(bytes, file.name, file.type);
+      if (reads.length > 0) {
+        await applyCertificateReads(supabase, authResult.diverId, reads, file.name);
       }
       const pdfCopy = await pdfCopyFromImage(bytes, file.name, file.type);
       if (pdfCopy) {
@@ -162,14 +181,22 @@ export async function POST(req: Request) {
           existing,
         );
       }
+      const primary = reads[0];
       uploaded.push({
         name: file.name,
         action: result.action,
         path: result.path,
-        issue_date: read.issue_date,
-        expiry_date: read.expiry_date,
-        ticket: read.name,
-        source: read.source,
+        issue_date: primary?.issue_date ?? null,
+        expiry_date: primary?.expiry_date ?? null,
+        ticket: primary?.name ?? null,
+        tickets: reads.map((read) => ({
+          name: read.name,
+          issue_date: read.issue_date,
+          expiry_date: read.expiry_date,
+          source: read.source,
+        })),
+        ticketCount: reads.length,
+        source: primary?.source ?? "none",
       });
     }
 
