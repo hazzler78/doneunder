@@ -74,7 +74,7 @@ Hermes can also browse a curated `diving_companies` directory (see `docs/diving-
 - `list_diving_companies` for all divers (graduates: prefer `hire_graduates=true`).
 - Soft fit % from typical tickets — **warn**, do not hard-block.
 - `apply_to_company` only when `apply_email` is verified on the row. Never invent an inbox. Confirm first. Dedupe via `hermes_apply_company`.
-- Still no CV blast and no live web scrape of company contacts.
+- Ops (`@gareth`) may `import_diving_companies_from_url` from public directories (e.g. ADC Find A Member): preview → confirm → bulk add **name/website only**. Still no inventing emails and no CV blast.
 
 ### Phase 2 — only after evidence
 

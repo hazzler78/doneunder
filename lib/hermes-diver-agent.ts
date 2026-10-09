@@ -60,6 +60,7 @@ import {
   updateDivingCompany,
   type DivingCompanyScope,
 } from "@/lib/diving-companies";
+import { importDivingCompaniesFromUrl } from "@/lib/diving-company-import";
 
 export type JobSuggestion = {
   id: string;
@@ -295,6 +296,11 @@ School outreach ops (DoneUnder partnerships — separate from diver CV work):
 - Use update_school_target to fix contact person/email, notes, website, priority, or status without a new contact log.
 - Use add_school_target if a school is missing from the list.
 - Help draft outreach emails in chat; if he sends via send_email to a school contact, then log_school_contact in the same turn when he confirms it went out.
+
+Diving company directory ops (for graduate apply browse):
+- When Gareth pastes a member-directory link (e.g. https://www.adc-uk.info/ or Find A Member), call import_diving_companies_from_url first with confirmed=false, show the preview (count + sample), then after a clear yes call again with confirmed=true.
+- Default full_members_only=true for ADC (contractors only). Never invent apply_email from the page. Never CV-blast the imported list.
+- After import, divers can browse; unlock apply later with update_diving_company when a careers inbox is verified.
 
 Pipeline counts: ${JSON.stringify(summary.byStatus)} active targets=${summary.totalActive}
 Next todo (up to 8):
@@ -1258,6 +1264,34 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
                   status: result.company.status,
                 },
               };
+            },
+          }),
+          import_diving_companies_from_url: tool({
+            description:
+              "Ops only: fetch a public member directory URL (ADC Find A Member or similar), preview company names/websites, then import into diving_companies after confirmed=true. Never sets apply_email. Prefer full_members_only for ADC contractors. Not for CV blasts.",
+            inputSchema: z.object({
+              url: z
+                .string()
+                .url()
+                .describe("Directory URL, e.g. https://www.adc-uk.info/ or https://www.adc-uk.info/find-a-member/"),
+              full_members_only: z
+                .boolean()
+                .optional()
+                .describe("For ADC: true (default) imports Full Members only; false includes associates."),
+              confirmed: z
+                .boolean()
+                .describe("False = preview only. True = write new companies after Gareth clearly confirms."),
+            }),
+            execute: async ({ url, full_members_only, confirmed }) => {
+              try {
+                return await importDivingCompaniesFromUrl(input.supabase, url, {
+                  fullMembersOnly: full_members_only,
+                  confirmed,
+                  limit: 150,
+                });
+              } catch (error) {
+                return { ok: false, error: describeToolFailure(error) };
+              }
             },
           }),
         }
