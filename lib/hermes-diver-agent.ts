@@ -50,6 +50,16 @@ import {
   type SchoolContactChannel,
   type SchoolOutreachStatus,
 } from "@/lib/school-outreach";
+import {
+  addDivingCompany,
+  companyApplicationDraft,
+  formatCompanyMatchReason,
+  getDivingCompanyByRef,
+  listDivingCompanies,
+  scoreDiverAgainstCompany,
+  updateDivingCompany,
+  type DivingCompanyScope,
+} from "@/lib/diving-companies";
 
 export type JobSuggestion = {
   id: string;
@@ -127,6 +137,40 @@ function scoreJobsForDiver(
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
+}
+
+async function loadAppliedCompanyIds(supabase: SupabaseClient, diverId: string) {
+  const { data } = await supabase
+    .from("ai_interactions")
+    .select("input")
+    .eq("actor_id", diverId)
+    .eq("feature", "hermes_apply_company")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const ids = new Set<string>();
+  for (const row of data ?? []) {
+    try {
+      const parsed = typeof row.input === "string" ? JSON.parse(row.input) : row.input;
+      const companyId =
+        parsed && typeof parsed === "object"
+          ? (parsed as { companyId?: string }).companyId
+          : null;
+      if (companyId) ids.add(companyId);
+    } catch {
+      // Ignore malformed audit rows.
+    }
+  }
+  return ids;
+}
+
+function matchProfileToCompany(
+  company: Parameters<typeof scoreDiverAgainstCompany>[0],
+  profile: DiverProfileFull,
+) {
+  return scoreDiverAgainstCompany(company, {
+    certs: ticketsFromProfile(profile),
+    location: profile.profile.location,
+  });
 }
 
 function buildProfileContext(
@@ -307,6 +351,9 @@ Other tools:
 - match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo.
 - After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft and wait for a clear yes.
 - apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
+- list_diving_companies when they ask about diving companies, who hires juniors/graduates, contractors in a country/region, or want work beyond the open campaign board. Prefer hire_graduates=true for fresh school graduates. Show soft fit % and typical tickets; still list weak fits.
+- apply_to_company only when has_apply_email / canApply is true for that company (verified careers inbox on file). Warn about missing typical tickets but do NOT hard-block — grads may still send after a clear yes. Never invent a company email. Never send without confirmed=true. If already applied to that company, do not send again.
+- If a company has no apply email, browse only: share website/notes and suggest building the CV / open campaigns; do not invent contacts.
 - For other email: draft to/subject/body first, then call send_email only after they clearly confirm. Set confirmed=true only after explicit approval. Light markdown in the body (**bold**, bullet lists) is fine — DoneUnder renders it for the recipient. Do not leave raw HTML in the body.
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
@@ -660,6 +707,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   }
 
   const openJobs = await loadOpenJobs(input.supabase);
+  const appliedCompanyIds = await loadAppliedCompanyIds(input.supabase, input.diverId);
   const { data: userPhotoRow } = await input.supabase
     .from("users")
     .select("avatar_url")
@@ -669,6 +717,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     typeof userPhotoRow?.avatar_url === "string" && userPhotoRow.avatar_url.trim(),
   );
   const schoolOutreachEnabled = canUseSchoolOutreach(input.username, input.userEmail);
+  const companyOpsEnabled = schoolOutreachEnabled;
   const schoolOutreachSummary = schoolOutreachEnabled
     ? await summarizeSchoolOutreach(input.supabase)
     : null;
@@ -1002,6 +1051,217 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         };
       },
     }),
+    list_diving_companies: tool({
+      description:
+        "Browse the curated diving-company directory. Use for graduates and divers asking who hires, contractors by country/region, or work beyond open campaigns. Prefer hire_graduates=true for fresh school leavers.",
+      inputSchema: z.object({
+        country: z.string().optional().describe("Country filter, e.g. UK, Norway, Netherlands"),
+        scope: z.enum(["offshore", "inshore"]).optional(),
+        hire_graduates: z
+          .boolean()
+          .optional()
+          .describe("True to prefer companies that take junior / graduate divers"),
+        search: z.string().optional().describe("Search name, country, location, or notes"),
+        has_apply_email: z
+          .boolean()
+          .optional()
+          .describe("True only lists companies with a verified careers inbox"),
+      }),
+      execute: async ({ country, scope, hire_graduates, search, has_apply_email }) => {
+        const companies = await listDivingCompanies(input.supabase, {
+          country,
+          scope: scope as DivingCompanyScope | undefined,
+          hire_graduates,
+          search,
+          has_apply_email,
+          limit: 25,
+        });
+        const ranked = companies
+          .map((company) => {
+            const match = matchProfileToCompany(company, state.profile);
+            return {
+              slug: company.slug,
+              name: company.name,
+              country: company.country,
+              location: company.location,
+              website: company.website,
+              scopes: company.scopes,
+              typical_certs: company.typical_certs,
+              notes: company.notes,
+              hire_graduates: company.hire_graduates,
+              has_apply_email: Boolean(company.apply_email?.trim()),
+              score: match.score,
+              verdict: match.verdict,
+              reason: formatCompanyMatchReason(match),
+              applied: appliedCompanyIds.has(company.id),
+            };
+          })
+          .sort((a, b) => b.score - a.score);
+        return { ok: true, count: ranked.length, companies: ranked };
+      },
+    }),
+    apply_to_company: tool({
+      description:
+        "Apply the diver to a curated diving company after they confirm. Sends living CV + certificate pack to the company's verified apply_email only. Soft-warns on missing typical tickets but does not hard-block. Never invent an email. Never send without confirmed=true.",
+      inputSchema: z.object({
+        company: z.string().describe("Company slug or distinctive name fragment"),
+        confirmed: z.boolean().describe("True only after the diver approved this application."),
+      }),
+      execute: async ({ company: companyRef, confirmed }) => {
+        const company = await getDivingCompanyByRef(input.supabase, companyRef);
+        if (!company || company.status === "skip") {
+          return {
+            ok: false,
+            error: "I could not tell which company. Name it from the directory list.",
+          };
+        }
+        const match = matchProfileToCompany(company, state.profile);
+        if (!match.canApply || !company.apply_email?.trim()) {
+          return {
+            ok: false,
+            error:
+              "This company has no verified apply email yet — browse only. Share the website/notes; do not invent a contact.",
+            company: {
+              slug: company.slug,
+              name: company.name,
+              website: company.website,
+              notes: company.notes,
+            },
+            match,
+          };
+        }
+
+        const draft = companyApplicationDraft(
+          company,
+          livingCvDisplayName(state.profile, input.displayName),
+        );
+        const warnings: string[] = [];
+        if (match.missing.length) {
+          warnings.push(`Typical tickets missing: ${match.missing.join(", ")}`);
+        }
+        if (match.expired.length) {
+          warnings.push(`Typical tickets expired: ${match.expired.join(", ")}`);
+        }
+
+        if (!confirmed) {
+          return {
+            ok: false,
+            message: "Not sent. Show the draft (and any ticket warnings) and wait for a clear yes.",
+            match,
+            warnings,
+            draft,
+          };
+        }
+        if (!input.userEmail) {
+          return { ok: false, error: "Logged-in account has no email address on file.", draft };
+        }
+        if (appliedCompanyIds.has(company.id)) {
+          return {
+            ok: false,
+            already_applied: true,
+            error: "Already applied to this company.",
+            draft,
+          };
+        }
+
+        const result = await sendDiverFollowUpEmail({
+          supabase: input.supabase,
+          diverId: input.diverId,
+          username: input.username,
+          displayName: livingCvDisplayName(state.profile, input.displayName),
+          userEmail: input.userEmail,
+          profile: state.profile,
+          to: draft.to,
+          subject: draft.subject,
+          body: draft.body,
+          attachCv: true,
+          attachCertificates: true,
+          pendingInbound: input.pendingInbound ?? null,
+        });
+
+        await logAgentInteraction({
+          actorId: input.diverId,
+          feature: "hermes_apply_company",
+          input: {
+            companyId: company.id,
+            slug: company.slug,
+            name: company.name,
+            to: draft.to,
+          },
+          output: result,
+        });
+
+        if (!result.ok) {
+          return { ok: false, error: result.error, draft, warnings };
+        }
+        appliedCompanyIds.add(company.id);
+        return {
+          ok: true,
+          to: draft.to,
+          from: result.from,
+          attached: result.attached,
+          companyId: company.id,
+          slug: company.slug,
+          name: company.name,
+          warnings,
+          applied: true,
+        };
+      },
+    }),
+    ...(companyOpsEnabled
+      ? {
+          add_diving_company: tool({
+            description:
+              "Ops only: add a diving company to the curated directory. Set apply_email only when the careers inbox is verified.",
+            inputSchema: z.object({
+              name: z.string().min(2),
+              slug: z.string().optional(),
+              country: z.string().optional(),
+              location: z.string().optional(),
+              website: z.string().url().optional(),
+              scopes: z.array(z.enum(["offshore", "inshore"])).optional(),
+              typical_certs: z.array(z.string()).optional(),
+              notes: z.string().optional(),
+              hire_graduates: z.boolean().optional(),
+              apply_email: z.string().email().optional(),
+            }),
+            execute: async (payload) => {
+              return addDivingCompany(input.supabase, payload);
+            },
+          }),
+          update_diving_company: tool({
+            description:
+              "Ops only: update a diving company (including setting a verified apply_email). Never invent emails.",
+            inputSchema: z.object({
+              company: z.string().describe("Company slug or name fragment"),
+              status: z.enum(["active", "skip"]).optional(),
+              name: z.string().optional(),
+              country: z.string().nullable().optional(),
+              location: z.string().nullable().optional(),
+              website: z.string().url().nullable().optional(),
+              scopes: z.array(z.enum(["offshore", "inshore"])).optional(),
+              typical_certs: z.array(z.string()).optional(),
+              notes: z.string().nullable().optional(),
+              hire_graduates: z.boolean().optional(),
+              apply_email: z.string().email().nullable().optional(),
+            }),
+            execute: async ({ company, ...patch }) => {
+              const result = await updateDivingCompany(input.supabase, company, patch);
+              if (!result.ok) return result;
+              return {
+                ok: true,
+                company: {
+                  slug: result.company.slug,
+                  name: result.company.name,
+                  apply_email: result.company.apply_email,
+                  hire_graduates: result.company.hire_graduates,
+                  status: result.company.status,
+                },
+              };
+            },
+          }),
+        }
+      : {}),
     send_email: tool({
       description:
         "Send an email as the logged-in diver after they confirm recipient, subject, and body. Set attach_cv=true when sending a CV. Set attach_certificates=true to attach one combined Certificates PDF (all stored PDFs and photos). Never send without confirmed=true.",

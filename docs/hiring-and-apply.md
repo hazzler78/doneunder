@@ -67,6 +67,15 @@ After `match_job` and a **clear yes**, `apply_job` sends the living CV PDF + cer
 
 `hello@` is how we learn. When Gareth or other divers press Apply, the inbox shows: did they send, what did the company ask next, do they want a named address.
 
+### Phase 1b — curated company browse + apply
+
+Hermes can also browse a curated `diving_companies` directory (see `docs/diving-companies.md`).
+
+- `list_diving_companies` for all divers (graduates: prefer `hire_graduates=true`).
+- Soft fit % from typical tickets — **warn**, do not hard-block.
+- `apply_to_company` only when `apply_email` is verified on the row. Never invent an inbox. Confirm first. Dedupe via `hermes_apply_company`.
+- Still no CV blast and no live web scrape of company contacts.
+
 ### Phase 2 — only after evidence
 
 A company-facing intake (named `applyEmail`, or a company desk that can mark received / shortlist) **if** Phase 1 shows companies asking for that.
@@ -92,8 +101,11 @@ Hermes reaching out proactively, or applying without the diver in the loop. Not 
 | Live campaigns + optional `applyEmail` | `lib/job-catalog.ts` |
 | Open filter, match prompt, draft, desk address | `lib/jobs.ts` |
 | `match_job` / `apply_job` | `lib/hermes-diver-agent.ts` |
+| Curated company directory + soft score | `lib/diving-companies.ts` |
+| `list_diving_companies` / `apply_to_company` | `lib/hermes-diver-agent.ts` |
 | Hide when closed | `lib/jobs.ts` `isJobOpen` + `/jobs` |
 | SQL for `closes_at` (run in prod when possible) | `supabase/migrations/010_jobs_closes_at.sql` |
+| Company directory seed | `supabase/migrations/015_diving_companies.sql` |
 
 Until that migration runs, the catalog is the live board.
 
