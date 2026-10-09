@@ -20,6 +20,8 @@ Example: [ADC Find A Member](https://www.adc-uk.info/find-a-member/) (homepage l
 3. Gareth says yes → `confirmed=true` writes name, website, UK/Ireland, notes. **`apply_email` stays empty.**
 4. Later, set verified careers inboxes with `update_diving_company`.
 
+If live ADC fetch fails from the server, Hermes falls back to the bundled snapshot in `data/adc-full-members.json` (same Full Member names/websites).
+
 Do **not** use imports for CV blasts. ADC forbids membership transcription for direct mailing / e-broadcasts; DoneUnder stores them for diver discovery + confirmed one-company apply only.
 
 ## Rules

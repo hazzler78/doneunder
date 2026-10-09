@@ -298,7 +298,8 @@ School outreach ops (DoneUnder partnerships — separate from diver CV work):
 - Help draft outreach emails in chat; if he sends via send_email to a school contact, then log_school_contact in the same turn when he confirms it went out.
 
 Diving company directory ops (for graduate apply browse):
-- When Gareth pastes a member-directory link (e.g. https://www.adc-uk.info/ or Find A Member), call import_diving_companies_from_url first with confirmed=false, show the preview (count + sample), then after a clear yes call again with confirmed=true.
+- When Gareth asks to add companies from adc-uk.info (or pastes that link / Find A Member), you MUST call import_diving_companies_from_url. Never claim the site is blocked without calling the tool. If live fetch fails, the tool still returns a bundled ADC Full Member snapshot.
+- First call with confirmed=false, show count + short sample (and fetchNote if present). After a clear yes, call again with confirmed=true.
 - Default full_members_only=true for ADC (contractors only). Never invent apply_email from the page. Never CV-blast the imported list.
 - After import, divers can browse; unlock apply later with update_diving_company when a careers inbox is verified.
 

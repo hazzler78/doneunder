@@ -1,0 +1,539 @@
+{
+  "source": "https://www.adc-uk.info/find-a-member/",
+  "fetchedAt": "2026-10-09",
+  "note": "ADC Full Members snapshot for Hermes import fallback. Discovery only — no CV blast.",
+  "members": [
+    {
+      "name": "ABCO Divers Ltd",
+      "website": "https://www.abcomarine.co.uk",
+      "country": "UK",
+      "location": "Lisburn, County Antrim",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Aberdeen Marine Ltd",
+      "website": "http://www.aberdeenmarine.com",
+      "country": "UK",
+      "location": "Kilmarnock, Ayrshire",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Aegean Diving Services Ltd",
+      "website": "https://www.ads-ltd.com",
+      "country": "UK",
+      "location": "Nellies Cottage, Portlooe",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Andark Ltd",
+      "website": "https://www.andark.co.uk",
+      "country": "UK",
+      "location": "Lower Swanwick, Southampton",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Apex Diving & Marine",
+      "website": "http://www.apexdiving.co.uk",
+      "country": "UK",
+      "location": "Portland Marina, Portland",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Associated Diving Services Ltd",
+      "website": "https://www.adsdiving.com",
+      "country": "UK",
+      "location": "The Unit, Cross Street",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Babcock Marine",
+      "website": "https://www.babcockinternational.com",
+      "country": "UK",
+      "location": "Devonport Royal Dockyard, Devonport",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Briggs Marine Contractors Ltd",
+      "website": "https://www.briggsmarine.com/",
+      "country": "UK",
+      "location": "Seaforth House, Seaforth Place",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Caldive Ltd",
+      "website": "https://www.caldive.co.uk",
+      "country": "UK",
+      "location": "Castle Avenue Industrial Estate, Invergordon  Ross-Shire",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Clyde Commercial Diving Ltd",
+      "website": null,
+      "country": "UK",
+      "location": "Rothesay Dock East, Clydebank",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Commercial and Specialised Diving Ltd",
+      "website": "http://www.specialised-diving.co.uk/",
+      "country": "UK",
+      "location": "Unit 7-8 Barnes B, Barrack Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Commercial Diving and Maritime Ltd",
+      "website": null,
+      "country": "UK",
+      "location": "Caffa Mill House, Fowey",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Constructex Ltd",
+      "website": "https://www.constructex.co.uk",
+      "country": "UK",
+      "location": "Riverside House, Upper Quay",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Cromarty Firth Marine Services",
+      "website": "https://cromartyfirthservices.com",
+      "country": "UK",
+      "location": "Unit 30, Evanton Industrial Estate",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Dagger Diving Services Ltd",
+      "website": "http://www.daggerdivingservices.co.uk/",
+      "country": "UK",
+      "location": "Unit 3, The Old Laundry",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "DCN Diving UK Ltd",
+      "website": "https://www.dcndiving.com",
+      "country": "UK",
+      "location": "Unit 5, Ashley Base",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Dive and Marine Contractors Ltd",
+      "website": "https://diveandmarine.com",
+      "country": "Ireland",
+      "location": "Newtown, Bonnettstown",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "DiveCo Marine Ltd",
+      "website": "https://www.diveco.co.uk",
+      "country": "UK",
+      "location": "Unit B3 Springhead Enterprise Park, Sprinhead Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "DiveTech UK",
+      "website": "http://www.divetechuk.co.uk",
+      "country": "UK",
+      "location": "Unit 2 Acer Court  Acer Road, Saddlebow Industrial Estate",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Diveworks International Ltd",
+      "website": "https://www.ukd-commercial.co.uk",
+      "country": "UK",
+      "location": "Unit 14, Wessex Trade Centre",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "DSMC",
+      "website": "https://www.dsmc.uk",
+      "country": "UK",
+      "location": "Woodside Barn, Threshfield",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Edwards Diving Services Ltd",
+      "website": "https://www.edwardsdivingservices.co.uk",
+      "country": "UK",
+      "location": "Unit G15 Main Avenue, Treforest Industrial Estate",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Falmouth Divers Ltd",
+      "website": "https://www.falmouthdivers.com",
+      "country": "UK",
+      "location": "Tidal House, Commercial Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Gareloch Support Services (Plant) Ltd",
+      "website": "https://www.gssplant.co.uk",
+      "country": "UK",
+      "location": "Silverhills, Rosneath",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Geomarine Limited",
+      "website": "https://www.geomarine.je",
+      "country": "UK",
+      "location": "First Floor, Les Ruettes",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "GreenC Marine Ltd",
+      "website": "https://greencmarine.ie",
+      "country": "UK",
+      "location": "Killarney, Kerry",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "GW Marine Systems Ltd",
+      "website": "http://www.gw-marine.com/",
+      "country": "UK",
+      "location": "Cornel Bach, Lower Denbigh Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Inspire Structures Ltd",
+      "website": "http://www.inspire-structures.co.uk",
+      "country": "UK",
+      "location": "Unit 718, Eddington Way",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Irish Sea Contractors Ltd",
+      "website": "https://www.irishseacontractors.com",
+      "country": "Ireland",
+      "location": "Crory Ferns, Enniscorthy",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Isle Of Man Government",
+      "website": null,
+      "country": "UK",
+      "location": "Department of Infrastructure, Ports Division",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Kaymac Marine & Civil Engineering Ltd",
+      "website": "https://www.kaymacmarine.co.uk",
+      "country": "UK",
+      "location": "Osprey Business Park, Byng Street",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "KBS Maritime Ltd",
+      "website": "https://kbsmaritime.com",
+      "country": "UK",
+      "location": "Building 3/260 (PP129), Round Tower Complex",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Kew Diving Services Ltd",
+      "website": "https://kewdivingservices.co.uk",
+      "country": "UK",
+      "location": "Fareham, Hampshire",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Leask Marine Ltd",
+      "website": "https://www.leaskmarine.com",
+      "country": "UK",
+      "location": "Hatston Industrial Estate, Kirkwall",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Lochs Diving Services Ltd",
+      "website": "https://www.lochsdiving.co.uk",
+      "country": "UK",
+      "location": "South Lochs, Isle of Lewis",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Malakoff Ltd",
+      "website": "https://www.malakofflimited.co.uk",
+      "country": "UK",
+      "location": "North Ness, Lerwick",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Marine and Civil Diving Services Ltd",
+      "website": "https://gpsmacs.co.uk",
+      "country": "UK",
+      "location": "Marine House, Upnor Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "MCS Subsea Ltd",
+      "website": "https://www.marinecivilsolutions.co.uk",
+      "country": "UK",
+      "location": "Unit 35, Teignbridge Business Centre",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Millennium Marine Contractors Ltd",
+      "website": "https://www.millenniummarinecontractors.co.uk/",
+      "country": "UK",
+      "location": "Unit 5 Wills Road, Totnes Industrial Estate",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "MMC Diving Services",
+      "website": "https://www.mmcdivingservices.co.uk",
+      "country": "UK",
+      "location": "Station Works, St John Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "MMP Marine & Inspection",
+      "website": "http://www.mmpmarineinspection.co.uk",
+      "country": "UK",
+      "location": "Unit 5 Bassett Business Units, North Weald",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "MSDS Marine Ltd",
+      "website": "http://www.msdsmarine.co.uk",
+      "country": "UK",
+      "location": "The Dairy, Boothswood Farm",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Norfolk Marine Ltd",
+      "website": "https://www.norfolkmarine.ie",
+      "country": "UK",
+      "location": "South Wharf, Belvedere Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "North West Marine Ltd",
+      "website": "https://www.northwestmarine.co.uk",
+      "country": "UK",
+      "location": "Oban, Argyll and Bute",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Northern Divers (Eng) Ltd",
+      "website": "https://www.northerndivers.co.uk",
+      "country": "UK",
+      "location": "Oslo Road, Sutton Fields Industrial Estate",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Ocean Kinetics Limited",
+      "website": "https://www.oceankinetics.co.uk",
+      "country": "UK",
+      "location": "Port Business Park, Gremista",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "OEG Subsea Ltd",
+      "website": "https://www.oeg.group/services/subsea-services/survey-and-positioning",
+      "country": "UK",
+      "location": "Units 3-5 Unity Grove, Knowsley Business Park",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Port Of London Authority",
+      "website": "https://www.portoflondon.co.uk",
+      "country": "UK",
+      "location": "Denton Wharf, Mark Lane",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "PPF-Variopool Ltd",
+      "website": "https://www.ppfvariopool.com/",
+      "country": "UK",
+      "location": "Lewis House, Great Chesterford Court",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Quay Diving Services Ltd",
+      "website": "https://quaydivingservices.co.uk",
+      "country": "UK",
+      "location": "Cobalt Business Exchange, Cobalt Park Way",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Quest Underwater Services Limited",
+      "website": "https://www.questmarine.co.uk",
+      "country": "UK",
+      "location": "Hethfelton Hollow, East Stoke",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Reach Engineering & Diving Services Ltd",
+      "website": "https://www.red-services.co.uk",
+      "country": "UK",
+      "location": "Unit 2, Estate Road 5",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Red7 Inshore Diving Ltd",
+      "website": "https://www.red7diving.com/",
+      "country": "UK",
+      "location": "Old Hall Farm, Elsing",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "RockSalt Subsea Ltd",
+      "website": "http://www.rocksaltsubsea.com",
+      "country": "UK",
+      "location": "Unit 9, Inch Business Park",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "RS Divers Ltd",
+      "website": "https://www.rsdivers.co.uk",
+      "country": "UK",
+      "location": "The Camber, Portsmouth",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Salvage & Marine Operations",
+      "website": null,
+      "country": "UK",
+      "location": "Staff Officer Salvage Projects, MOD Abbey Wood",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Salvesen (UK) Ltd",
+      "website": "https://www.salvesenuk.com",
+      "country": "UK",
+      "location": "East Canada Dock, Port of Liverpool",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Sea-Lift Diving Ltd",
+      "website": "https://www.sea-liftdiving.co.uk",
+      "country": "UK",
+      "location": "Morriston, Swansea",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Sealane Inshore Ltd",
+      "website": "https://www.sealaneinshore.co.uk",
+      "country": "UK",
+      "location": "Wapping Street, South Shields",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Seatec UK Limited",
+      "website": "https://www.seatec-services.com",
+      "country": "UK",
+      "location": "Warrior Close, Chandlers Ford",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Seawide Services Ltd",
+      "website": "https://www.seawideservices.co.uk",
+      "country": "UK",
+      "location": "Falmouth Wharves, North Parade",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Seawork Marine Services Ltd",
+      "website": "https://www.seaworkmarineservices.com",
+      "country": "UK",
+      "location": "Unit 6, Budds Lane",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Sellafield Ltd",
+      "website": null,
+      "country": "UK",
+      "location": "B130 Dive Store, Sellafield",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Shearwater Marine Services Ltd",
+      "website": "https://www.shearwatermarine.co.uk",
+      "country": "UK",
+      "location": "Unit 19  Highland Avenue, Sandbank Business Park",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Specialised Diving Services",
+      "website": "https://www.specialiseddivingservices.com",
+      "country": "UK",
+      "location": "Lodge Farm, Old Church Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Sub Aqua Diving Services Ltd",
+      "website": "https://www.commercialdivingservices.co.uk",
+      "country": "UK",
+      "location": "Lawson Industrial Estate, North Ormesby  Middlesbrough",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Subsea Marine Ltd",
+      "website": "https://www.subseamarine.ie",
+      "country": "Ireland",
+      "location": "Dundalk, County Louth",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Teignmouth Maritime Services Ltd",
+      "website": "https://www.tmsmaritime.co.uk",
+      "country": "UK",
+      "location": "Exeter Road, Dawlish",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "The SMS Group Ltd",
+      "website": "https://www.sms-marine.co.uk",
+      "country": "UK",
+      "location": "Port View House, Channel View Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Underwater Construction Corporation UK Ltd",
+      "website": "https://uccdive.com",
+      "country": "UK",
+      "location": "Hulljady, Wigan",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Underwater Diving Services Ltd",
+      "website": "https://www.uds.co.uk",
+      "country": "UK",
+      "location": "Anchor Line Basin, Ramsden Dock Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "UXO Groundworks Ltd",
+      "website": "https://www.uxogroundworks.com",
+      "country": "UK",
+      "location": "John Hudson, Karl Weber",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Valkyrie Diving Services",
+      "website": "https://www.valkyriediving.com",
+      "country": "UK",
+      "location": "Basin Road North, Brighton and Hove",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Wessex Archaeology",
+      "website": "https://www.wessexarch.co.uk",
+      "country": "UK",
+      "location": "Portway House, Old Sarum Park",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Wetworx Marine Services Ltd",
+      "website": "http://www.wetworx.co.uk/",
+      "country": "UK",
+      "location": "Park Road Industrial Estate, Park Road",
+      "memberType": "Full Member"
+    },
+    {
+      "name": "Xeiad",
+      "website": "https://www.xeiad.com",
+      "country": "UK",
+      "location": "Clarendon Court, Manners Avenue",
+      "memberType": "Full Member"
+    }
+  ]
+}

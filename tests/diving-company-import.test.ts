@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   extractCompanyDraftsFromHtml,
   parseAdcMembersHtml,
+  previewDivingCompaniesFromUrl,
   resolveImportUrl,
 } from "../lib/diving-company-import";
 
@@ -44,5 +45,34 @@ describe("ADC company import", () => {
     });
     assert.equal(all.drafts.length, 3);
     assert.ok(all.drafts.some((d) => d.memberType === "Associate Member"));
+  });
+
+  it("falls back to bundled ADC snapshot when live fetch fails", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw new Error("blocked by network");
+    };
+
+    const result = { data: [] as unknown[], error: null };
+    const limit = () => Promise.resolve(result);
+    const order = () => ({ order, eq: () => ({ limit }), neq: () => ({ limit }), limit });
+    const fakeSupabase = {
+      from: () => ({
+        select: () => ({ order }),
+      }),
+    };
+
+    try {
+      const preview = await previewDivingCompaniesFromUrl(fakeSupabase as never, "https://www.adc-uk.info/", {
+        fullMembersOnly: true,
+        limit: 20,
+      });
+      assert.equal(preview.parser, "adc_snapshot");
+      assert.ok(preview.totalFound >= 20);
+      assert.match(preview.fetchNote || "", /bundled/i);
+      assert.ok(preview.drafts[0]?.name);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

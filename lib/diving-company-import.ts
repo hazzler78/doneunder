@@ -4,6 +4,7 @@ import {
   listDivingCompanies,
   type DivingCompany,
 } from "@/lib/diving-companies";
+import adcFullMembersSnapshot from "@/data/adc-full-members.json";
 
 export type ImportedCompanyDraft = {
   name: string;
@@ -20,14 +21,18 @@ export type ImportedCompanyDraft = {
 
 export type ImportPreview = {
   sourceUrl: string;
-  parser: "adc_members" | "generic_links";
+  parser: "adc_members" | "adc_snapshot" | "generic_links";
   totalFound: number;
   drafts: ImportedCompanyDraft[];
   skippedEmpty: number;
+  fetchNote?: string;
 };
 
 const ADC_HOME = "https://www.adc-uk.info";
 const ADC_MEMBERS = "https://www.adc-uk.info/find-a-member/";
+
+const UK_POSTCODE_RE =
+  /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -57,12 +62,19 @@ function countryFromAddress(address: string) {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  if (parts.length === 0) return null;
+  if (parts.length === 0) return "UK";
+  const joined = address.toLowerCase();
+  if (joined.includes("northern ireland") || joined.includes("scotland") || joined.includes("england") || joined.includes("wales")) {
+    return "UK";
+  }
+  if (/\b(eire|republic of ireland)\b/i.test(address) || /,\s*ireland\s*$/i.test(address.trim())) {
+    return "Ireland";
+  }
   const last = parts[parts.length - 1]!.toLowerCase();
-  if (last.includes("northern ireland")) return "UK";
-  if (last === "scotland" || last === "england" || last === "wales" || last === "uk") return "UK";
-  if (last.includes("ireland") || last === "eire" || last === "roi") return "Ireland";
-  if (last.length >= 2 && last.length <= 24) {
+  if (last === "uk" || last === "united kingdom" || last === "gb") return "UK";
+  if (last === "ireland" || last === "eire" || last === "roi") return "Ireland";
+  if (UK_POSTCODE_RE.test(last) || UK_POSTCODE_RE.test(address)) return "UK";
+  if (last.length >= 2 && last.length <= 24 && !/\d/.test(last)) {
     return parts[parts.length - 1]!;
   }
   return "UK";
@@ -196,12 +208,49 @@ export function resolveImportUrl(rawUrl: string) {
   return url.toString();
 }
 
+function isAdcHost(url: string) {
+  try {
+    return new URL(url).host.toLowerCase().replace(/^www\./, "") === "adc-uk.info";
+  } catch {
+    return false;
+  }
+}
+
+function draftsFromAdcSnapshot(
+  options?: { fullMembersOnly?: boolean },
+): Omit<ImportedCompanyDraft, "alreadyListed" | "existingSlug">[] {
+  const fullOnly = options?.fullMembersOnly !== false;
+  const members = Array.isArray(adcFullMembersSnapshot.members) ? adcFullMembersSnapshot.members : [];
+  return members
+    .filter((row) => {
+      if (!row?.name) return false;
+      if (!fullOnly) return true;
+      return String(row.memberType || "Full Member").toLowerCase() === "full member";
+    })
+    .map((row) => ({
+      name: String(row.name).trim(),
+      website: normalizeWebsite(row.website),
+      country: row.country ? String(row.country) : "UK",
+      location: row.location ? String(row.location) : null,
+      memberType: row.memberType ? String(row.memberType) : "Full Member",
+      hire_graduates: true,
+      scopes: ["inshore"] as Array<"offshore" | "inshore">,
+      notes: [
+        "ADC Full Member.",
+        `Source snapshot ${adcFullMembersSnapshot.fetchedAt || "bundled"} from adc-uk.info Find a Member (discovery only — no CV blast).`,
+        "apply_email empty until a careers inbox is verified.",
+      ].join(" "),
+    }));
+}
+
 export async function fetchCompanyDirectoryHtml(url: string) {
   const resolved = resolveImportUrl(url);
   const response = await fetch(resolved, {
     headers: {
-      "user-agent": "DoneUnder-Hermes/1.0 (+https://doneunder.ai; company-directory-import)",
-      accept: "text/html,application/xhtml+xml",
+      "user-agent":
+        "Mozilla/5.0 (compatible; DoneUnder-Hermes/1.1; +https://doneunder.ai) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en-GB,en;q=0.9",
     },
     redirect: "follow",
     signal: AbortSignal.timeout(25_000),
@@ -250,10 +299,30 @@ export async function previewDivingCompaniesFromUrl(
   rawUrl: string,
   options?: { fullMembersOnly?: boolean; limit?: number },
 ): Promise<ImportPreview> {
-  const { url, html } = await fetchCompanyDirectoryHtml(rawUrl);
-  const { parser, drafts } = extractCompanyDraftsFromHtml(html, url, {
-    fullMembersOnly: options?.fullMembersOnly,
-  });
+  const resolved = resolveImportUrl(rawUrl);
+  let parser: ImportPreview["parser"] = "generic_links";
+  let drafts: Omit<ImportedCompanyDraft, "alreadyListed" | "existingSlug">[] = [];
+  let fetchNote: string | undefined;
+
+  try {
+    const { url, html } = await fetchCompanyDirectoryHtml(resolved);
+    const extracted = extractCompanyDraftsFromHtml(html, url, {
+      fullMembersOnly: options?.fullMembersOnly,
+    });
+    parser = extracted.parser;
+    drafts = extracted.drafts;
+    if (drafts.length === 0 && isAdcHost(url)) {
+      drafts = draftsFromAdcSnapshot(options);
+      parser = "adc_snapshot";
+      fetchNote = "Live ADC page returned no member cards; used bundled Full Member snapshot.";
+    }
+  } catch (error) {
+    if (!isAdcHost(resolved)) throw error;
+    drafts = draftsFromAdcSnapshot(options);
+    parser = "adc_snapshot";
+    fetchNote = `Live ADC fetch failed (${error instanceof Error ? error.message : String(error)}); used bundled Full Member snapshot.`;
+  }
+
   const existing = await listDivingCompanies(supabase, { status: "all", limit: 500 });
   const bySlug = new Map(existing.map((row) => [row.slug, row]));
   const byName = new Map(existing.map((row) => [row.name.trim().toLowerCase(), row]));
@@ -270,11 +339,12 @@ export async function previewDivingCompaniesFromUrl(
   });
 
   return {
-    sourceUrl: url,
+    sourceUrl: resolved,
     parser,
     totalFound: drafts.length,
     drafts: enriched,
     skippedEmpty: 0,
+    fetchNote,
   };
 }
 
@@ -293,10 +363,11 @@ export async function importDivingCompaniesFromUrl(
       ok: false as const,
       needs_confirmation: true as const,
       message:
-        "Preview only. Show the list to Gareth and ask to confirm before importing. Then call again with confirmed=true.",
+        "Preview only. Show the count and a short sample to Gareth and ask to confirm before importing. Then call again with confirmed=true. Do not invent emails.",
       preview: {
         sourceUrl: preview.sourceUrl,
         parser: preview.parser,
+        fetchNote: preview.fetchNote,
         totalFound: preview.totalFound,
         newCount: preview.drafts.filter((d) => !d.alreadyListed).length,
         alreadyListedCount: preview.drafts.filter((d) => d.alreadyListed).length,
