@@ -259,6 +259,7 @@ type JobRow = {
   closes_at?: string | null;
   scope?: string | null;
   mobilization?: string | null;
+  created_at?: string | null;
 };
 
 function rowToPublicJob(row: JobRow): PublicJob {
@@ -274,6 +275,7 @@ function rowToPublicJob(row: JobRow): PublicJob {
     mobilization: row.mobilization ?? "",
     status: row.status === "filled" || row.status === "draft" ? row.status : "open",
     applyEmail: null,
+    postedAt: row.created_at ?? null,
   };
 }
 
@@ -303,7 +305,9 @@ export async function loadOpenJobs(supabase?: SupabaseClient | null, now = new D
     try {
       const full = await supabase
         .from("jobs")
-        .select("id,title,description,location,start_date,required_certs,status,closes_at,scope,mobilization")
+        .select(
+          "id,title,description,location,start_date,required_certs,status,closes_at,scope,mobilization,created_at",
+        )
         .eq("status", "open")
         .order("created_at", { ascending: false })
         .limit(40);
@@ -311,7 +315,7 @@ export async function loadOpenJobs(supabase?: SupabaseClient | null, now = new D
       if (!rows) {
         const basic = await supabase
           .from("jobs")
-          .select("id,title,description,location,start_date,required_certs,status")
+          .select("id,title,description,location,start_date,required_certs,status,created_at")
           .eq("status", "open")
           .order("created_at", { ascending: false })
           .limit(40);

@@ -13,6 +13,12 @@ export type PublicJob = {
   status: "open" | "filled" | "draft";
   /** Company inbox when they have given one. Until then Hermes applies via hello@doneunder.ai. */
   applyEmail?: string | null;
+  /**
+   * When the campaign became alertable. Jobs without this never trigger email/Hermes
+   * job alerts (keeps the pre-existing catalog from blasting everyone on ship day).
+   * DB rows use `created_at`.
+   */
+  postedAt?: string | null;
 };
 
 /**

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripQuotes } from "@/lib/email";
+import { sendJobAlerts } from "@/lib/job-alerts";
 import { sendPublishNudges } from "@/lib/publish-nudge";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { maybeSendStuckDiverAlert, runStuckDiverCheck } from "@/lib/stuck-divers";
@@ -39,6 +40,7 @@ export async function GET(req: Request) {
 
     const supabase = createServiceSupabaseClient();
     const publishNudges = await sendPublishNudges(supabase, { dryRun });
+    const jobAlerts = await sendJobAlerts(supabase, { dryRun });
 
     return NextResponse.json({
       ok: true,
@@ -49,6 +51,7 @@ export async function GET(req: Request) {
       findings: report.findings,
       mail,
       publishNudges,
+      jobAlerts,
     });
   } catch (error) {
     console.error("Stuck diver check failed:", error);
