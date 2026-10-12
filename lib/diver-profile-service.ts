@@ -1148,7 +1148,12 @@ export async function autoPublishIfEligible(supabase: DbClient, diverId: string)
 
   const hasContent =
     Boolean(current.profile.cv_last_processed_at) ||
-    Boolean(effectiveHeadline(current.profile)) ||
+    Boolean(
+      effectiveHeadline({
+        headline: current.profile.headline,
+        ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
+      }),
+    ) ||
     Boolean(current.profile.polished_cv_markdown?.trim());
 
   if (!hasContent) {

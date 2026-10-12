@@ -64,16 +64,16 @@ async function run() {
 
   const { data: references, error: refsError } = await supabase
     .from("diver_references")
-    .select("user_id, name, phone")
-    .in("user_id", ids);
+    .select("diver_id, name, phone")
+    .in("diver_id", ids);
 
   if (refsError) throw new Error(refsError.message);
 
   const refsByUser = {};
   for (const ref of references ?? []) {
-    const list = refsByUser[ref.user_id] ?? [];
+    const list = refsByUser[ref.diver_id] ?? [];
     list.push(ref);
-    refsByUser[ref.user_id] = list;
+    refsByUser[ref.diver_id] = list;
   }
 
   let published = 0;
