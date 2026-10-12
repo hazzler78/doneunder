@@ -17,7 +17,9 @@ import {
   listDiverDocumentFiles,
   upsertDiverCertificateFile,
 } from "@/lib/diver-documents";
-import { aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
+import { autoPublishIfEligible, aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
+import { nudgeMissingPhotoAfterPublish } from "@/lib/photo-nudge";
+import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -337,29 +339,80 @@ export async function POST(req: Request) {
       await serviceSupabase.from("users").update({ full_name: extractedName }).eq("id", diverId);
     }
 
+    const { data: userRow } = await serviceSupabase
+      .from("users")
+      .select("username")
+      .eq("id", diverId)
+      .maybeSingle();
+    const username = typeof userRow?.username === "string" ? userRow.username.trim() : "";
+
+    const autoPublish = await autoPublishIfEligible(serviceSupabase, diverId);
+    let needsPhoto = false;
+    let photoNudged = false;
+    if (autoPublish.published) {
+      const photo = await nudgeMissingPhotoAfterPublish(serviceSupabase, {
+        diverId,
+        role: "diver",
+      });
+      needsPhoto = !photo.hasPhoto;
+      photoNudged = photo.nudged;
+    }
+
+    const profileStatus = autoPublish.published
+      ? "published"
+      : autoPublish.profile.profile.profile_status === "published"
+        ? "published"
+        : "draft";
+    const publicUrl = username ? `${SITE_URL}/${username}` : `${SITE_URL}/preview`;
     const experienceCount = payload.experiences?.length ?? 0;
     const certCount = payload.certifications?.length ?? 0;
+
+    let visibilityLine: string;
+    if (autoPublish.published) {
+      visibilityLine =
+        `Your page is live at ${publicUrl}. Review at /preview/cv — Unpublish in workspace if you want it offline. ` +
+        (needsPhoto
+          ? "Add a clear face photo on /preview so contractors see a finished card. "
+          : "");
+    } else if (autoPublish.skippedReason === "intentional_unpublish") {
+      visibilityLine =
+        "Your page stays offline (you unpublished earlier). Say Publish my profile or use Publish page when you want it live again. ";
+    } else if (autoPublish.skippedReason === "validation_failed") {
+      const reasons = autoPublish.validation?.errors?.join(" ") || "Profile still needs a headline.";
+      visibilityLine = `Could not auto-publish yet (${reasons}). Fix that, then say Publish my profile. `;
+    } else {
+      visibilityLine =
+        "Your page is still a draft. Open Preview to check, then say Publish my profile when it looks right. ";
+    }
+
     const cvReply =
       `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
-      "Your page is still a draft — contractors cannot see it yet. Open Preview to check, then say Publish my profile (or use Publish page in the workspace panel) when it looks right. " +
-      (extractionWarnings.length
-        ? `Notes: ${extractionWarnings.join(" ")} `
-        : "") +
+      visibilityLine +
+      (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")} ` : "") +
       "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";
 
     await appendAgentTurn(serviceSupabase, {
       threadId: thread.id,
       userContent: `Please process this CV PDF: ${mainCvFile.name}`,
       assistantContent: cvReply,
-      metadata: { source: "process-cv", importBatchId, suggestPublish: true },
+      metadata: {
+        source: "process-cv",
+        importBatchId,
+        suggestPublish: profileStatus === "draft",
+        autoPublished: autoPublish.published,
+        photoNudged,
+      },
     });
 
     return NextResponse.json({
       ok: true,
       disclaimer: AI_DISCLAIMER,
       warnings: extractionWarnings,
-      suggestPublish: true,
-      profileStatus: "draft",
+      suggestPublish: profileStatus === "draft",
+      profileStatus,
+      autoPublished: autoPublish.published,
+      needsPhoto,
+      photoNudged,
       importBatchId,
       uploaded: {
         cv: cvPath,

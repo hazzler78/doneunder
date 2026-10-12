@@ -58,11 +58,13 @@ export default async function AmbassadorPreviewPage() {
       avatarUrl={userRow?.avatar_url ?? null}
       previewBanner={
         <div className="rounded-lg border border-border/70 bg-card/90 p-4 text-sm">
-          <p className="font-medium text-heading">Draft preview — only you can see this page.</p>
+          <p className="font-medium text-heading">
+            {isPublished ? "Preview — your public page is live." : "Draft preview — only you can see this page."}
+          </p>
           <p className="mt-1 text-muted-foreground">
             {isPublished
               ? `Your profile is published at /${username}. Frame your photo so your face sits in the circle.`
-              : `Your public page is not live yet. Publish from workspace when you are ready for https://doneunder.ai/${username}.`}
+              : `Your public page is not live yet (auto-publish needs a headline after CV upload). Publish from workspace when ready for https://doneunder.ai/${username}.`}
           </p>
           <p className="mt-2 text-muted-foreground">
             To edit wording: open{" "}
@@ -74,7 +76,7 @@ export default async function AmbassadorPreviewPage() {
           <p className="mt-2 text-muted-foreground">
             {isPublished
               ? "To take the public page offline, open workspace and use Unpublish page (keeps your username)."
-              : "When you are ready for the public URL, open workspace and use Publish page."}
+              : "After your CV is processed it usually goes live automatically. If it is still draft, use Publish page in workspace."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/workspace" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>

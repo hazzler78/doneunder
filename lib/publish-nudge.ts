@@ -57,7 +57,7 @@ export function formatPublishNudgeEmail(input: {
 
   const text = `Hi ${name},
 
-Your DoneUnder CV looks ready — it is still a draft, so contractors cannot see it yet.
+Your DoneUnder CV looks ready, but it is still a draft (auto-publish needs a headline, or you unpublished earlier).
 
 Open your workspace and tap Publish page (or ask Hermes: “Publish my profile”). Preview first if you want to tweak anything.
 ${headlineLine}

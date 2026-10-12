@@ -1117,6 +1117,105 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
   return { ok: true as const, validation, profile };
 }
 
+export type AutoPublishSkipReason =
+  | "already_published"
+  | "intentional_unpublish"
+  | "not_ready"
+  | "validation_failed";
+
+/**
+ * Publish when the profile is still a never-published draft.
+ * Skips intentional unpublish (draft with published_at set) so re-process does not force them live again.
+ */
+export async function autoPublishIfEligible(supabase: DbClient, diverId: string) {
+  const current = await getDiverProfile(supabase, diverId);
+
+  if (current.profile.profile_status === "published") {
+    return {
+      published: false as const,
+      skippedReason: "already_published" as const,
+      profile: current,
+    };
+  }
+
+  if (current.profile.published_at) {
+    return {
+      published: false as const,
+      skippedReason: "intentional_unpublish" as const,
+      profile: current,
+    };
+  }
+
+  const hasContent =
+    Boolean(current.profile.cv_last_processed_at) ||
+    Boolean(effectiveHeadline(current.profile)) ||
+    Boolean(current.profile.polished_cv_markdown?.trim());
+
+  if (!hasContent) {
+    return {
+      published: false as const,
+      skippedReason: "not_ready" as const,
+      profile: current,
+    };
+  }
+
+  const result = await publishDiverProfile(supabase, diverId);
+  if (!result.ok) {
+    return {
+      published: false as const,
+      skippedReason: "validation_failed" as const,
+      validation: result.validation,
+      profile: result.profile,
+    };
+  }
+
+  return {
+    published: true as const,
+    validation: result.validation,
+    profile: result.profile,
+  };
+}
+
+/** Draft divers who never went live and already have a processed/ready CV (for one-shot backfill). */
+export async function listAutoPublishBackfillCandidates(supabase: DbClient) {
+  const { data: profiles, error } = await supabase
+    .from("diver_profiles")
+    .select(
+      "user_id, profile_status, published_at, cv_last_processed_at, headline, ambassador_public_headline, polished_cv_markdown",
+    )
+    .eq("profile_status", "draft")
+    .is("published_at", null)
+    .limit(500);
+
+  if (error) throw new Error(error.message);
+
+  const rows = profiles ?? [];
+  if (rows.length === 0) return [] as string[];
+
+  const ids = rows.map((row) => row.user_id as string);
+  const { data: divers, error: diversError } = await supabase
+    .from("users")
+    .select("id, role")
+    .in("id", ids)
+    .eq("role", "diver");
+
+  if (diversError) throw new Error(diversError.message);
+
+  const diverIds = new Set((divers ?? []).map((d) => d.id as string));
+
+  return rows
+    .filter((row) => {
+      if (!diverIds.has(row.user_id as string)) return false;
+      const headline = String(row.headline || "").trim() || String(row.ambassador_public_headline || "").trim();
+      const hasContent =
+        Boolean(row.cv_last_processed_at) ||
+        headline.length > 0 ||
+        Boolean(String(row.polished_cv_markdown || "").trim());
+      return hasContent;
+    })
+    .map((row) => row.user_id as string);
+}
+
 /** Take the ambassador page offline. Username is kept; /{username} goes back to 404 until republished. */
 export async function unpublishDiverProfile(supabase: DbClient, diverId: string) {
   const current = await getDiverProfile(supabase, diverId);

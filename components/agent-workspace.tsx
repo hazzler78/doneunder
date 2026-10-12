@@ -427,6 +427,8 @@ export function AgentWorkspace({
           unreadablePdf?: boolean;
           suggestPublish?: boolean;
           profileStatus?: "draft" | "published";
+          needsPhoto?: boolean;
+          autoPublished?: boolean;
         };
         if (data.unreadablePdf || data.ok === false) {
           cvFailed = true;
@@ -445,7 +447,16 @@ export function AgentWorkspace({
           }
         } else {
           if (data.profileStatus) setProfileStatus(data.profileStatus);
-          if (data.suggestPublish || data.profileStatus === "draft") {
+          if (data.profileStatus === "published") {
+            setSuggestPublish(false);
+            setSuggestPhoto(Boolean(data.needsPhoto));
+            setPanelOpen(true);
+            setUploadNotice(
+              data.needsPhoto
+                ? "CV processed — your page is live. Add a face photo on Preview so the card looks finished."
+                : "CV processed — your page is live. Unpublish in the workspace if you want it offline.",
+            );
+          } else if (data.suggestPublish || data.profileStatus === "draft") {
             setSuggestPublish(true);
             setPanelOpen(true);
             setUploadNotice("CV processed. Still a draft — tap Publish page when it looks right.");
@@ -753,7 +764,7 @@ export function AgentWorkspace({
           {suggestPublish && profileStatus === "draft" ? (
             <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-2">
               <p className="text-[11px] text-heading">
-                Your CV is still a draft — contractors cannot see it until you publish.
+                Still a draft (needs a headline or you unpublished). Tap Publish when you want it live.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Link href="/preview" target="_blank">
@@ -939,8 +950,8 @@ export function AgentWorkspace({
                 <div className="rounded-xl border border-primary/40 bg-primary/10 px-3.5 py-3 text-sm text-heading">
                   <p className="font-medium">Ready to go live?</p>
                   <p className="mt-1 text-heading/90">
-                    Your CV is saved as a draft. Contractors cannot see it until you publish.
-                    Preview first if you want — publishing keeps your username.
+                    New CVs usually publish automatically. Yours is still a draft — fix any gaps or
+                    republish if you took it offline. Preview first if you want.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href="/preview" target="_blank">

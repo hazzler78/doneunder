@@ -110,7 +110,7 @@ On success, `profile_status` becomes `published` and `/{username}` is publicly v
 4. **Apply edits** — `PATCH` after each confirmed change in chat.
 5. **Persist turns** — `POST /api/agent/threads/messages` after each user/assistant exchange.
 6. **Review** — share validation warnings with the diver.
-7. **Publish** — `POST .../publish` when diver confirms.
+7. **Publish** — CV process auto-publishes eligible never-published drafts. Use `POST .../publish` only for leftovers or after an intentional unpublish; divers opt out with unpublish.
 
 ## Conversation memory
 
