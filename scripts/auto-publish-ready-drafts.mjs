@@ -2,9 +2,11 @@
  * One-shot: publish existing draft divers who already have a processed CV
  * and have never been published (published_at is null).
  *
+ * Always point --env-file at cloud Supabase (not .env.local / localhost).
+ *
  * Usage:
- *   node --env-file=.env.local scripts/auto-publish-ready-drafts.mjs
- *   node --env-file=.env.local scripts/auto-publish-ready-drafts.mjs --dry-run
+ *   node --env-file=D:/Docker/doneunder-backup/supabase-cloud.env scripts/auto-publish-ready-drafts.mjs --dry-run
+ *   node --env-file=D:/Docker/doneunder-backup/supabase-cloud.env scripts/auto-publish-ready-drafts.mjs
  */
 import { createClient } from "@supabase/supabase-js";
 
@@ -30,6 +32,12 @@ async function run() {
   const dryRun = process.argv.includes("--dry-run");
   const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRole = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  if (/127\.0\.0\.1|localhost/.test(url)) {
+    throw new Error(
+      `Refusing to run against local Supabase (${url}). Use the cloud env file, e.g. D:/Docker/doneunder-backup/supabase-cloud.env`,
+    );
+  }
+  console.log(`Target: ${url}`);
   const supabase = createClient(url, serviceRole, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
