@@ -13,7 +13,11 @@ import {
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
 import { buildDiverCvPdf, cvPdfFilename, livingCvDisplayName } from "@/lib/cv-pdf";
-import { applyCertificateReads, readAllCertificatesFromBytes } from "@/lib/cert-text";
+import {
+  applyCertificateReads,
+  readAllCertificatesFromBytes,
+  repairCertificationDatesFromProfileText,
+} from "@/lib/cert-text";
 import {
   buildCertificateAttachments,
   DIVER_DOCUMENTS_BUCKET,
@@ -365,7 +369,7 @@ Other tools:
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
-- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). Do not say "not provided" if a stored scan has a date. If unreadable is true, ask the diver to type the date. Do not tell them to split a multi-cert PDF unless extraction returned nothing.
+- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). It also lifts dates that were stuck in issuing_body notes into expiry_date/issue_date. Do not say "not provided" if a stored scan or note has a date. If apply_errors is non-empty, quote the real error — do not invent a generic "data error". If unreadable is true, ask the diver to type the date. Do not tell them to split a multi-cert PDF unless extraction returned nothing.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
 - Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
@@ -867,6 +871,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           await listDiverDocumentFiles(input.supabase, input.diverId),
         );
         const fromFiles = [];
+        const applyErrors: string[] = [];
         for (const file of files) {
           const { data, error } = await input.supabase.storage
             .from(DIVER_DOCUMENTS_BUCKET)
@@ -907,16 +912,37 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
               state.cvUpdated = true;
               if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
             }
+            applyErrors.push(...result.errors);
           }
         }
+
+        let repairedFromText = 0;
+        if (apply) {
+          const repair = await repairCertificationDatesFromProfileText(input.supabase, input.diverId);
+          repairedFromText = repair.repaired;
+          if (repair.ok && repair.repaired > 0) {
+            state.profile = repair.profile;
+            state.cvUpdated = true;
+            if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
+          }
+          if (!repair.ok && repair.errors?.length) applyErrors.push(...repair.errors);
+        }
+
         return {
           on_profile: state.profile.certifications.map((cert) => ({
             name: cert.name,
             issue_date: cert.issue_date ?? null,
             expiry_date: cert.expiry_date ?? null,
+            issuing_body: cert.issuing_body ?? null,
           })),
           from_files: fromFiles,
           tickets_found: fromFiles.filter((item) => item.name || item.expiry_date || item.issue_date).length,
+          repaired_from_profile_text: repairedFromText,
+          apply_errors: applyErrors.slice(0, 8),
+          note:
+            repairedFromText > 0
+              ? `Lifted ${repairedFromText} expiry/issue date(s) that were stuck in ticket notes.`
+              : undefined,
         };
       },
     }),

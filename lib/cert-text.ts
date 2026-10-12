@@ -5,7 +5,7 @@ import { extractPdfText } from "@/lib/pdf-text";
 import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import { classifyCertificateFile, imageBytesToCertificatePdf } from "@/lib/certificate-pack";
 import { extractCertificateDates, parseFlexibleDate } from "@/lib/dates";
-import { applyConversationalCvUpdate } from "@/lib/diver-profile-service";
+import { applyConversationalCvUpdate, getDiverProfile } from "@/lib/diver-profile-service";
 import { isAiConfigured } from "@/lib/feature-flags";
 
 export type CertificateRead = {
@@ -313,46 +313,203 @@ export async function pdfCopyFromImage(bytes: Buffer, filename: string, contentT
   }
 }
 
+function looksLikePersonName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  if (/^(mr|mrs|ms|miss|dr)\b/i.test(trimmed)) return true;
+  if (/^[A-Z]{2,}[,\s]+[A-Z]/.test(trimmed) && !/\b(IMCA|HSE|OPITO|DMT|BOSIET|FOET|IDSA)\b/i.test(trimmed)) {
+    return true;
+  }
+  if (
+    /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(trimmed) &&
+    !/\b(diver|medic|medical|certificate|ticket|diving|first aid|oxygen|supervisor|bosiet|foet|imca|hse|opito|a\.?e\.?d|providers)\b/i.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function significantTokens(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 3)
+    .filter(
+      (token) =>
+        !["the", "and", "with", "for", "certificate", "cert", "ticket", "diving", "diver"].includes(token),
+    );
+}
+
+function scoreCertNameMatch(existingName: string, candidateName: string) {
+  const left = existingName.trim().toLowerCase();
+  const right = candidateName.trim().toLowerCase();
+  if (!left || !right) return 0;
+  if (left === right) return 100;
+  if (left.includes(right) || right.includes(left)) return 80;
+  const leftTokens = new Set(significantTokens(left));
+  const rightTokens = significantTokens(right);
+  if (leftTokens.size === 0 || rightTokens.length === 0) return 0;
+  const hits = rightTokens.filter((token) => leftTokens.has(token)).length;
+  return Math.round((hits / Math.max(leftTokens.size, rightTokens.length)) * 70);
+}
+
+function cleanIssuingBody(text: string | null | undefined) {
+  if (!text?.trim()) return null;
+  return text
+    .replace(
+      /\s*[-–]?\s*\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\s*(?:expiry|expires|valid until|valid to|to)\s*\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\s*/gi,
+      " ",
+    )
+    .replace(/\s*(?:expiry|expires|valid until|valid to)[:\s\-]*\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s[-–]\s*$/g, "")
+    .trim() || null;
+}
+
+/** Lift issue/expiry dates that were stuck in issuing_body text into proper date fields. */
+export async function repairCertificationDatesFromProfileText(
+  supabase: SupabaseClient,
+  diverId: string,
+) {
+  const profile = await getDiverProfile(supabase, diverId);
+  const updates: Array<{ match: { name: string }; patch: Record<string, string | null | undefined> }> = [];
+
+  for (const cert of profile.certifications) {
+    if (cert.expiry_date && cert.issue_date) continue;
+    const blob = [cert.issuing_body, cert.cert_number, cert.name].filter(Boolean).join(" ");
+    const dates = extractCertificateDates(blob);
+    if (!dates.expiry_date && !dates.issue_date) continue;
+    const patch: Record<string, string | null | undefined> = {};
+    if (!cert.expiry_date && dates.expiry_date) patch.expiry_date = dates.expiry_date;
+    if (!cert.issue_date && dates.issue_date) patch.issue_date = dates.issue_date;
+    if (cert.issuing_body && (patch.expiry_date || patch.issue_date)) {
+      patch.issuing_body = cleanIssuingBody(cert.issuing_body);
+    }
+    if (Object.keys(patch).length === 0) continue;
+    updates.push({ match: { name: cert.name }, patch });
+  }
+
+  if (updates.length === 0) {
+    return { ok: true as const, repaired: 0, profile };
+  }
+
+  const result = await applyConversationalCvUpdate(
+    supabase,
+    diverId,
+    { update_certifications: updates },
+    { sourceRef: "source: cert-date-repair" },
+  );
+  return {
+    ok: result.ok,
+    repaired: result.ok ? updates.length : 0,
+    errors: result.errors,
+    profile: result.profile,
+  };
+}
+
 export async function applyCertificateRead(
   supabase: SupabaseClient,
   diverId: string,
   read: CertificateRead,
   fallbackName: string,
 ) {
-  if (!read.expiry_date && !read.issue_date && !read.name) return { ok: false as const };
-  const matchName = read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "");
-  const patch = {
-    name: read.name ?? undefined,
-    issuing_body: read.issuing_body ?? undefined,
-    cert_number: read.cert_number ?? undefined,
-    issue_date: read.issue_date ?? undefined,
-    expiry_date: read.expiry_date ?? undefined,
-  };
-  const updated = await applyConversationalCvUpdate(
-    supabase,
-    diverId,
-    { update_certifications: [{ match: { name: matchName }, patch }] },
-    { sourceRef: "source: cert-read" },
+  if (!read.expiry_date && !read.issue_date && !read.name) {
+    return { ok: false as const, error: "No certificate fields to save." };
+  }
+
+  // Dates often arrive only inside issuing_body / OCR excerpt.
+  const fromText = extractCertificateDates(
+    [read.issuing_body, read.excerpt, read.name].filter(Boolean).join(" "),
   );
-  if (updated.ok) return { ok: true as const, mode: "updated" as const, read };
-  if (!read.name && !read.expiry_date) return { ok: false as const };
+  const issue_date = read.issue_date || fromText.issue_date;
+  const expiry_date = read.expiry_date || fromText.expiry_date;
+  const issuing_body = cleanIssuingBody(read.issuing_body) ?? read.issuing_body ?? undefined;
+
+  const candidateName = (read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "")).trim();
+  if (looksLikePersonName(candidateName) && !expiry_date && !issue_date) {
+    return { ok: false as const, error: `Skipped person-name label "${candidateName}".` };
+  }
+
+  const profile = await getDiverProfile(supabase, diverId);
+  let bestName: string | null = null;
+  let bestScore = 0;
+  for (const cert of profile.certifications) {
+    const score = scoreCertNameMatch(cert.name, candidateName);
+    // Prefer filling tickets that still lack expiry when scores are close.
+    const preferMissing = !cert.expiry_date ? 5 : 0;
+    const total = score + preferMissing;
+    if (total > bestScore) {
+      bestScore = total;
+      bestName = cert.name;
+    }
+  }
+
+  const patch = {
+    // Keep the known profile title when we matched; avoid renaming to OCR person names.
+    name:
+      bestScore >= 45 && bestName
+        ? undefined
+        : looksLikePersonName(candidateName)
+          ? undefined
+          : read.name ?? undefined,
+    issuing_body,
+    cert_number: read.cert_number ?? undefined,
+    issue_date: issue_date ?? undefined,
+    expiry_date: expiry_date ?? undefined,
+  };
+
+  if (bestScore >= 45 && bestName) {
+    const updated = await applyConversationalCvUpdate(
+      supabase,
+      diverId,
+      { update_certifications: [{ match: { name: bestName }, patch }] },
+      { sourceRef: "source: cert-read" },
+    );
+    if (updated.ok) return { ok: true as const, mode: "updated" as const, read, matched: bestName };
+    return {
+      ok: false as const,
+      error: updated.errors.join("; ") || `Could not update "${bestName}".`,
+      read,
+    };
+  }
+
+  if (looksLikePersonName(candidateName)) {
+    return {
+      ok: false as const,
+      error: `Could not match scan "${candidateName}" to an existing ticket.`,
+      read,
+    };
+  }
+
+  if (!read.name && !expiry_date) {
+    return { ok: false as const, error: "Nothing to add — missing ticket name and expiry." };
+  }
+
   const added = await applyConversationalCvUpdate(
     supabase,
     diverId,
     {
       add_certifications: [
         {
-          name: read.name || matchName,
-          issuing_body: read.issuing_body ?? undefined,
+          name: candidateName,
+          issuing_body,
           cert_number: read.cert_number ?? undefined,
-          issue_date: read.issue_date ?? undefined,
-          expiry_date: read.expiry_date ?? undefined,
+          issue_date: issue_date ?? undefined,
+          expiry_date: expiry_date ?? undefined,
         },
       ],
     },
     { sourceRef: "source: cert-read" },
   );
-  return { ok: added.ok, mode: "added" as const, read };
+  return {
+    ok: added.ok,
+    mode: "added" as const,
+    read,
+    error: added.ok ? undefined : added.errors.join("; ") || "Could not add certification.",
+  };
 }
 
 export async function applyCertificateReads(
@@ -368,6 +525,9 @@ export async function applyCertificateReads(
   return {
     ok: results.some((item) => item.ok),
     applied: results.filter((item) => item.ok).length,
+    errors: results
+      .map((item) => ("error" in item ? item.error : null))
+      .filter((item): item is string => Boolean(item)),
     results,
   };
 }

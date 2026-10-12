@@ -83,6 +83,17 @@ export function extractCertificateDates(text: string) {
   const compact = text.replace(/\s+/g, " ").trim();
   const squeezed = text.replace(/\s+/g, "");
 
+  // Common CV-import junk: "19-10-2024 expiry 19-10-2026" or "08-04-2026 expiry 29-04-2027"
+  const pair = compact.match(
+    /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]+\s+\d{2,4})\s*(?:expiry|expires|valid until|valid to|to)\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]+\s+\d{2,4})/i,
+  );
+  if (pair) {
+    return {
+      issue_date: parseFlexibleDate(pair[1] ?? null),
+      expiry_date: parseFlexibleDate(pair[2] ?? null),
+    };
+  }
+
   const expiryMatch =
     squeezed.match(/CertificateExpiryDate[:\-]?(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i) ||
     squeezed.match(/(?:ExpiryDate|ValidUntil|ValidTo|GiltigTill|Utgangsdatum)[:\-]?(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i) ||
