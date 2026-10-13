@@ -28,6 +28,7 @@ import {
 import { isAiConfigured, isEmailConfigured } from "@/lib/feature-flags";
 import {
   applicationDraft,
+  applyAddressForJob,
   applyBlockReason,
   formatMatchReason,
   isJobOpen,
@@ -37,7 +38,6 @@ import {
   scoreDiverAgainstJob,
   type PublicJob,
 } from "@/lib/jobs";
-import { CONTACT_EMAIL } from "@/lib/site";
 import { logAgentInteraction } from "@/lib/audit";
 import {
   isInboundFollowUpConfirmation,
@@ -361,10 +361,10 @@ Other tools:
 - find_matching_jobs when they want several open campaigns.
 - match_job when they name one campaign, say yes to one you just offered, or the message includes a job id. Always call it before saying they fit or do not fit.
 - NEVER ask the diver to type a job ID. IDs are in open_campaigns. If they say "yes" after you offered the saturation role, call match_job with that campaign's id (title match is enough).
-- match_job accepts a job id or a title fragment such as "saturation" or "German Bight".
+- match_job accepts a job id or a title fragment from open_campaigns (company name in the title is enough).
 - match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo.
-- After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft and wait for a clear yes.
-- apply_job sends CV + certificates to the listing desk (${CONTACT_EMAIL} until a company gives an address). It refuses when required tickets are expired or missing. Never invent a company email. Never send without confirmed=true. If already_applied, do not send again.
+- After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft (including the real company inbox) and wait for a clear yes.
+- apply_job sends CV + certificates only to the campaign's verified contractor inbox. Campaigns without an inbox are not listed. Never invent a company email. Never send to hello@ or DoneUnder as a fake listing desk. Never send without confirmed=true. If already_applied, do not send again.
 - list_diving_companies when they ask about diving companies, who hires juniors/graduates, contractors in a country/region, or want work beyond the open campaign board. Prefer hire_graduates=true for fresh school graduates. Show soft fit % and typical tickets; still list weak fits.
 - apply_to_company only when has_apply_email / canApply is true for that company (verified careers inbox on file). Warn about missing typical tickets but do NOT hard-block — grads may still send after a clear yes. Never invent a company email. Never send without confirmed=true. If already applied to that company, do not send again.
 - If a company has no apply email, browse only: share website/notes and suggest building the CV / open campaigns; do not invent contacts.
@@ -1023,7 +1023,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     }),
     apply_job: tool({
       description:
-        "Apply the diver to one campaign after they confirm. Sends the living CV and certificate pack to the listing desk. Refuses when required tickets are expired or missing. Never send without confirmed=true.",
+        "Apply the diver to one campaign after they confirm. Sends the living CV and certificate pack to the campaign's verified contractor inbox. Refuses when tickets are expired/missing or there is no applyEmail. Never invent an inbox. Never send without confirmed=true.",
       inputSchema: z.object({
         job_id: z.string(),
         confirmed: z.boolean().describe("True only after the diver approved this application."),
@@ -1040,9 +1040,18 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         }
         const draft = applicationDraft(job, livingCvDisplayName(state.profile, input.displayName));
         const match = matchProfileToJob(job, state.profile);
-        const blocked = applyBlockReason(match);
+        const blocked = applyBlockReason(match, job);
         if (blocked) {
           return { ok: false, error: blocked, match, draft };
+        }
+        const to = draft.to ?? applyAddressForJob(job);
+        if (!to) {
+          return {
+            ok: false,
+            error: "Not sent. No contractor inbox on file for this campaign.",
+            match,
+            draft,
+          };
         }
         if (!confirmed) {
           return {
@@ -1053,7 +1062,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           };
         }
         if (!isJobOpen(job)) {
-          return { ok: false, error: "This campaign has closed.", draft };
+          return { ok: false, error: "This campaign has closed or has no contractor inbox.", draft };
         }
         if (!input.userEmail) {
           return { ok: false, error: "Logged-in account has no email address on file.", draft };
@@ -1085,7 +1094,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           displayName: livingCvDisplayName(state.profile, input.displayName),
           userEmail: input.userEmail,
           profile: state.profile,
-          to: draft.to,
+          to,
           subject: draft.subject,
           body: draft.body,
           attachCv: true,
@@ -1096,7 +1105,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         await logAgentInteraction({
           actorId: input.diverId,
           feature: "hermes_apply_job",
-          input: { jobId: job.id, title: job.title, to: draft.to },
+          input: { jobId: job.id, title: job.title, to },
           output: result,
         });
 
@@ -1109,7 +1118,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         );
         return {
           ok: true,
-          to: draft.to,
+          to,
           from: result.from,
           attached: result.attached,
           jobId: job.id,

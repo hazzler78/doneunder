@@ -1,8 +1,8 @@
 # How commercial diving hiring actually works
 
-Last reviewed: 2026-08-23.
+Last reviewed: 2026-10-13.
 
-This is product policy, not a backlog. Read it before adding apply features, an ATS, a company portal, or a CV blast. The living CV and certificate pack already match how contractors hire. Extra machinery does not — until `hello@doneunder.ai` proves otherwise.
+This is product policy, not a backlog. Read it before adding apply features, an ATS, a company portal, or a CV blast. The living CV and certificate pack already match how contractors hire. Extra machinery does not — until real contractor desks prove otherwise.
 
 Research is from public job ads, competitor sites, and diver complaints (forums / job boards). We have **not** yet interviewed contractor crewing desks. Treat company-side claims as working assumptions until real applications land.
 
@@ -29,6 +29,7 @@ Not “the form was annoying.” The recurring pain:
 | Dead tickets | Apply with expired medical / BOSIET and get dumped. Re-sending the same pack every campaign. |
 | Fees | Sites or “agencies” that charge divers to be visible. Trust dies immediately. |
 | Stale CV | Every apply is a zip of mixed scans. Nobody knows which ticket is current. |
+| Fake desk | Apply looks like it went to a company but landed at DoneUnder. Trust dies immediately. |
 
 Rigzone-style oil-and-gas boards are the reference for the ghosting pattern: resume email in, nothing back.
 
@@ -47,25 +48,25 @@ Build for this:
 
 1. **Receipt.** Someone got the pack. Hermes can say so. A reply can come back to Hermes (inbound Reply-To), not vanish.
 2. **Current tickets.** Do not apply if medical / BOSIET / required cert is missing or expired. Match first, then apply.
-3. **Honest listings.** `closesAt` hides the campaign. No ghost ads. No diver fees.
+3. **Honest listings.** Only show campaigns with a **verified `applyEmail`**. `closesAt` hides the campaign. No ghost ads. No diver fees. Never pretend DoneUnder is the contractor desk.
 
 Do **not** treat “fill the contractor’s Workday form” as the gap. We do not know which companies even have a form, and the ones that hire divers often do not.
 
 ## DoneUnder apply policy
 
-### Phase 1 — now (PR #29)
+### Phase 1 — now
 
-After `match_job` and a **clear yes**, `apply_job` sends the living CV PDF + certificate pack.
+After `match_job` and a **clear yes**, `apply_job` sends the living CV PDF + certificate pack **to the campaign’s verified contractor inbox**.
 
-- Default desk: `hello@doneunder.ai` (`CONTACT_EMAIL`).
-- Override later with `PublicJob.applyEmail` when a company has given an inbox. Never invent one.
+- **Required:** `PublicJob.applyEmail` from the company’s own careers / imprint page (or a live public ad that names that inbox). Never invent one. Never fall back to `hello@doneunder.ai`.
+- Campaigns **without** `applyEmail` are **hidden** from `/jobs`, Hermes `open_campaigns`, match, and apply.
 - Confirm first (`confirmed=true`). No send on a maybe.
 - Do not re-send if `hermes_apply_job` already logged that `jobId`.
 - Closed campaigns (`closesAt` / status) cannot be applied to.
 - Required tickets that are **expired or missing** block `apply_job`. Same-day expiry still counts as current. A ticket with no date is current-but-unknown — Hermes should ask for the date, not invent one.
-- Do **not** write catalog job ids into an `applications` UUID table. Catalog ids are slugs (`job-nsea-irm-2026-09`), not Postgres UUIDs.
+- Do **not** write catalog job ids into an `applications` UUID table. Catalog ids are slugs (`job-baltic-taucher-2026-11`), not Postgres UUIDs.
 
-`hello@` is how we learn. When Gareth or other divers press Apply, the inbox shows: did they send, what did the company ask next, do they want a named address.
+`hello@` remains a **company contact** address for listing requests — not an apply desk.
 
 ### Phase 1b — curated company browse + apply
 
@@ -84,35 +85,35 @@ A company-facing intake (named `applyEmail`, or a company desk that can mark rec
 
 Hermes reaching out proactively, or applying without the diver in the loop. Not before we know that divers and companies want it.
 
-## Do not build until `hello@` (or a diver / company) asks
+## Do not build until a diver / company asks
 
 - ATS / form-fill / browser automation against contractor portals
 - CV blast to a list of inboxes
 - Company apply portal or full ATS
 - Coupling catalog jobs to `applications.id` UUIDs
 - Charging divers to apply or to be listed
-- Leaving campaigns on `/jobs` after `closesAt`
+- Leaving campaigns on `/jobs` after `closesAt` or without `applyEmail`
 - Apply without match / with dead required tickets
+- Falling back to `hello@` as a fake listing desk
 
 ## Code map
 
 | Piece | Where |
 | --- | --- |
-| Live campaigns + optional `applyEmail` | `lib/job-catalog.ts` |
-| Open filter, match prompt, draft, desk address | `lib/jobs.ts` |
+| Live campaigns + required `applyEmail` | `lib/job-catalog.ts` |
+| Open filter, match prompt, draft, desk address | `lib/jobs.ts` (`hasApplyInbox`, `isJobOpen`, `applyAddressForJob`) |
 | `match_job` / `apply_job` | `lib/hermes-diver-agent.ts` |
 | Curated company directory + soft score | `lib/diving-companies.ts` |
 | `list_diving_companies` / `apply_to_company` | `lib/hermes-diver-agent.ts` |
-| Hide when closed | `lib/jobs.ts` `isJobOpen` + `/jobs` |
+| Hide when closed or no inbox | `lib/jobs.ts` `isJobOpen` + `/jobs` |
 | SQL for `closes_at` (run in prod when possible) | `supabase/migrations/010_jobs_closes_at.sql` |
 | Company directory seed | `supabase/migrations/015_diving_companies.sql` |
 
 Until that migration runs, the catalog is the live board.
 
-## Open questions (answer from inbox, not from code)
+## Open questions (answer from real company replies, not from code)
 
-- Do contractors want the pack at a named mailbox, or are they fine with DoneUnder as desk?
-- Do they reply to Hermes inbound, or do they call the diver?
+- Do contractors reply to Hermes inbound, or do they call the diver?
 - Is a short covering note useful, or do they only open the PDFs?
 - Which tickets are actually the first filter for North Sea vs inshore vs wind?
 

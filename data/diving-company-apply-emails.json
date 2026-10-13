@@ -106,6 +106,72 @@
       "name": "Wessex Archaeology",
       "apply_email": "wa.applications@wessexarch.co.uk",
       "source": "https://www.wessexarch.co.uk/vacancies"
+    },
+    {
+      "name": "Franmarine Underwater Services",
+      "apply_email": "reception@franmarine.com.au",
+      "source": "https://www.franmarine.com.au/careers/",
+      "country": "Australia"
+    },
+    {
+      "name": "Shelf Subsea Australia",
+      "apply_email": "contact@shelfsubsea.com",
+      "source": "https://www.shelfsubsea.com/employment/",
+      "country": "Australia"
+    },
+    {
+      "name": "Pacific Marine Group",
+      "apply_email": "hr@pacificmarinegroup.com.au",
+      "source": "pacificmarinegroup.com.au careers / EOI posts",
+      "country": "Australia"
+    },
+    {
+      "name": "Indianic Group",
+      "apply_email": "hr@indianic.com.au",
+      "source": "https://indianic.com.au/about/",
+      "country": "Australia"
+    },
+    {
+      "name": "Dive Co",
+      "apply_email": "info@diveco.com.au",
+      "source": "LinkedIn Dive Supervisor hiring (Sydney)",
+      "country": "Australia"
+    },
+    {
+      "name": "The Diving Co (NSW)",
+      "apply_email": "admin@divingco.com.au",
+      "source": "https://divingco.com.au published office inbox",
+      "country": "Australia"
+    },
+    {
+      "name": "Commercial Marine Group",
+      "apply_email": "na@commercialmarinegroup.com.au",
+      "source": "LinkedIn ADAS diver/supervisor EOI (Nick Ayres)",
+      "country": "Australia"
+    },
+    {
+      "name": "Fremantle Commercial Diving",
+      "apply_email": "info@fcdiving.com.au",
+      "source": "https://fremantlecommercialdiving.com.au/about/employment/",
+      "country": "Australia"
+    },
+    {
+      "name": "Southern Commercial Divers",
+      "apply_email": "admin@southerncommercialdivers.com.au",
+      "source": "https://southerncommercialdivers.com.au/employment",
+      "country": "Australia"
+    },
+    {
+      "name": "Dive Works Subsea Solutions",
+      "apply_email": "andrew@diveworks.com.au",
+      "source": "diveworks.com.au contact + LinkedIn recruiting",
+      "country": "Australia"
+    },
+    {
+      "name": "Bhagwan Marine",
+      "apply_email": "admin@bhagwanmarine.com",
+      "source": "Bhagwan Marine job application form",
+      "country": "Australia"
     }
   ]
 }

@@ -44,8 +44,8 @@ describe("ticketSatisfiesRequirement", () => {
 });
 
 describe("scoreDiverAgainstJob with aliases", () => {
-  it("lets Fernando-style pack apply to Baltic", () => {
-    const job = JOB_CATALOG.find((item) => item.id === "job-baltic-inshore-2026-10");
+  it("lets Fernando-style pack apply to Baltic Taucher", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
     assert.ok(job);
     const match = scoreDiverAgainstJob(
       job,
@@ -55,7 +55,7 @@ describe("scoreDiverAgainstJob with aliases", () => {
           { name: "IMCA Surface Supplied (Top Up)", expiryDate: null },
         ],
       },
-      new Date("2026-10-01T12:00:00.000Z"),
+      new Date("2026-10-13T12:00:00.000Z"),
     );
     assert.deepEqual(match.missing, []);
     assert.equal(match.canApply, true);
@@ -63,16 +63,19 @@ describe("scoreDiverAgainstJob with aliases", () => {
     assert.ok(match.have.includes("HSE Diver Medical"));
   });
 
-  it("lets Domenik-style Top Up count as IMCA on DMT campaign", () => {
-    const job = JOB_CATALOG.find((item) => item.id === "job-dsv-dmt-2026-10");
+  it("lets Top Up + medical clear Nordseetaucher", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-nordseetaucher-2026-11");
     assert.ok(job);
-    const match = scoreDiverAgainstJob(job, {
-      certs: [
-        { name: "Surface Supplied (Top Up)", expiryDate: null, issuingBody: "HSE" },
-        { name: "Diver Medic Technician", expiryDate: "2027-01-01" },
-        { name: "OPITO FOET with EBS", expiryDate: "2028-01-01" },
-      ],
-    });
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [
+          { name: "Surface Supplied (Top Up)", expiryDate: null, issuingBody: "HSE" },
+          { name: "HSE Diver Medical", expiryDate: "2027-01-01" },
+        ],
+      },
+      new Date("2026-10-13T12:00:00.000Z"),
+    );
     assert.deepEqual(match.missing, []);
     assert.equal(match.canApply, true);
   });

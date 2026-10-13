@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Jobs | doneunder.ai",
   description:
-    "Open commercial diving campaigns. Match in Hermes. Applications go to hello@doneunder.ai until a contractor gives an inbox. Listings drop off when they close.",
+    "Open commercial diving campaigns with a verified contractor inbox. Match in Hermes, then apply with your living CV and tickets. Listings drop off when they close.",
 };
 
 function formatDay(iso: string | null) {
@@ -33,8 +33,8 @@ export default async function JobsPage() {
           Open campaigns. Closed when the window closes.
         </h1>
         <p className="mt-4 text-muted-foreground">
-          Scopes Hermes can match you against. Apply sends your living CV and tickets to{" "}
-          {CONTACT_EMAIL} until a contractor gives us their inbox. When a listing hits its close
+          Only campaigns with a verified contractor careers inbox appear here. Apply sends your
+          living CV and tickets to that company — not to DoneUnder. When a listing hits its close
           date, it leaves this board.
         </p>
       </div>

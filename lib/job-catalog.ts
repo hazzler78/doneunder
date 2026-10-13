@@ -11,7 +11,10 @@ export type PublicJob = {
   scope: JobScope;
   mobilization: string;
   status: "open" | "filled" | "draft";
-  /** Company inbox when they have given one. Until then Hermes applies via hello@doneunder.ai. */
+  /**
+   * Verified contractor careers inbox. Required for a campaign to appear on the board
+   * or accept apply_job. Never invent — only emails from the company’s own careers page.
+   */
   applyEmail?: string | null;
   /**
    * When the campaign became alertable. Jobs without this never trigger email/Hermes
@@ -22,73 +25,39 @@ export type PublicJob = {
 };
 
 /**
- * Live campaigns Hermes can match. ClosesAt is the last day the listing is public.
+ * Live campaigns Hermes can match. Only rows with a verified applyEmail are shown.
+ * ClosesAt is the last day the listing is public.
  * Replace or extend via the jobs table; this catalog is the fallback.
  */
 export const JOB_CATALOG: PublicJob[] = [
   {
-    id: "job-nsea-irm-2026-09",
-    title: "Air divers — North Sea IRM",
+    id: "job-baltic-taucher-2026-11",
+    title: "Berufstaucher — Baltic Taucher (Rostock / North & Baltic Sea)",
     description:
-      "Inspection, repair and maintenance on producing North Sea assets. Surface-supplied air diving with possible sat-support. IMCA DSV / air spread. Mobilise from Aberdeen or Esbjerg.",
-    location: "Northern North Sea",
-    startDate: "2026-09-28",
-    closesAt: "2026-09-14T17:00:00.000Z",
-    requiredCerts: ["IMCA", "BOSIET", "OEUK Medical"],
-    scope: "offshore",
-    mobilization: "72 hours",
-    status: "open",
-  },
-  {
-    id: "job-wind-gbf-2026-10",
-    title: "Inspection divers — offshore wind",
-    description:
-      "Monopile and transition-piece inspection package in the German Bight. NDT welcome. Air diving from a walk-to-work / CTV spread. English reporting.",
-    location: "German Bight",
-    startDate: "2026-10-06",
-    closesAt: "2026-09-28T17:00:00.000Z",
-    requiredCerts: ["IMCA", "BOSIET", "PCN NDT"],
-    scope: "offshore",
-    mobilization: "5 days",
-    status: "open",
-  },
-  {
-    id: "job-baltic-inshore-2026-10",
-    title: "Inshore construction divers — Baltic harbour works",
-    description:
-      "Lock, quay and intake work in the Baltic. Air diving, Broco cutting, and construction support. EU work eligibility required.",
-    location: "South Baltic",
-    startDate: "2026-10-12",
-    closesAt: "2026-10-05T17:00:00.000Z",
+      "Full-time commercial diver with Baltic Taucherei Rostock. Harbour, offshore, salvage and construction scopes across the North and Baltic Sea. Apply with CV + tickets to their careers desk.",
+    location: "Rostock, Germany — North Sea & Baltic projects",
+    startDate: null,
+    closesAt: "2026-12-15T17:00:00.000Z",
     requiredCerts: ["IMCA", "HSE Diver Medical"],
     scope: "inshore",
-    mobilization: "7 days",
+    mobilization: "Agree start date with company",
     status: "open",
+    applyEmail: "bewerbung@baltic-taucher.de",
+    postedAt: "2026-10-13T12:00:00.000Z",
   },
   {
-    id: "job-ncs-sat-2026-09",
-    title: "Saturation support — Norwegian Continental Shelf",
+    id: "job-nordseetaucher-2026-11",
+    title: "Berufstaucher — NORDSEETAUCHER (Bremerhaven / ports & inland)",
     description:
-      "Sat-system support and air diving on NCS IRM / installation follow-on. DMT preferred. Valid OGUK/OEUK medical.",
-    location: "Norwegian Sea / North Sea",
-    startDate: "2026-09-22",
-    closesAt: "2026-09-08T17:00:00.000Z",
-    requiredCerts: ["IMCA", "BOSIET", "OEUK Medical"],
-    scope: "offshore",
-    mobilization: "48 hours",
+      "Experienced professional diver for NORDSEETAUCHER in Bremerhaven. Ports, power plants, dams, rivers and lakes — inspections, welding/cutting, repair and equipment care. Permanent full-time role.",
+    location: "Bremerhaven, Germany — ports & inland waters",
+    startDate: null,
+    closesAt: "2026-12-15T17:00:00.000Z",
+    requiredCerts: ["IMCA", "HSE Diver Medical"],
+    scope: "inshore",
+    mobilization: "Agree start date with company",
     status: "open",
-  },
-  {
-    id: "job-dsv-dmt-2026-10",
-    title: "Diver Medic Technician — short-notice DSV",
-    description:
-      "DMT on a North Sea DSV for mixed IRM and construction. Must hold a current DMT ticket and be ready to sail on short notice.",
-    location: "North Sea",
-    startDate: "2026-10-01",
-    closesAt: "2026-10-18T17:00:00.000Z",
-    requiredCerts: ["IMCA", "DMT", "BOSIET"],
-    scope: "offshore",
-    mobilization: "24–48 hours",
-    status: "open",
+    applyEmail: "info@nordseetaucher.de",
+    postedAt: "2026-10-13T12:00:00.000Z",
   },
 ];

@@ -1,14 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
-import { CONTACT_EMAIL } from "@/lib/site";
 import { ticketSatisfiesRequirement } from "@/lib/ticket-match";
 
 /** Product policy for match/apply: docs/hiring-and-apply.md */
 
 export type { PublicJob } from "@/lib/job-catalog";
 
-export function isJobOpen(job: Pick<PublicJob, "status" | "closesAt">, now = new Date()) {
+/** True when the campaign has a verified contractor careers inbox. */
+export function hasApplyInbox(job: Pick<PublicJob, "applyEmail">) {
+  const email = job.applyEmail?.trim().toLowerCase();
+  return Boolean(email && email.includes("@"));
+}
+
+export function isJobOpen(
+  job: Pick<PublicJob, "status" | "closesAt" | "applyEmail">,
+  now = new Date(),
+) {
   if (job.status && job.status !== "open") return false;
+  if (!hasApplyInbox(job)) return false;
   if (!job.closesAt) return true;
   return new Date(job.closesAt).getTime() > now.getTime();
 }
@@ -205,14 +214,18 @@ export function formatMatchReason(match: JobMatch) {
   if (match.unknownExpiry.length) parts.push(`No expiry on file: ${match.unknownExpiry.join(", ")}`);
   if (!parts.length) parts.push("No required tickets listed");
   if (!match.canApply) {
-    if (match.expired.length) parts.push("Do not apply until expired tickets are renewed");
+    if (!match.open) parts.push("Campaign is closed or has no contractor inbox");
+    else if (match.expired.length) parts.push("Do not apply until expired tickets are renewed");
     else if (match.missing.length) parts.push("Do not apply until missing tickets are on file");
   }
   return `${parts.join(". ")}.`;
 }
 
-export function applyBlockReason(match: JobMatch) {
-  if (!match.open) return "This campaign has closed.";
+export function applyBlockReason(match: JobMatch, job?: Pick<PublicJob, "applyEmail">) {
+  if (job && !hasApplyInbox(job)) {
+    return "Not sent. No contractor inbox on file for this campaign.";
+  }
+  if (!match.open) return "This campaign has closed or has no contractor inbox.";
   if (match.expired.length) {
     return `Not sent. Required tickets expired: ${match.expired.join(", ")}. Renew those first.`;
   }
@@ -222,10 +235,11 @@ export function applyBlockReason(match: JobMatch) {
   return null;
 }
 
-export function applyAddressForJob(job: Pick<PublicJob, "applyEmail">) {
+/** Company careers inbox only — never falls back to hello@. */
+export function applyAddressForJob(job: Pick<PublicJob, "applyEmail">): string | null {
   const custom = job.applyEmail?.trim().toLowerCase();
   if (custom && custom.includes("@")) return custom;
-  return CONTACT_EMAIL;
+  return null;
 }
 
 export function applicationDraft(job: PublicJob, displayName: string) {

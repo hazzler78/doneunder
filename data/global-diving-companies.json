@@ -1,0 +1,278 @@
+{
+  "updatedAt": "2026-10-13",
+  "note": "Global first wave (Europe/ME/NA/SA/Africa/Asia) beyond UK/AU for diving_companies. apply_email only when published for CV/careers — never invented. Re-apply with tmp-tutorial/seed-global-diving-companies.mjs.",
+  "companies": [
+    {
+      "name": "Baltic Taucher",
+      "country": "Germany",
+      "location": "Rostock / Baltic & North Sea",
+      "website": "https://www.baltic-taucher.com",
+      "apply_email": "bewerbung@baltic-taucher.de",
+      "hire_graduates": true
+    },
+    {
+      "name": "Nordsee Taucher",
+      "country": "Germany",
+      "location": "Bremerhaven / Ammersbek",
+      "website": "https://www.nordseetaucher.de",
+      "apply_email": "info@nordseetaucher.de",
+      "hire_graduates": true
+    },
+    {
+      "name": "Allseas",
+      "country": "Netherlands",
+      "location": "Delft / global offshore",
+      "website": "https://www.allseas.com",
+      "apply_email": "recruitment@allseas.com",
+      "hire_graduates": false
+    },
+    {
+      "name": "Stoltd Partner",
+      "country": "Ireland",
+      "location": "Dublin / West Africa projects",
+      "website": "https://www.stoltd-partner.com",
+      "apply_email": "hr@stoltd-partner.com",
+      "hire_graduates": false
+    },
+    {
+      "name": "DCN Diving",
+      "country": "Netherlands",
+      "location": "Bergen op Zoom / global",
+      "website": "https://www.dcndiving.com",
+      "apply_email": "recruitment@dcndiving.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Topaz Energy and Marine",
+      "country": "United Arab Emirates",
+      "location": "Dubai / MENA & Caspian",
+      "website": "https://topazworld.com",
+      "apply_email": "offshore.recruitment@topaz-marine.com",
+      "hire_graduates": false
+    },
+    {
+      "name": "Zamil Offshore",
+      "country": "Saudi Arabia",
+      "location": "Al Khobar / Arabian Gulf",
+      "website": "https://www.zamiloffshore.com",
+      "apply_email": null,
+      "hire_graduates": false
+    },
+    {
+      "name": "CCC (Consolidated Contractors Company)",
+      "country": "United Arab Emirates",
+      "location": "Abu Dhabi / MENA",
+      "website": "https://www.ccc.net",
+      "apply_email": null,
+      "hire_graduates": false
+    },
+    {
+      "name": "Aqueos",
+      "country": "United States",
+      "location": "Broussard LA / Ventura CA / Gulf & West Coast",
+      "website": "https://aqueossubsea.com",
+      "apply_email": "careers@aqueossubsea.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "American Inshore Divers",
+      "country": "United States",
+      "location": "Texas / US inshore",
+      "website": "http://aidc.us.com",
+      "apply_email": "resumes@aidc.us.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "US Underwater Services",
+      "country": "United States",
+      "location": "Mansfield TX / inland & offshore",
+      "website": "https://www.usunderwaterservices.com",
+      "apply_email": "info@usunderwaterservices.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Subsea Global Solutions",
+      "country": "United States",
+      "location": "Miami / Houston / global ports",
+      "website": "https://careers.subseaglobalsolutions.com",
+      "apply_email": "jobs@sgsdiving.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Can-Dive Construction",
+      "country": "Canada",
+      "location": "Burnaby / North Vancouver BC",
+      "website": "https://www.can-dive.com",
+      "apply_email": "info@can-dive.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Canpac Marine Services",
+      "country": "Canada",
+      "location": "North Vancouver BC",
+      "website": "https://canpacmarine.com",
+      "apply_email": "careers@canpacmarine.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Oceânica",
+      "country": "Brazil",
+      "location": "Macaé / Rio das Ostras RJ",
+      "website": "https://www.oceanica.com.br",
+      "apply_email": "curriculo@oceanica.com.br",
+      "hire_graduates": true
+    },
+    {
+      "name": "Belov Engenharia",
+      "country": "Brazil",
+      "location": "Rio de Janeiro / Salvador BA",
+      "website": "https://www.belov.com.br",
+      "apply_email": "recrutamentorj@belov.com.br",
+      "hire_graduates": true
+    },
+    {
+      "name": "H&S Diving Consulting",
+      "country": "South Africa",
+      "location": "Durban",
+      "website": "https://www.linkedin.com/company/h-s-diving-consultants",
+      "apply_email": "ops@hsdiving.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "South African Diving Contractors",
+      "country": "South Africa",
+      "location": "Eastern Cape / inland & coastal",
+      "website": "https://www.sadiving.co.za",
+      "apply_email": "info@sadiving.co.za",
+      "hire_graduates": true
+    },
+    {
+      "name": "Octodive",
+      "country": "South Africa",
+      "location": "Saldanha Bay / Cape Town",
+      "website": "https://octodive.com",
+      "apply_email": "ops@octodive.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "DOF",
+      "country": "Norway",
+      "location": "Norway / UK / Brazil / Angola",
+      "website": "https://www.dof.com",
+      "apply_email": null,
+      "hire_graduates": false
+    },
+    {
+      "name": "Shelf Subsea Asia-Pacific",
+      "country": "Singapore",
+      "location": "Singapore / SE Asia",
+      "website": "https://www.shelfsubsea.com",
+      "apply_email": "office@bintangsubsea.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Nereus Subsea",
+      "country": "Singapore",
+      "location": "Singapore / UAE",
+      "website": "https://www.nereussubsea.com",
+      "apply_email": "jobs@nereussubsea.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Joint Pacific Ocean Underwater Services",
+      "country": "Singapore",
+      "location": "Singapore",
+      "website": "https://jpocean.com.sg",
+      "apply_email": "admin@jpocean.com.sg",
+      "hire_graduates": true
+    },
+    {
+      "name": "International Marine Ind Diving (IMID)",
+      "country": "Singapore",
+      "location": "Bedok, Singapore",
+      "website": "https://www.imid.com.sg",
+      "apply_email": "intlmarine@singnet.com.sg",
+      "hire_graduates": true
+    },
+    {
+      "name": "DM Group Services",
+      "country": "Singapore",
+      "location": "Singapore",
+      "website": "https://dmgroupservices.com",
+      "apply_email": "jobs@dmgroupservices.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dive Resources",
+      "country": "Malaysia",
+      "location": "Johor Bahru / Miri / Jakarta",
+      "website": "https://www.diveresources.com.my",
+      "apply_email": "hr@diveresources.com.my",
+      "hire_graduates": true
+    },
+    {
+      "name": "Blackpearl Subsea Services",
+      "country": "Malaysia",
+      "location": "Malaysia",
+      "website": "https://www.bpsubsea.com",
+      "apply_email": "admin@bpsubsea.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Sapura Energy Subsea",
+      "country": "Malaysia",
+      "location": "Malaysia / SE Asia offshore",
+      "website": "https://www.sapuraenergy.com",
+      "apply_email": "seb.subseascm@sapuraenergy.com",
+      "hire_graduates": false
+    },
+    {
+      "name": "Supreme Hydro Engineering (SHEPL)",
+      "country": "India",
+      "location": "Mumbai / ONGC fields",
+      "website": "https://www.shepl.net",
+      "apply_email": "shepl@shepl.net",
+      "hire_graduates": false
+    },
+    {
+      "name": "Dolphin Underwater Services",
+      "country": "India",
+      "location": "Gandhidham Gujarat / Indian ports",
+      "website": "https://dolphindiving.in",
+      "apply_email": "operation@dolphindiving.in",
+      "hire_graduates": true
+    },
+    {
+      "name": "Sea Lion Offshore Diving",
+      "country": "India",
+      "location": "Visakhapatnam",
+      "website": "http://sealionoffshorediving.com",
+      "apply_email": "seadive@rediffmail.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Seaward Commercial Diving",
+      "country": "South Korea",
+      "location": "Busan",
+      "website": "https://seaward.co.kr",
+      "apply_email": "sm@seaward.kr",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dalian Longhe Marine Engineering",
+      "country": "China",
+      "location": "Dalian",
+      "website": "https://en.longheoe.com",
+      "apply_email": "longheoe@sina.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Shenzhen Juli Commercial Diving",
+      "country": "China",
+      "location": "Shenzhen / South China ports",
+      "website": "https://szjulidiving.com",
+      "apply_email": "shenzhen@julidiving.com",
+      "hire_graduates": true
+    }
+  ]
+}

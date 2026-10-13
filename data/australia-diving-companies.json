@@ -1,0 +1,99 @@
+{
+  "updatedAt": "2026-10-13",
+  "note": "Australia first-wave commercial diving contractors for diving_companies. ADAS / AS2299 focus. Re-apply with tmp-tutorial/seed-australia-diving-companies.mjs.",
+  "companies": [
+    {
+      "name": "Franmarine Underwater Services",
+      "location": "Perth WA / Sydney NSW",
+      "website": "https://www.franmarine.com.au",
+      "apply_email": "reception@franmarine.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Shelf Subsea Australia",
+      "location": "Perth WA",
+      "website": "https://www.shelfsubsea.com",
+      "apply_email": "contact@shelfsubsea.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Pacific Marine Group",
+      "location": "Townsville QLD",
+      "website": "https://www.pacificmarinegroup.com.au",
+      "apply_email": "hr@pacificmarinegroup.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Indianic Group",
+      "location": "Henderson WA",
+      "website": "https://indianic.com.au",
+      "apply_email": "hr@indianic.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dive Co",
+      "location": "Sydney NSW",
+      "website": "https://diveco.com.au",
+      "apply_email": "info@diveco.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "The Diving Co (NSW)",
+      "location": "Seaforth NSW",
+      "website": "https://divingco.com.au",
+      "apply_email": "admin@divingco.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Commercial Marine Group",
+      "location": "Brisbane QLD / Perth WA",
+      "website": "https://www.commercialmarinegroup.com.au",
+      "apply_email": "na@commercialmarinegroup.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Fremantle Commercial Diving",
+      "location": "Bibra Lake WA",
+      "website": "https://fremantlecommercialdiving.com.au",
+      "apply_email": "info@fcdiving.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Southern Commercial Divers",
+      "location": "Tullimbar NSW",
+      "website": "https://southerncommercialdivers.com.au",
+      "apply_email": "admin@southerncommercialdivers.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dive Works Subsea Solutions",
+      "location": "Carrum Downs VIC / Hobart TAS",
+      "website": "https://www.diveworks.com.au",
+      "apply_email": "andrew@diveworks.com.au",
+      "hire_graduates": true
+    },
+    {
+      "name": "Bhagwan Marine",
+      "location": "Geraldton / Perth WA (national)",
+      "website": "https://www.bhagwanmarine.com",
+      "apply_email": "admin@bhagwanmarine.com",
+      "hire_graduates": false
+    },
+    {
+      "name": "Oceanic Offshore",
+      "location": "Dampier WA",
+      "website": "https://www.oceanicoffshore.com.au",
+      "apply_email": null,
+      "hire_graduates": true,
+      "note": "Browse-only until careers inbox verified"
+    },
+    {
+      "name": "Southern Divers",
+      "location": "Melbourne VIC",
+      "website": "https://southerndivers.com.au",
+      "apply_email": null,
+      "hire_graduates": true,
+      "note": "Browse-only (web form only)"
+    }
+  ]
+}
