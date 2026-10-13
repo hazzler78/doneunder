@@ -1,0 +1,126 @@
+{
+  "updatedAt": "2026-10-13",
+  "note": "Scandinavia wave (Sweden focus + Norway/Denmark/Finland) for diving_companies. apply_email only when published for CV/careers — never invented. Re-apply with tmp-tutorial/seed-scandinavia-diving-companies.mjs.",
+  "companies": [
+    {
+      "name": "Nordic Subsea Group",
+      "country": "Sweden",
+      "location": "Göteborg / Sweden-wide",
+      "website": "https://www.nordicsubseagroup.se",
+      "apply_email": "info@nordicsubseagroup.se",
+      "hire_graduates": true
+    },
+    {
+      "name": "Sventab",
+      "country": "Sweden",
+      "location": "Stockholm / MarCon group",
+      "website": "https://www.sventab.se",
+      "apply_email": "info@sventab.se",
+      "hire_graduates": true
+    },
+    {
+      "name": "SSE (Svensk Sjöentreprenad)",
+      "country": "Sweden",
+      "location": "Göteborg / Malmö / Sölvesborg",
+      "website": "https://www.sse-ab.se",
+      "apply_email": "info@sse.se",
+      "hire_graduates": true
+    },
+    {
+      "name": "SUAB (Svenska Undervattensentreprenader)",
+      "country": "Sweden",
+      "location": "Strängnäs / Stockholm region",
+      "website": "https://www.suab.nu",
+      "apply_email": "jobba@suab.nu",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dyk & Anläggning AB",
+      "country": "Sweden",
+      "location": "Stockholm / Visby / Sweden-wide",
+      "website": "https://www.dyk-anlaggning.se",
+      "apply_email": "info@dyk-anlaggning.se",
+      "hire_graduates": true
+    },
+    {
+      "name": "Dawab Sverige",
+      "country": "Sweden",
+      "location": "Göteborg",
+      "website": "https://dawabsverige.se",
+      "apply_email": "info@dawabsverige.se",
+      "hire_graduates": true
+    },
+    {
+      "name": "STDG (Svenska Tungdykargruppen)",
+      "country": "Sweden",
+      "location": "Mora / Sweden-wide",
+      "website": "https://www.stdg.se",
+      "apply_email": "info@stdg.se",
+      "hire_graduates": false
+    },
+    {
+      "name": "Dykab",
+      "country": "Sweden",
+      "location": "Luleå / Stockholm",
+      "website": "https://www.dykab.se",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Kystarbeid AS",
+      "country": "Norway",
+      "location": "Bekkjarvik / Onarheim / west coast",
+      "website": "https://kystarbeid.no",
+      "apply_email": "post@kystarbeid.no",
+      "hire_graduates": true
+    },
+    {
+      "name": "Submara Nord",
+      "country": "Norway",
+      "location": "Svolvær / Lofoten / Nordland & Troms",
+      "website": "https://submara.no",
+      "apply_email": "janikken.kildahl@submara.no",
+      "hire_graduates": true
+    },
+    {
+      "name": "Juhls Diving",
+      "country": "Denmark",
+      "location": "Esbjerg / Denmark-wide",
+      "website": "https://juhlsdiving.dk",
+      "apply_email": "k@juhlsdiving.dk",
+      "hire_graduates": true
+    },
+    {
+      "name": "Odin Diving",
+      "country": "Denmark",
+      "location": "Frederikshavn / Scandinavia & international",
+      "website": "https://odindiving.com",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Nordic Marine Service",
+      "country": "Denmark",
+      "location": "Kolding / Svendborg / Vassingerød",
+      "website": "https://nmsdiving.dk",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "DG Diving Group",
+      "country": "Finland",
+      "location": "Turku / Helsinki",
+      "website": "https://www.dg.fi",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Finnish Industrial Diving",
+      "country": "Finland",
+      "location": "Inkoo / Finland",
+      "website": "https://industrialdiving.fi",
+      "apply_email": null,
+      "hire_graduates": true
+    }
+  ]
+}
