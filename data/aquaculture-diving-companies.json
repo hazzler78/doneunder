@@ -1,0 +1,86 @@
+{
+  "updatedAt": "2026-10-13",
+  "note": "Aquaculture / fish-farm diving wave — strong school-leaver path in Norway, Scotland, Canada, Chile, Tasmania. Prefer diving contractors + aquaservice arms over generic salmon producer portals. apply_email only when published for CV/careers. Re-apply with tmp-tutorial/seed-aquaculture-diving-companies.mjs.",
+  "companies": [
+    {
+      "name": "Aqua Dykk AS",
+      "country": "Norway",
+      "location": "Førde / Western Norway",
+      "website": "https://www.aquadykk.no",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Nova Sea Aquaservice",
+      "country": "Norway",
+      "location": "Lovund / Helgeland coast",
+      "website": "https://www.novasea.no",
+      "apply_email": "hege.storheil@novasea-aqua.no",
+      "hire_graduates": true
+    },
+    {
+      "name": "Frøy",
+      "country": "Norway",
+      "location": "Norway-wide aquaservice",
+      "website": "https://www.froygruppen.no",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Ross-shire Diving Services",
+      "country": "UK",
+      "location": "Kishorn / west Highlands Scotland",
+      "website": "https://rsdiving.com",
+      "apply_email": "fiona@rsdiving.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Malakoff Limited",
+      "country": "UK",
+      "location": "Oban / west coast Scotland / Shetland",
+      "website": "https://www.malakofflimited.co.uk",
+      "apply_email": "jhaynes@malakofflimited.co.uk",
+      "hire_graduates": true
+    },
+    {
+      "name": "Camcor Diving Services",
+      "country": "Canada",
+      "location": "Sidney / Vancouver Island BC",
+      "website": "https://camcordiving.com",
+      "apply_email": "assistant.camcor@gmail.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Diveco Marine",
+      "country": "Canada",
+      "location": "Courtenay / Vancouver Island BC",
+      "website": "https://www.divecomarine.com",
+      "apply_email": "terrydiveco@gmail.com",
+      "hire_graduates": true
+    },
+    {
+      "name": "Korvik Chile",
+      "country": "Chile",
+      "location": "Puerto Aysén / Patagonia",
+      "website": "https://korvikchile.cl",
+      "apply_email": "rh@korvikchile.cl",
+      "hire_graduates": true
+    },
+    {
+      "name": "Caleb (Servicios de Buceo Salmonero)",
+      "country": "Chile",
+      "location": "Puerto Montt",
+      "website": "https://servicaleb.cl",
+      "apply_email": null,
+      "hire_graduates": true
+    },
+    {
+      "name": "Tassal Group (aquaculture divers)",
+      "country": "Australia",
+      "location": "Dover / Electrona / SE Tasmania",
+      "website": "https://www.tassal.com.au",
+      "apply_email": null,
+      "hire_graduates": true
+    }
+  ]
+}
