@@ -1,0 +1,111 @@
+{
+  "updatedAt": "2026-10-13",
+  "note": "Verified careers/apply inboxes for diving_companies. Never invent addresses. Re-apply with tmp-tutorial/set-adc-apply-emails*.mjs if needed.",
+  "companies": [
+    {
+      "name": "DiveCo Marine Ltd",
+      "apply_email": "info@diveco.co.uk",
+      "source": "https://diveco.co.uk/company/join-our-team/"
+    },
+    {
+      "name": "Red7 Inshore Diving Ltd",
+      "apply_email": "enquiries@red7inshore.com",
+      "source": "https://www.red7diving.com/contact/ + LinkedIn hiring posts"
+    },
+    {
+      "name": "Kaymac Marine & Civil Engineering Ltd",
+      "apply_email": "enquiries@kaymacltd.co.uk",
+      "source": "https://www.kaymacmarine.co.uk/careers/"
+    },
+    {
+      "name": "Briggs Marine Contractors Ltd",
+      "apply_email": "recruitment@briggsmarine.co.uk",
+      "source": "https://www.briggsmarine.com/recruitment-privacy-statement/"
+    },
+    {
+      "name": "Leask Marine Ltd",
+      "apply_email": "careers@leaskmarine.com",
+      "source": "https://www.leaskmarine.com/about/careers/"
+    },
+    {
+      "name": "Falmouth Divers Ltd",
+      "apply_email": "adamjones@falmouthdivers.com",
+      "source": "Falmouth Divers LinkedIn diver hiring posts"
+    },
+    {
+      "name": "Edwards Diving Services Ltd",
+      "apply_email": "recruitment@edwardsdivingservices.co.uk",
+      "source": "Edwards Diving LinkedIn hiring posts"
+    },
+    {
+      "name": "MMC Diving Services",
+      "apply_email": "careers@mmcdivingservices.co.uk",
+      "source": "https://www.mmcdivingservices.co.uk/careers/"
+    },
+    {
+      "name": "Constructex Ltd",
+      "apply_email": "employment@constructex.co.uk",
+      "source": "https://www.constructex.co.uk/employment"
+    },
+    {
+      "name": "RS Divers Ltd",
+      "apply_email": "info@rsdivers.co.uk",
+      "source": "https://rsdivers.co.uk/about/our-dive-team/staff-divers/"
+    },
+    {
+      "name": "Northern Divers (Eng) Ltd",
+      "apply_email": "contact@northerndivers.co.uk",
+      "source": "https://northerndivers.co.uk/contact-us (general office; careers page has no dedicated inbox)"
+    },
+    {
+      "name": "Ocean Kinetics Limited",
+      "apply_email": "info@oceankinetics.co.uk",
+      "source": "https://www.oceankinetics.co.uk/futures/ + diving apprentice CV route"
+    },
+    {
+      "name": "Reach Engineering & Diving Services Ltd",
+      "apply_email": "reds@red-services.co.uk",
+      "source": "http://www.red-services.co.uk/recruitment.html + LinkedIn diver hiring"
+    },
+    {
+      "name": "DCN Diving UK Ltd",
+      "apply_email": "recruitment@dcndiving.com",
+      "source": "https://www.workingatdcndiving.com/vacancies"
+    },
+    {
+      "name": "Underwater Diving Services Ltd",
+      "apply_email": "recruitment@uds.co.uk",
+      "source": "UDS LinkedIn hiring posts"
+    },
+    {
+      "name": "Dive and Marine Contractors Ltd",
+      "apply_email": "info@diveandmarinecontractors.com",
+      "source": "https://diveandmarine.com/contact/ Careers section"
+    },
+    {
+      "name": "Teignmouth Maritime Services Ltd",
+      "apply_email": "info@tmsmaritime.co.uk",
+      "source": "https://www.tmsmaritime.co.uk/vacancies/ speculative CV"
+    },
+    {
+      "name": "The SMS Group Ltd",
+      "apply_email": "vacancies@sms-marine.co.uk",
+      "source": "https://www.sms-marine.co.uk/about/marine-industry-tradesmen/"
+    },
+    {
+      "name": "Shearwater Marine Services Ltd",
+      "apply_email": "info@shearwatermarine.co.uk",
+      "source": "https://www.shearwatermarine.co.uk/careers"
+    },
+    {
+      "name": "Kew Diving Services Ltd",
+      "apply_email": "info@kewdivingservices.co.uk",
+      "source": "https://kewdivingservices.co.uk/about/"
+    },
+    {
+      "name": "Wessex Archaeology",
+      "apply_email": "wa.applications@wessexarch.co.uk",
+      "source": "https://www.wessexarch.co.uk/vacancies"
+    }
+  ]
+}
