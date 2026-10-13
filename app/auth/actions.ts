@@ -1,14 +1,24 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { safeInternalPath } from "@/lib/auth-paths";
+import { SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { claimPreferredUsername, isValidPublicUsername, normalizeUsername } from "@/lib/usernames";
 
 function withMessage(path: string, message: string) {
   const query = new URLSearchParams({ message }).toString();
   return `${path}?${query}`;
+}
+
+async function requestOrigin() {
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") || headerStore.get("host");
+  const proto = headerStore.get("x-forwarded-proto") || "https";
+  if (host) return `${proto}://${host}`;
+  return SITE_URL;
 }
 
 async function resolveEmailForLogin(identifierRaw: string) {
@@ -176,4 +186,69 @@ export async function logoutAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/");
+}
+
+/** Send a password-reset link to the account email (or username → email). */
+export async function forgotPasswordAction(formData: FormData) {
+  const identifier = String(formData.get("email") ?? "").trim();
+  if (!identifier) {
+    redirect(withMessage("/forgot-password", "Enter the email or username for your account."));
+  }
+
+  const email = await resolveEmailForLogin(identifier);
+  // Always show the same success copy — do not reveal whether the account exists.
+  const successPath = withMessage(
+    "/forgot-password",
+    "If an account exists for that address, we sent a reset link. Check your inbox (and spam). Use Continue with Google on the sign-in page if you registered with Google.",
+  );
+
+  if (!email) {
+    redirect(successPath);
+  }
+
+  const origin = await requestOrigin();
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
+  });
+
+  if (error) {
+    redirect(withMessage("/forgot-password", error.message));
+  }
+
+  redirect(successPath);
+}
+
+/** Set a new password after the recovery link established a session. */
+export async function updatePasswordAction(formData: FormData) {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (password.length < 8) {
+    redirect(withMessage("/reset-password", "Password must be at least 8 characters."));
+  }
+  if (password !== confirm) {
+    redirect(withMessage("/reset-password", "Passwords do not match."));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect(
+      withMessage(
+        "/forgot-password",
+        "Your reset link expired or was already used. Request a new one.",
+      ),
+    );
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    redirect(withMessage("/reset-password", error.message));
+  }
+
+  await supabase.auth.signOut();
+  redirect(withMessage("/login", "Password updated. Sign in with your new password."));
 }

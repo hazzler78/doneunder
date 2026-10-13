@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   if (!code) {
     return redirectWithCookies(
-      `${origin}/login?message=${encodeURIComponent("Google sign-in was cancelled.")}`,
+      `${origin}/login?message=${encodeURIComponent("Sign-in was cancelled.")}`,
       [],
     );
   }
@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
     const { supabase, cookiesToSet, responseHeaders } = createSupabaseRouteClient(request);
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      console.error("Google OAuth exchange failed:", error.message);
+      console.error("Auth code exchange failed:", error.message);
       return redirectWithCookies(
-        `${origin}/login?message=${encodeURIComponent(error.message || "Google sign-in failed.")}`,
+        `${origin}/login?message=${encodeURIComponent(error.message || "Sign-in failed.")}`,
         cookiesToSet,
         responseHeaders,
       );
@@ -38,10 +38,16 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (!user) {
       return redirectWithCookies(
-        `${origin}/login?message=${encodeURIComponent("Google sign-in did not create a session.")}`,
+        `${origin}/login?message=${encodeURIComponent("Sign-in did not create a session.")}`,
         cookiesToSet,
         responseHeaders,
       );
+    }
+
+    const nextRaw = url.searchParams.get("next");
+    // Password recovery links land here with next=/reset-password — do not skip to workspace.
+    if (safeInternalPath(nextRaw, "") === "/reset-password") {
+      return redirectWithCookies(`${origin}/reset-password`, cookiesToSet, responseHeaders);
     }
 
     let role = "diver";
@@ -49,15 +55,15 @@ export async function GET(request: NextRequest) {
       const profile = await ensureDiverProfileForAuthUser(user);
       role = profile?.role ?? "diver";
     } catch (error) {
-      console.error("Failed to create diver profile after Google sign-in:", error);
+      console.error("Failed to create diver profile after sign-in:", error);
     }
 
-    const next = role === "admin" ? "/dashboard/admin" : safeInternalPath(url.searchParams.get("next"));
+    const next = role === "admin" ? "/dashboard/admin" : safeInternalPath(nextRaw);
     return redirectWithCookies(`${origin}${next}`, cookiesToSet, responseHeaders);
   } catch (error) {
-    console.error("Google OAuth callback failed:", error);
+    console.error("Auth callback failed:", error);
     return redirectWithCookies(
-      `${origin}/login?message=${encodeURIComponent("Google sign-in failed.")}`,
+      `${origin}/login?message=${encodeURIComponent("Sign-in failed.")}`,
       [],
     );
   }
