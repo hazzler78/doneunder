@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
 import { CONTACT_EMAIL } from "@/lib/site";
+import { ticketSatisfiesRequirement } from "@/lib/ticket-match";
 
 /** Product policy for match/apply: docs/hiring-and-apply.md */
 
@@ -96,6 +97,7 @@ export function applyPromptForJob(job: Pick<PublicJob, "id" | "title">) {
 export type DiverTicket = {
   name: string;
   expiryDate?: string | null;
+  issuingBody?: string | null;
 };
 
 export type JobMatch = {
@@ -131,14 +133,6 @@ export function isTicketExpired(expiryDate: string | null | undefined, now = new
   return exp < today;
 }
 
-function namesMatch(required: string, ticketName: string) {
-  const needle = required.toLowerCase();
-  const name = ticketName.toLowerCase();
-  if (name.includes(needle) || needle.includes(name)) return true;
-  const tokens = needle.split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
-  return tokens.length > 0 && tokens.every((token) => name.includes(token));
-}
-
 export function scoreDiverAgainstJob(
   job: PublicJob,
   input: {
@@ -158,7 +152,12 @@ export function scoreDiverAgainstJob(
   const unknownExpiry: string[] = [];
 
   for (const cert of required) {
-    const hit = tickets.find((ticket) => namesMatch(cert, ticket.name));
+    const hit = tickets.find((ticket) =>
+      ticketSatisfiesRequirement(cert, {
+        name: ticket.name,
+        issuingBody: ticket.issuingBody,
+      }),
+    );
     if (!hit) {
       missing.push(cert);
       continue;

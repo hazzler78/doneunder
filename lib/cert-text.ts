@@ -321,7 +321,7 @@ function looksLikePersonName(name: string) {
     return true;
   }
   if (
-    /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(trimmed) &&
+    /^[A-Z][a-z]+(?:\s+[A-Z][a-z'’-]+){1,4}$/.test(trimmed) &&
     !/\b(diver|medic|medical|certificate|ticket|diving|first aid|oxygen|supervisor|bosiet|foet|imca|hse|opito|a\.?e\.?d|providers)\b/i.test(
       trimmed,
     )
@@ -329,6 +329,31 @@ function looksLikePersonName(name: string) {
     return true;
   }
   return false;
+}
+
+/** When OCR labels a ticket with the diver's name, recover the real title from body/filename/text. */
+export function inferCertificateTitle(input: {
+  name?: string | null;
+  issuingBody?: string | null;
+  excerpt?: string | null;
+  fallbackName?: string | null;
+}) {
+  const blob = [input.name, input.issuingBody, input.excerpt, input.fallbackName]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/\b(dmt|diver\s*medic|trauma\s*training|idm\/\d+)\b/.test(blob)) {
+    return "Diver Medic Technician (DMT)";
+  }
+  if (/\bfoet\b/.test(blob)) return "OPITO FOET";
+  if (/\bbosiet\b/.test(blob)) return "OPITO BOSIET";
+  if (/\b(oeuk|oguk)\b/.test(blob) && /\bmedical\b/.test(blob)) return "OEUK Medical";
+  if (/\b(hse|imca)\b/.test(blob) && /\bmedical\b/.test(blob)) return "HSE Diver Medical";
+  if (/\bsurface\s*supplied\b/.test(blob) || /\btop\s*[- ]?up\b/.test(blob)) {
+    return "IMCA Surface Supplied (Top Up)";
+  }
+  if (/\bclosed\s*bell\b/.test(blob)) return "IMCA Closed Bell";
+  return null;
 }
 
 function significantTokens(value: string) {
@@ -367,6 +392,42 @@ function cleanIssuingBody(text: string | null | undefined) {
     .replace(/\s{2,}/g, " ")
     .replace(/\s[-–]\s*$/g, "")
     .trim() || null;
+}
+
+/** Rename person-name cert rows using issuing body / notes when we can infer the real ticket. */
+export async function repairMisnamedCertifications(
+  supabase: SupabaseClient,
+  diverId: string,
+) {
+  const profile = await getDiverProfile(supabase, diverId);
+  const updates: Array<{ match: { name: string }; patch: { name: string } }> = [];
+
+  for (const cert of profile.certifications) {
+    if (!looksLikePersonName(cert.name)) continue;
+    const inferred = inferCertificateTitle({
+      name: cert.name,
+      issuingBody: cert.issuing_body,
+    });
+    if (!inferred || inferred === cert.name) continue;
+    updates.push({ match: { name: cert.name }, patch: { name: inferred } });
+  }
+
+  if (updates.length === 0) {
+    return { ok: true as const, repaired: 0, profile };
+  }
+
+  const result = await applyConversationalCvUpdate(
+    supabase,
+    diverId,
+    { update_certifications: updates },
+    { sourceRef: "source: cert-title-repair" },
+  );
+  return {
+    ok: result.ok,
+    repaired: result.ok ? updates.length : 0,
+    errors: result.errors,
+    profile: result.profile,
+  };
 }
 
 /** Lift issue/expiry dates that were stuck in issuing_body text into proper date fields. */
@@ -428,7 +489,18 @@ export async function applyCertificateRead(
   const expiry_date = read.expiry_date || fromText.expiry_date;
   const issuing_body = cleanIssuingBody(read.issuing_body) ?? read.issuing_body ?? undefined;
 
-  const candidateName = (read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "")).trim();
+  const rawName = (read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "")).trim();
+  const inferredName = inferCertificateTitle({
+    name: rawName,
+    issuingBody: issuing_body,
+    excerpt: read.excerpt,
+    fallbackName,
+  });
+  const candidateName =
+    looksLikePersonName(rawName) && inferredName ? inferredName : rawName || inferredName || "";
+  if (!candidateName) {
+    return { ok: false as const, error: "Skipped scan with no usable ticket name." };
+  }
   if (looksLikePersonName(candidateName) && !expiry_date && !issue_date) {
     return { ok: false as const, error: `Skipped person-name label "${candidateName}".` };
   }
@@ -437,7 +509,11 @@ export async function applyCertificateRead(
   let bestName: string | null = null;
   let bestScore = 0;
   for (const cert of profile.certifications) {
-    const score = scoreCertNameMatch(cert.name, candidateName);
+    const score = Math.max(
+      scoreCertNameMatch(cert.name, candidateName),
+      scoreCertNameMatch(cert.name, rawName),
+      inferredName ? scoreCertNameMatch(cert.name, inferredName) : 0,
+    );
     // Prefer filling tickets that still lack expiry when scores are close.
     const preferMissing = !cert.expiry_date ? 5 : 0;
     const total = score + preferMissing;
@@ -451,10 +527,12 @@ export async function applyCertificateRead(
     // Keep the known profile title when we matched; avoid renaming to OCR person names.
     name:
       bestScore >= 45 && bestName
-        ? undefined
+        ? looksLikePersonName(bestName) && inferredName
+          ? inferredName
+          : undefined
         : looksLikePersonName(candidateName)
-          ? undefined
-          : read.name ?? undefined,
+          ? inferredName ?? undefined
+          : read.name ?? inferredName ?? undefined,
     issuing_body,
     cert_number: read.cert_number ?? undefined,
     issue_date: issue_date ?? undefined,

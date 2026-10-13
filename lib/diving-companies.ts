@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isTicketExpired, type DiverTicket } from "@/lib/jobs";
+import { ticketSatisfiesRequirement } from "@/lib/ticket-match";
 
 export type DivingCompanyStatus = "active" | "skip";
 export type DivingCompanyScope = "offshore" | "inshore";
@@ -33,14 +34,6 @@ export type CompanyMatch = {
 const COMPANY_COLUMNS =
   "id,slug,name,country,location,website,scopes,typical_certs,notes,hire_graduates,apply_email,status,updated_at" as const;
 
-function namesMatch(required: string, ticketName: string) {
-  const needle = required.toLowerCase();
-  const name = ticketName.toLowerCase();
-  if (name.includes(needle) || needle.includes(name)) return true;
-  const tokens = needle.split(/[^a-z0-9]+/).filter((token) => token.length >= 3);
-  return tokens.length > 0 && tokens.every((token) => name.includes(token));
-}
-
 function slugify(name: string) {
   return name
     .trim()
@@ -68,7 +61,12 @@ export function scoreDiverAgainstCompany(
   const expired: string[] = [];
 
   for (const cert of typical) {
-    const hit = tickets.find((ticket) => namesMatch(cert, ticket.name));
+    const hit = tickets.find((ticket) =>
+      ticketSatisfiesRequirement(cert, {
+        name: ticket.name,
+        issuingBody: ticket.issuingBody,
+      }),
+    );
     if (!hit) {
       missing.push(cert);
       continue;

@@ -17,6 +17,7 @@ import {
   applyCertificateReads,
   readAllCertificatesFromBytes,
   repairCertificationDatesFromProfileText,
+  repairMisnamedCertifications,
 } from "@/lib/cert-text";
 import {
   buildCertificateAttachments,
@@ -113,6 +114,7 @@ function ticketsFromProfile(profile: DiverProfileFull) {
   return profile.certifications.map((cert) => ({
     name: cert.name,
     expiryDate: cert.expiry_date ?? null,
+    issuingBody: cert.issuing_body ?? null,
   }));
 }
 
@@ -917,6 +919,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         }
 
         let repairedFromText = 0;
+        let repairedTitles = 0;
         if (apply) {
           const repair = await repairCertificationDatesFromProfileText(input.supabase, input.diverId);
           repairedFromText = repair.repaired;
@@ -926,7 +929,25 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
           }
           if (!repair.ok && repair.errors?.length) applyErrors.push(...repair.errors);
+
+          const titleRepair = await repairMisnamedCertifications(input.supabase, input.diverId);
+          repairedTitles = titleRepair.repaired;
+          if (titleRepair.ok && titleRepair.repaired > 0) {
+            state.profile = titleRepair.profile;
+            state.cvUpdated = true;
+            if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
+          }
+          if (!titleRepair.ok && titleRepair.errors?.length) applyErrors.push(...titleRepair.errors);
         }
+
+        const noteParts = [
+          repairedFromText > 0
+            ? `Lifted ${repairedFromText} expiry/issue date(s) that were stuck in ticket notes.`
+            : "",
+          repairedTitles > 0
+            ? `Renamed ${repairedTitles} person-name ticket row(s) to the real certificate title.`
+            : "",
+        ].filter(Boolean);
 
         return {
           on_profile: state.profile.certifications.map((cert) => ({
@@ -938,11 +959,9 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           from_files: fromFiles,
           tickets_found: fromFiles.filter((item) => item.name || item.expiry_date || item.issue_date).length,
           repaired_from_profile_text: repairedFromText,
+          repaired_titles: repairedTitles,
           apply_errors: applyErrors.slice(0, 8),
-          note:
-            repairedFromText > 0
-              ? `Lifted ${repairedFromText} expiry/issue date(s) that were stuck in ticket notes.`
-              : undefined,
+          note: noteParts.length ? noteParts.join(" ") : undefined,
         };
       },
     }),
