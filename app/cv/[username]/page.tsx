@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
-import { SITE_URL } from "@/lib/site";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveFullCvAccess } from "@/lib/cv-access";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
+import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export async function generateMetadata({
   return {
     title: `${name} · CV | doneunder.ai`,
     description,
+    robots: { index: false, follow: false },
     openGraph: {
       title: `${name} · CV`,
       description,
@@ -66,6 +68,79 @@ export default async function DiverCvPage({
     .maybeSingle();
 
   if (!publicAmbassador) notFound();
+
+  const access = await resolveFullCvAccess(publicAmbassador.user_id);
+  const fullName = publicAmbassador.full_name ?? "Commercial Diver";
+  const headline =
+    publicAmbassador.ambassador_public_headline ||
+    publicAmbassador.headline ||
+    "Commercial Diver CV";
+  const location = publicAmbassador.location || "Location not provided";
+  const summary =
+    publicAmbassador.ambassador_short_bio ||
+    publicAmbassador.bio ||
+    "Professional summary not provided yet.";
+
+  if (!access.allowed) {
+    const needsCompany =
+      access.reason === "anonymous" ||
+      access.reason === "company_inactive" ||
+      access.reason === "diver_other" ||
+      access.reason === "unknown";
+
+    return (
+      <main className="mx-auto w-full max-w-2xl space-y-6 px-4 py-10 text-sm leading-relaxed">
+        <div>
+          <Link
+            href={`/${username}`}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }), "inline-flex")}
+          >
+            ← Ambassador page
+          </Link>
+        </div>
+
+        <header className="space-y-2 border-b border-border/60 pb-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
+            Full CV locked
+          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-heading sm:text-4xl">
+            {fullName}
+          </h1>
+          <p className="text-base font-medium text-heading-muted sm:text-lg">{headline}</p>
+          <p className="text-muted-foreground">{location}</p>
+        </header>
+
+        <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-5">
+          <p className="text-heading/90 line-clamp-4">{summary}</p>
+          <p className="text-sm text-muted-foreground">
+            Experience history, certificate numbers, and references stay private. Hiring teams with an
+            active company subscription can unlock the full living CV. Divers use DoneUnder free.
+          </p>
+          <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap">
+            {needsCompany ? (
+              <>
+                <Link href="/login" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
+                  Company sign in
+                </Link>
+                <a
+                  href={CONTACT_MAILTO}
+                  className={cn(buttonVariants({ size: "lg", variant: "outline" }), "w-full sm:w-auto")}
+                >
+                  Request company access
+                </a>
+              </>
+            ) : null}
+            <Link
+              href={`/${username}`}
+              className={cn(buttonVariants({ size: "lg", variant: "outline" }), "w-full sm:w-auto")}
+            >
+              Back to public card
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   const [{ data: experiences }, { data: certifications }, { data: references }, { data: profileExtras }] =
     await Promise.all([
@@ -106,17 +181,7 @@ export default async function DiverCvPage({
           email: item.email ?? null,
         }));
 
-  const fullName = publicAmbassador.full_name ?? "Commercial Diver";
-  const headline =
-    publicAmbassador.ambassador_public_headline ||
-    publicAmbassador.headline ||
-    "Commercial Diver CV";
-  const location = publicAmbassador.location || "Location not provided";
   const mobilization = publicAmbassador.mobilization_notice || "Mobilization not provided";
-  const summary =
-    publicAmbassador.ambassador_short_bio ||
-    publicAmbassador.bio ||
-    "Professional summary not provided yet.";
   const satHours =
     publicAmbassador.sat_hours && publicAmbassador.sat_hours > 0
       ? publicAmbassador.sat_hours.toLocaleString()

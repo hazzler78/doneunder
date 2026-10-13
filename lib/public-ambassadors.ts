@@ -19,7 +19,7 @@ export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbass
     const { data, error } = await supabase
       .from("public_diver_ambassador")
       .select(
-        "user_id,username,full_name,headline,ambassador_public_headline,location,availability_status,mobilization_notice",
+        "user_id,username,full_name,headline,ambassador_public_headline,location,availability_status,mobilization_notice,avatar_url",
       )
       .not("username", "is", null)
       .order("published_at", { ascending: false })
@@ -27,14 +27,6 @@ export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbass
     if (error || !data) return [];
 
     const filtered = data.filter((row) => isIndexableAmbassadorUsername(row.username)).slice(0, limit);
-    const userIds = filtered.map((row) => row.user_id).filter(Boolean) as string[];
-    const avatarByUserId = new Map<string, string | null>();
-    if (userIds.length > 0) {
-      const { data: users } = await supabase.from("users").select("id,avatar_url").in("id", userIds);
-      for (const user of users ?? []) {
-        avatarByUserId.set(user.id, user.avatar_url ?? null);
-      }
-    }
 
     return filtered.map((row) => ({
       username: row.username as string,
@@ -43,7 +35,7 @@ export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbass
       location: row.location || "",
       availabilityStatus: row.availability_status || "available",
       mobilizationNotice: row.mobilization_notice || "",
-      avatarUrl: avatarByUserId.get(row.user_id as string) ?? null,
+      avatarUrl: (row as { avatar_url?: string | null }).avatar_url ?? null,
     }));
   } catch (error) {
     console.error("Failed to load public ambassadors:", error);

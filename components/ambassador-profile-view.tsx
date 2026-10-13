@@ -27,6 +27,8 @@ export type AmbassadorProfileViewProps = {
   avatarUrl?: string | null;
   showRequestButton?: boolean;
   showCvLink?: boolean;
+  /** When false, Full CV becomes a locked / paywalled affordance. */
+  canViewFullCv?: boolean;
   previewBanner?: ReactNode;
   photoSlot?: ReactNode;
 };
@@ -65,6 +67,7 @@ export function AmbassadorProfileView({
   avatarUrl,
   showRequestButton = true,
   showCvLink = true,
+  canViewFullCv = false,
   previewBanner,
   photoSlot,
 }: AmbassadorProfileViewProps) {
@@ -200,13 +203,16 @@ export function AmbassadorProfileView({
             {showCvLink ? (
               <Link
                 href={showRequestButton ? `/cv/${username}` : "/preview/cv"}
-                target="_blank"
+                target={canViewFullCv || !showRequestButton ? "_blank" : undefined}
                 className={cn(
-                  buttonVariants({ size: "lg", variant: showRequestButton ? "outline" : "default" }),
+                  buttonVariants({
+                    size: "lg",
+                    variant: showRequestButton ? "outline" : "default",
+                  }),
                   "w-full sm:w-auto",
                 )}
               >
-                Full CV
+                {showRequestButton && !canViewFullCv ? "Unlock full CV" : "Full CV"}
               </Link>
             ) : null}
           </div>

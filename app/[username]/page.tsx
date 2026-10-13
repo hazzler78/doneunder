@@ -2,10 +2,28 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AmbassadorProfileSwipe } from "@/components/ambassador-profile-swipe";
 import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
+import { resolveFullCvAccess } from "@/lib/cv-access";
 import { loadAmbassadorSwipeContext } from "@/lib/public-ambassadors";
 import { SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
+
+/** Skip OCR person-name junk on public ticket teasers. */
+function looksLikeTicketName(name: string) {
+  const n = name.trim();
+  if (!n) return false;
+  if (
+    /medical|bosiet|foet|imca|dmt|oeuk|oguk|hse|first aid|oxygen|supervisor|certificate|fitness|huet|opito|ndt|alst|sat|surface|scuba|class|idsa|adas|dcbc|b50|dive/i.test(
+      n,
+    )
+  ) {
+    return true;
+  }
+  if (/^[A-Z][A-Z' -]+,\s*[A-Z]/i.test(n)) return false;
+  if (/^(mr|mrs|ms|miss)\b/i.test(n)) return false;
+  if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(n) && n.split(/\s+/).length <= 4) return false;
+  return n.length > 3;
+}
 
 export async function generateMetadata({
   params,
@@ -70,30 +88,46 @@ export default async function AmbassadorPage({
   const { data: publicAmbassador } = await supabase
     .from("public_diver_ambassador")
     .select(
-      "user_id,username,full_name,headline,bio,sat_hours,dive_hours,location,mobilization_notice,availability_status,polished_cv_markdown,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights",
+      "user_id,username,full_name,headline,bio,sat_hours,dive_hours,location,mobilization_notice,availability_status,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,avatar_url",
     )
     .eq("username", username)
     .maybeSingle();
 
   if (!publicAmbassador) notFound();
 
-  const [{ data: certifications }, { data: userRow }, swipe] = await Promise.all([
+  const [{ data: certifications }, swipe, access] = await Promise.all([
     supabase
+      .from("public_diver_cert_teaser")
+      .select("name,expiry_date")
+      .eq("diver_id", publicAmbassador.user_id)
+      .order("sort_order", { ascending: true })
+      .limit(12),
+    loadAmbassadorSwipeContext(username),
+    resolveFullCvAccess(publicAmbassador.user_id),
+  ]);
+
+  // Fallback before teaser view exists / until RLS migration is applied.
+  // Never select cert_number or references for the public card.
+  let teaserCerts = certifications ?? [];
+  if (teaserCerts.length === 0) {
+    const { data: fallbackCerts } = await supabase
       .from("diver_certifications")
       .select("name,expiry_date")
       .eq("diver_id", publicAmbassador.user_id)
-      .order("sort_order", { ascending: true }),
-    supabase.from("users").select("avatar_url").eq("id", publicAmbassador.user_id).maybeSingle(),
-    loadAmbassadorSwipeContext(username),
-  ]);
+      .order("sort_order", { ascending: true })
+      .limit(12);
+    teaserCerts = fallbackCerts ?? [];
+  }
 
-  const avatarUrl = userRow?.avatar_url ?? null;
+  const avatarUrl = publicAmbassador.avatar_url ?? null;
 
   const displayName = publicAmbassador.full_name || "Commercial Diver";
-  const certRows = (certifications ?? []).map((cert) => ({
-    name: cert.name,
-    expiry_date: cert.expiry_date,
-  }));
+  const certRows = teaserCerts
+    .filter((cert) => looksLikeTicketName(cert.name || ""))
+    .map((cert) => ({
+      name: cert.name,
+      expiry_date: cert.expiry_date,
+    }));
   const highlights = Array.isArray(publicAmbassador.ambassador_key_highlights)
     ? publicAmbassador.ambassador_key_highlights.filter(
         (item): item is string => typeof item === "string",
@@ -117,6 +151,7 @@ export default async function AmbassadorPage({
       certifications={certRows}
       avatarUrl={avatarUrl}
       showCvLink
+      canViewFullCv={access.allowed}
     />
   );
 
