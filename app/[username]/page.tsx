@@ -12,17 +12,13 @@ import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 function looksLikeTicketName(name: string) {
   const n = name.trim();
   if (!n) return false;
-  if (
-    /medical|bosiet|foet|imca|dmt|oeuk|oguk|hse|first aid|oxygen|supervisor|certificate|fitness|huet|opito|ndt|alst|sat|surface|scuba|class|idsa|adas|dcbc|b50|dive/i.test(
-      n,
-    )
-  ) {
-    return true;
-  }
   if (/^[A-Z][A-Z' -]+,\s*[A-Z]/i.test(n)) return false;
   if (/^(mr|mrs|ms|miss)\b/i.test(n)) return false;
+  if (/^[A-Z][A-Z]+\s+[A-Z][a-z]+$/.test(n)) return false;
   if (/^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(n) && n.split(/\s+/).length <= 4) return false;
-  return n.length > 3;
+  return /medical|bosiet|foet|imca|dmt|oeuk|oguk|hse|first aid|oxygen|supervisor|certificate|fitness|huet|opito|ndt|alst|sat|surface|scuba|class|idsa|adas|dcbc|b50|dive|competenc/i.test(
+    n,
+  );
 }
 
 export async function generateMetadata({
