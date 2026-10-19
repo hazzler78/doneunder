@@ -440,11 +440,12 @@ export function AgentWorkspace({
           setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
         } else if (!response.ok) {
           cvFailed = true;
-          const message = `${data.error ?? "Failed to process CV upload."}${data.detail ? ` ${data.detail}` : ""}`;
+          const raw = `${data.error ?? ""} ${data.detail ?? ""}`;
+          const message = /AI_RetryError|Too Many Requests|429|rate limit/i.test(raw)
+            ? "The CV reader is busy right now. Wait a moment and press Process files again."
+            : (data.error ?? "Could not process the CV. Try again in a moment.");
           setUploadError(message);
-          if (fileOverride) {
-            setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
-          }
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
         } else {
           if (data.profileStatus) setProfileStatus(data.profileStatus);
           if (data.profileStatus === "published") {
@@ -611,7 +612,7 @@ export function AgentWorkspace({
             ) : (
               <>
                 <p className="text-[11px] leading-relaxed">
-                  Draft only — preview works, public URL stays offline until you publish.
+                  A finished CV publishes your page automatically. This copy is still a draft, so the public URL is offline until the CV is ready.
                 </p>
                 <Button
                   size="sm"
@@ -1120,6 +1121,18 @@ export function AgentWorkspace({
             void sendMessage(input);
           }}
         >
+          {role === "diver" && messages.length > 1 ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={sending || uploading}
+                onClick={() => void sendMessage("Match me to open campaigns")}
+                className="rounded-full border border-border/60 bg-card px-3 py-1.5 text-left text-xs text-heading-muted/90 transition hover:border-primary/40 hover:bg-muted/40 disabled:opacity-50"
+              >
+                Match me to open campaigns
+              </button>
+            </div>
+          ) : null}
           <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-card p-2 focus-within:border-primary/40">
             {role === "diver" ? (
               <>

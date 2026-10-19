@@ -42,17 +42,15 @@ function isImcaDiverTicket(text: string) {
   }
   if (/\bimca\b/.test(text)) return true;
   const compact = text.replace(/\s+/g, " ");
+  // Job titles such as "Commercial Diver" or "Air Diver" are not an IMCA ticket.
   return (
     /\bsurface\s*supplied\b/.test(compact) ||
     /\btop\s*[- ]?up\b/.test(compact) ||
     /\bclosed\s*bell\b/.test(compact) ||
     /\bair\s*diving\s*supervisor\b/.test(compact) ||
     /\btrainee\s*air\b/.test(compact) ||
-    /\bsat(?:uration)?\s*diver\b/.test(compact) ||
-    /\bcommercial\s*(?:air\s*)?diver\b/.test(compact) ||
     /\bhse\s*(?:air|surface)\b/.test(compact) ||
-    /\bidsa\s*level\b/.test(compact) ||
-    (/\bair\s*diver\b/.test(compact) && !/\bscuba\b/.test(compact))
+    /\bidsa\s*level\b/.test(compact)
   );
 }
 

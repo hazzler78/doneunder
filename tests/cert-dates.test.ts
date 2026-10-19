@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractCertificateDates } from "../lib/dates";
+import { extractCertificateDates, parseFlexibleDate } from "../lib/dates";
 
 describe("certificate date extraction", () => {
   it("pulls issue and expiry from 'date expiry date' junk in issuing_body", () => {
@@ -17,5 +17,10 @@ describe("certificate date extraction", () => {
     );
     assert.equal(dates.issue_date, "2026-04-08");
     assert.equal(dates.expiry_date, "2027-04-29");
+  });
+
+  it("does not turn a bare year into 1 January", () => {
+    assert.equal(parseFlexibleDate("2026"), null);
+    assert.equal(parseFlexibleDate("19-10-2026"), "2026-10-19");
   });
 });

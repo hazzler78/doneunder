@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isYearPlaceholderExpiry } from "@/lib/dates";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
 import { ticketSatisfiesRequirement } from "@/lib/ticket-match";
 
@@ -136,6 +137,8 @@ function calendarDay(value: Date | string) {
 /** True when the expiry calendar day is before today. Same-day expiry is still current. */
 export function isTicketExpired(expiryDate: string | null | undefined, now = new Date()) {
   if (!expiryDate?.trim()) return false;
+  // CV years were stored as 1 January. That is not a real expiry day.
+  if (isYearPlaceholderExpiry(expiryDate)) return false;
   const exp = calendarDay(expiryDate);
   const today = calendarDay(now);
   if (!exp || !today) return false;
@@ -161,22 +164,30 @@ export function scoreDiverAgainstJob(
   const unknownExpiry: string[] = [];
 
   for (const cert of required) {
-    const hit = tickets.find((ticket) =>
-      ticketSatisfiesRequirement(cert, {
+    const hit = tickets.find((ticket) => {
+      const bareName = ticket.name.trim().toLowerCase();
+      if (
+        (bareName === "imca" || bareName === "imca diver") &&
+        isYearPlaceholderExpiry(ticket.expiryDate)
+      ) {
+        return false;
+      }
+      return ticketSatisfiesRequirement(cert, {
         name: ticket.name,
         issuingBody: ticket.issuingBody,
-      }),
-    );
+      });
+    });
     if (!hit) {
       missing.push(cert);
       continue;
     }
-    if (isTicketExpired(hit.expiryDate, now)) {
+    const yearOnly = isYearPlaceholderExpiry(hit.expiryDate);
+    if (!yearOnly && isTicketExpired(hit.expiryDate, now)) {
       expired.push(cert);
       continue;
     }
     have.push(cert);
-    if (!hit.expiryDate?.trim()) unknownExpiry.push(cert);
+    if (yearOnly || !hit.expiryDate?.trim()) unknownExpiry.push(cert);
   }
 
   const loc = (input.location ?? "").toLowerCase();

@@ -44,7 +44,8 @@ export function parseFlexibleDate(value?: string | null) {
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
   if (/^\d{4}-\d{2}$/.test(trimmed)) return `${trimmed}-01`;
-  if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
+  // A year alone is not a day. "2026" must not become 1 January.
+  if (/^\d{4}$/.test(trimmed)) return null;
 
   const numeric = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (numeric) {
@@ -77,6 +78,12 @@ export function parseFlexibleDate(value?: string | null) {
   }
 
   return null;
+}
+
+/** True when a stored expiry is only a year that was saved as 1 January. */
+export function isYearPlaceholderExpiry(value?: string | null) {
+  if (!value?.trim()) return false;
+  return /^\d{4}-01-01(?:$|T)/.test(value.trim());
 }
 
 export function extractCertificateDates(text: string) {

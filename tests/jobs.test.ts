@@ -119,6 +119,40 @@ describe("job expiry", () => {
     assert.match(formatMatchReason(match), /Expired: HSE Diver Medical/);
   });
 
+  it("does not treat a year stored as 1 January as an expired IMCA ticket", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
+    assert.ok(job);
+    const now = new Date("2026-10-19T08:00:00.000Z");
+    assert.equal(isTicketExpired("2026-01-01", now), false);
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [
+          { name: "Surface Supplied (Top Up)", expiryDate: "2026-01-01", issuingBody: "HSE" },
+          { name: "HSE Diver Medical", expiryDate: "2027-04-29" },
+        ],
+      },
+      now,
+    );
+    assert.equal(match.expired.includes("IMCA"), false);
+    assert.ok(match.unknownExpiry.includes("IMCA"));
+    assert.ok(match.have.includes("IMCA"));
+  });
+
+  it("does not call a bare IMCA row with a January year expired", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-nordseetaucher-2026-11");
+    assert.ok(job);
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [{ name: "IMCA", expiryDate: "2026-01-01" }],
+      },
+      new Date("2026-10-19T08:00:00.000Z"),
+    );
+    assert.equal(match.expired.includes("IMCA"), false);
+    assert.ok(match.missing.includes("IMCA"));
+  });
+
   it("blocks apply when a required ticket is missing", () => {
     const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
     assert.ok(job);

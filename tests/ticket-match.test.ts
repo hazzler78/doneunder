@@ -41,6 +41,12 @@ describe("ticketSatisfiesRequirement", () => {
   it("does not treat bare SCUBA as IMCA", () => {
     assert.equal(ticketSatisfiesRequirement("IMCA", "SCUBA"), false);
   });
+
+  it("does not treat a job title as an IMCA certificate", () => {
+    assert.equal(ticketSatisfiesRequirement("IMCA", "Commercial Diver"), false);
+    assert.equal(ticketSatisfiesRequirement("IMCA", "Air Diver"), false);
+    assert.equal(ticketSatisfiesRequirement("IMCA", "Saturation Diver"), false);
+  });
 });
 
 describe("scoreDiverAgainstJob with aliases", () => {

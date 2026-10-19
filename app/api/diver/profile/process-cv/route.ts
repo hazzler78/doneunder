@@ -40,7 +40,30 @@ Source documents are often not in English — translate fully into professional 
 Return factual outputs only from provided material. Use "Not provided" when unknown.
 Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
 full_name must be the person's name as printed on the CV (not a Google account or email handle).
+Certificates: include only tickets named in the source. Do not invent IMCA, BOSIET, or a medical. A job title such as Commercial Diver or Air Diver is not a certificate.
+Dates: copy a full day/month/year when it is printed. A year by itself (for example 2026) is not an expiry date — leave expiry_date empty. Never write 1 January as a stand-in for a year.
 Respond in the exact JSON schema requested. Every string field must be English.`;
+
+function isRateLimitError(error: unknown) {
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /429|too many requests|rate limit|AI_RetryError/i.test(text);
+}
+
+async function generateCvObject<T>(run: () => Promise<T>): Promise<T> {
+  const waits = [0, 2500, 6000];
+  let last: unknown;
+  for (let attempt = 0; attempt < waits.length; attempt++) {
+    const wait = waits[attempt] ?? 0;
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      return await run();
+    } catch (error) {
+      last = error;
+      if (!isRateLimitError(error) || attempt === waits.length - 1) throw error;
+    }
+  }
+  throw last;
+}
 
 const cvChunkSchema = z.object({
   summary: z.string().min(1),
@@ -292,13 +315,13 @@ export async function POST(req: Request) {
     const chunkContactMentions: string[] = [];
 
     for (const [index, chunk] of cvChunks.entries()) {
-      const chunkResult = await generateObject({
+      const chunkResult = await generateCvObject(() => generateObject({
         model: aiModel,
         schema: cvChunkSchema,
         system:
           "You extract normalized, factual profile data from commercial diving CV fragments. Source may be any language. Return concise English output and no hallucinations. Translate non-English source text into English while keeping proper names and official certificate titles.",
         prompt: `Chunk ${index + 1}/${cvChunks.length} from CV "${mainCvFile.name}":\n${chunk}`,
-      });
+      }));
       chunkSummaries.push(chunkResult.object.summary);
       chunkCertMentions.push(...chunkResult.object.certifications_mentioned);
       chunkExperienceMentions.push(...chunkResult.object.experiences_mentioned);
@@ -317,12 +340,12 @@ export async function POST(req: Request) {
       "Generate polished English markdown CV + structured JSON + ambassador copy. Translate any non-English source into English. Do not omit valid experience entries found in source text.",
     ].join("\n\n");
 
-    const aiResult = await generateObject({
+    const aiResult = await generateCvObject(() => generateObject({
       model: aiModel,
       system: cvSystemPrompt,
       schema: aiCvOutputSchema,
       prompt: finalPrompt,
-    });
+    }));
 
     const parsed = aiResult.object;
     const nowIso = new Date().toISOString();
@@ -421,6 +444,15 @@ export async function POST(req: Request) {
       output: parsed,
     });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to process CV.", detail: String(error) }, { status: 500 });
+    console.error("process-cv failed", error);
+    const busy = isRateLimitError(error);
+    return NextResponse.json(
+      {
+        error: busy
+          ? "The CV reader is busy right now. Wait a moment and press Process files again."
+          : "Could not process the CV. Try again in a moment.",
+      },
+      { status: busy ? 429 : 500 },
+    );
   }
 }
