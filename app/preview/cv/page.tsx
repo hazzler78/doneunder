@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { CvMarkdown } from "@/components/cv-markdown";
 import { PreviewHighlightToHermes } from "@/components/preview-highlight-to-hermes";
 import { buttonVariants } from "@/components/ui/button";
 import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
@@ -164,9 +165,9 @@ export default async function CvPreviewPage() {
               Internal Hermes draft — not shown on your public CV. Highlight text above to fix the
               structured sections instead.
             </p>
-            <pre className="whitespace-pre-wrap rounded-lg border bg-muted p-4 font-sans text-sm">
-              {p.polished_cv_markdown}
-            </pre>
+            <div className="rounded-lg border bg-muted p-4 text-sm">
+              <CvMarkdown markdown={p.polished_cv_markdown} />
+            </div>
           </section>
         ) : null}
       </PreviewHighlightToHermes>

@@ -122,6 +122,7 @@ export function AgentWorkspace({
   const [livingCv, setLivingCv] = useState<LivingCvInfo>({ present: false, updatedAt: null });
   const [docLoading, setDocLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"cv" | "certs" | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [suggestPublish, setSuggestPublish] = useState(false);
@@ -395,6 +396,7 @@ export function AgentWorkspace({
       return;
     }
     setUploading(true);
+    setUploadPhase(cvFile ? "cv" : "certs");
     setUploadError(null);
     setUploadNotice(null);
     setSuggestPublish(false);
@@ -511,6 +513,7 @@ export function AgentWorkspace({
       }
     } finally {
       setUploading(false);
+      setUploadPhase(null);
     }
   }
 
@@ -744,7 +747,13 @@ export function AgentWorkspace({
             onClick={() => void processCvUpload()}
             disabled={uploading || (!mainCv && certs.length === 0)}
           >
-            {uploading ? "Uploading…" : mainCv ? "Process files" : "Store certificates"}
+            {uploading
+              ? uploadPhase === "certs"
+                ? "Uploading…"
+                : "Processing…"
+              : mainCv
+                ? "Process files"
+                : "Store certificates"}
           </Button>
           {certs.length > 0 ? (
             <ul className="space-y-0.5 text-[11px] text-heading-muted">

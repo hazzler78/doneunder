@@ -408,8 +408,10 @@ export async function POST(req: Request) {
         "Your page is still a draft. Open Preview to check, then say Publish my profile when it looks right. ";
     }
 
+    const roleLabel = experienceCount === 1 ? "1 role" : `${experienceCount} roles`;
+    const certLabel = certCount === 1 ? "1 cert" : `${certCount} certs`;
     const cvReply =
-      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${experienceCount} roles, ${certCount} certs). ` +
+      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${roleLabel}, ${certLabel}). ` +
       visibilityLine +
       (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")} ` : "") +
       "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";
