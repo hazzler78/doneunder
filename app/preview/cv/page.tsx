@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PreviewHighlightToHermes } from "@/components/preview-highlight-to-hermes";
 import { buttonVariants } from "@/components/ui/button";
+import { contextLineForCertificate, formatCertificateDate, resolveCertificateDates } from "@/lib/dates";
 import { getDiverProfile, persistMissingChildRowsFromJson } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -112,18 +113,27 @@ export default async function CvPreviewPage() {
           <h2 className="text-xl font-semibold">Certifications</h2>
           {profile.certifications.length > 0 ? (
             <ul className="space-y-2">
-              {profile.certifications.map((item, index) => (
+              {profile.certifications.map((item, index) => {
+                const dates = resolveCertificateDates({
+                  name: item.name,
+                  issuingBody: item.issuing_body,
+                  issueDate: item.issue_date,
+                  expiryDate: item.expiry_date,
+                  context: contextLineForCertificate(p.polished_cv_markdown, item.name),
+                });
+                return (
                 <li key={`${item.name}-${index}`} className="rounded-md border p-3">
                   <p className="font-semibold">{item.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {[item.issuing_body, item.cert_number ? `#${item.cert_number}` : null].filter(Boolean).join(" • ")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Issued: {formatDate(item.issue_date) ?? "Not provided"} • Expires:{" "}
-                    {formatDate(item.expiry_date) ?? "Not provided"}
+                    Issued: {formatCertificateDate(dates.issue_date) ?? "Not provided"} • Expires:{" "}
+                    {formatCertificateDate(dates.expiry_date) ?? "Not provided"}
                   </p>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           ) : (
             <p>No certifications listed yet.</p>

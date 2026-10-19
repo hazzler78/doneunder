@@ -16,9 +16,28 @@ function haystack(ticket: TicketMatchInput | string) {
 
 function isMedicalTicket(text: string) {
   return (
-    /\b(medical|oeuk|oguk|fitness\s+certificate|diver\s+medical)\b/.test(text) &&
+    /\b(medical|oeuk|oguk|fitness\s+certificate|offshore\s+diver\s+medical|diver\s+medical)\b/.test(text) &&
     !/\b(dmt|diver\s*medic\s*technician)\b/.test(text)
   );
+}
+
+/** A row that is only the campaign label, with no body and no date, is not a held ticket. */
+export function isPlaceholderCertificate(ticket: {
+  name: string;
+  issuingBody?: string | null;
+  expiryDate?: string | null;
+}) {
+  const name = ticket.name.trim().toLowerCase();
+  const labels = new Set([
+    "imca",
+    "imca diver",
+    "hse diver medical",
+    "medical",
+    "bosiet",
+    "certification",
+    "not provided",
+  ]);
+  return labels.has(name) && !ticket.issuingBody?.trim() && !ticket.expiryDate?.trim();
 }
 
 function isSurvivalTicket(text: string) {

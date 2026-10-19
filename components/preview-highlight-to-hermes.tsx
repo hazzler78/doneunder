@@ -33,7 +33,7 @@ export function PreviewHighlightToHermes({ children, className }: Props) {
       return;
     }
     const text = selection.toString().replace(/\s+/g, " ").trim();
-    if (text.length < 8) {
+    if (text.length < 2) {
       clearToolbar();
       return;
     }
@@ -59,8 +59,12 @@ export function PreviewHighlightToHermes({ children, className }: Props) {
   }, [clearToolbar]);
 
   useEffect(() => {
-    const onMouseUp = () => {
+    const onMouseUp = (event: MouseEvent) => {
+      if (event.detail > 1) return;
       window.setTimeout(updateFromSelection, 0);
+    };
+    const onDoubleClick = () => {
+      window.setTimeout(updateFromSelection, 40);
     };
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === "Escape") clearToolbar();
@@ -68,10 +72,12 @@ export function PreviewHighlightToHermes({ children, className }: Props) {
     };
     const onScroll = () => clearToolbar();
     document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("dblclick", onDoubleClick);
     document.addEventListener("keyup", onKeyUp);
     window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("dblclick", onDoubleClick);
       document.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("scroll", onScroll, true);
     };

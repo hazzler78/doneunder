@@ -47,6 +47,11 @@ describe("ticketSatisfiesRequirement", () => {
     assert.equal(ticketSatisfiesRequirement("IMCA", "Air Diver"), false);
     assert.equal(ticketSatisfiesRequirement("IMCA", "Saturation Diver"), false);
   });
+
+  it("counts Offshore Diver Medical as the diver medical", () => {
+    assert.equal(ticketSatisfiesRequirement("HSE Diver Medical", "Offshore Diver Medical"), true);
+    assert.equal(ticketSatisfiesRequirement("IMCA", "Offshore Diver Medical"), false);
+  });
 });
 
 describe("scoreDiverAgainstJob with aliases", () => {

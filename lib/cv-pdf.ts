@@ -1,3 +1,4 @@
+import { formatCertificateDate, resolveCertificateDates, contextLineForCertificate } from "@/lib/dates";
 import type { DiverProfileFull } from "@/lib/diver-profile";
 
 type PdfLine = {
@@ -12,6 +13,24 @@ function formatCvDate(value?: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
+function certificateDateLine(profile: DiverProfileFull, cert: DiverProfileFull["certifications"][number]) {
+  const dates = resolveCertificateDates({
+    name: cert.name,
+    issuingBody: cert.issuing_body,
+    issueDate: cert.issue_date,
+    expiryDate: cert.expiry_date,
+    context: contextLineForCertificate(profile.profile.polished_cv_markdown, cert.name),
+  });
+  return [
+    cert.issuing_body,
+    cert.cert_number ? `#${cert.cert_number}` : null,
+    `Issued: ${formatCertificateDate(dates.issue_date) ?? "Not provided"}`,
+    `Expires: ${formatCertificateDate(dates.expiry_date) ?? "Not provided"}`,
+  ]
+    .filter(Boolean)
+    .join(" • ");
 }
 
 function sanitizeFilenamePart(value: string) {
@@ -146,14 +165,7 @@ export function buildCvPdfLines(profile: DiverProfileFull, displayName: string):
     for (const cert of profile.certifications) {
       lines.push({ text: cert.name, size: 11, bold: true, gapAfter: 2 });
       lines.push({
-        text: [
-          cert.issuing_body,
-          cert.cert_number ? `#${cert.cert_number}` : null,
-          `Issued: ${formatCvDate(cert.issue_date) ?? "Not provided"}`,
-          `Expires: ${formatCvDate(cert.expiry_date) ?? "Not provided"}`,
-        ]
-          .filter(Boolean)
-          .join(" • "),
+        text: certificateDateLine(profile, cert),
         size: 9,
         gapAfter: 8,
       });
@@ -297,14 +309,7 @@ export function buildDiverCertificatesPdf(profile: DiverProfileFull, displayName
     for (const cert of profile.certifications) {
       lines.push({ text: cert.name, size: 11, bold: true, gapAfter: 2 });
       lines.push({
-        text: [
-          cert.issuing_body,
-          cert.cert_number ? `#${cert.cert_number}` : null,
-          `Issued: ${formatCvDate(cert.issue_date) ?? "Not provided"}`,
-          `Expires: ${formatCvDate(cert.expiry_date) ?? "Not provided"}`,
-        ]
-          .filter(Boolean)
-          .join(" • "),
+        text: certificateDateLine(profile, cert),
         size: 9,
         gapAfter: 8,
       });

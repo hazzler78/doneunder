@@ -153,6 +153,25 @@ describe("job expiry", () => {
     assert.ok(match.missing.includes("IMCA"));
   });
 
+  it("names the offshore medical and does not treat a blank IMCA label as current", () => {
+    const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
+    assert.ok(job);
+    const match = scoreDiverAgainstJob(
+      job,
+      {
+        certs: [
+          { name: "IMCA" },
+          { name: "Offshore Diver Medical", expiryDate: "2027-12-31" },
+        ],
+      },
+      new Date("2026-10-19T08:00:00.000Z"),
+    );
+    assert.ok(match.missing.includes("IMCA"));
+    assert.ok(match.have.includes("HSE Diver Medical"));
+    assert.match(formatMatchReason(match), /HSE Diver Medical \(via Offshore Diver Medical\)/);
+    assert.equal(match.score, 28);
+  });
+
   it("blocks apply when a required ticket is missing", () => {
     const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
     assert.ok(job);

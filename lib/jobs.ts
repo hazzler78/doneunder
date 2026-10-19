@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isYearPlaceholderExpiry } from "@/lib/dates";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
-import { ticketSatisfiesRequirement } from "@/lib/ticket-match";
+import { isPlaceholderCertificate, ticketSatisfiesRequirement } from "@/lib/ticket-match";
 
 /** Product policy for match/apply: docs/hiring-and-apply.md */
 
@@ -120,6 +120,8 @@ export type JobMatch = {
   verdict: "strong" | "possible" | "weak";
   open: boolean;
   canApply: boolean;
+  /** Requirement label → the certificate name that satisfied it. */
+  matched?: Record<string, string>;
 };
 
 function calendarDay(value: Date | string) {
@@ -162,14 +164,13 @@ export function scoreDiverAgainstJob(
   const missing: string[] = [];
   const expired: string[] = [];
   const unknownExpiry: string[] = [];
+  const matched: Record<string, string> = {};
 
   for (const cert of required) {
     const hit = tickets.find((ticket) => {
-      const bareName = ticket.name.trim().toLowerCase();
-      if (
-        (bareName === "imca" || bareName === "imca diver") &&
-        isYearPlaceholderExpiry(ticket.expiryDate)
-      ) {
+      const bareImcaYear =
+        ticket.name.trim().toLowerCase() === "imca" && isYearPlaceholderExpiry(ticket.expiryDate);
+      if (isPlaceholderCertificate(ticket) || bareImcaYear) {
         return false;
       }
       return ticketSatisfiesRequirement(cert, {
@@ -181,6 +182,7 @@ export function scoreDiverAgainstJob(
       missing.push(cert);
       continue;
     }
+    matched[cert] = hit.name;
     const yearOnly = isYearPlaceholderExpiry(hit.expiryDate);
     if (!yearOnly && isTicketExpired(hit.expiryDate, now)) {
       expired.push(cert);
@@ -214,12 +216,21 @@ export function scoreDiverAgainstJob(
     verdict,
     open,
     canApply: open && expired.length === 0 && missing.length === 0,
+    matched,
   };
+}
+
+function withTicketName(label: string, matched?: Record<string, string>) {
+  const via = matched?.[label]?.trim();
+  if (!via || via.toLowerCase() === label.toLowerCase()) return label;
+  return `${label} (via ${via})`;
 }
 
 export function formatMatchReason(match: JobMatch) {
   const parts: string[] = [];
-  if (match.have.length) parts.push(`Current: ${match.have.join(", ")}`);
+  if (match.have.length) {
+    parts.push(`Current: ${match.have.map((label) => withTicketName(label, match.matched)).join(", ")}`);
+  }
   if (match.expired.length) parts.push(`Expired: ${match.expired.join(", ")}`);
   if (match.missing.length) parts.push(`Missing: ${match.missing.join(", ")}`);
   if (match.unknownExpiry.length) parts.push(`No expiry on file: ${match.unknownExpiry.join(", ")}`);

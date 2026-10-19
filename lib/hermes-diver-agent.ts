@@ -11,6 +11,7 @@ import {
   validateDiverProfile,
 } from "@/lib/diver-profile-service";
 import { conversationalCvUpdateSchema, formatProfileZodError, type DiverProfileFull } from "@/lib/diver-profile";
+import { contextLineForCertificate, resolveCertificateDates, yearSpanInText } from "@/lib/dates";
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
 import { buildDiverCvPdf, cvPdfFilename, livingCvDisplayName } from "@/lib/cv-pdf";
 import {
@@ -111,11 +112,41 @@ function truncateText(value: string | null | undefined, max = 280) {
 }
 
 function ticketsFromProfile(profile: DiverProfileFull) {
-  return profile.certifications.map((cert) => ({
-    name: cert.name,
-    expiryDate: cert.expiry_date ?? null,
-    issuingBody: cert.issuing_body ?? null,
-  }));
+  const markdown = profile.profile.polished_cv_markdown;
+  const fromRows = profile.certifications.map((cert) => {
+    const dates = resolveCertificateDates({
+      name: cert.name,
+      issuingBody: cert.issuing_body,
+      issueDate: cert.issue_date,
+      expiryDate: cert.expiry_date,
+      context: contextLineForCertificate(markdown, cert.name),
+    });
+    return {
+      name: cert.name,
+      expiryDate: dates.expiry_date,
+      issuingBody: cert.issuing_body ?? null,
+    };
+  });
+  const known = new Set(fromRows.map((ticket) => ticket.name.trim().toLowerCase()));
+  for (const line of (markdown ?? "").split(/\n/)) {
+    const span = yearSpanInText(line);
+    if (!span) continue;
+    const name = line
+      .replace(/[*#_`]/g, " ")
+      .replace(/\b(?:19|20)\d{2}\s*(?:-|–|—|\bto\b)\s*(?:19|20)\d{2}\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .replace(/^[-•\d.)\s]+/, "")
+      .trim();
+    if (name.length < 4 || known.has(name.toLowerCase())) continue;
+    if (!/\b(medical|imca|bosiet|foet|certif|ticket|diver|hse|adas|adci)\b/i.test(name)) continue;
+    known.add(name.toLowerCase());
+    fromRows.push({
+      name,
+      expiryDate: span.expiry_date,
+      issuingBody: null,
+    });
+  }
+  return fromRows;
 }
 
 function matchProfileToJob(job: PublicJob, profile: DiverProfileFull) {
@@ -362,7 +393,7 @@ Other tools:
 - match_job when they name one campaign, say yes to one you just offered, or the message includes a job id. Always call it before saying they fit or do not fit.
 - NEVER ask the diver to type a job ID. IDs are in open_campaigns. If they say "yes" after you offered the saturation role, call match_job with that campaign's id (title match is enough).
 - match_job accepts a job id or a title fragment from open_campaigns (company name in the title is enough).
-- match_job returns have (current), expired, missing, unknownExpiry, and canApply. An expired required ticket is NOT current. If unknownExpiry, ask them to type the date or attach a clearer photo. A year by itself is not an expiry, and 1 January must not be called expired. Do not say they have an IMCA ticket unless the profile names IMCA or an equivalent commercial ticket (surface supplied, closed bell, HSE air/surface, IDSA). A job title such as Commercial Diver is not IMCA.
+- match_job and find_matching_jobs return the same verdict the job cards show. Repeat that reason. Do not say the diver lacks a ticket the reason lists as Current, and do not say they hold one it lists as Missing. "via …" names the certificate on their CV that satisfied the requirement. Offshore Diver Medical counts as HSE Diver Medical. A row that is only the word IMCA, with no dates, is not a held ticket. A year range such as 2025–2027 is valid through the end of the last year, not an expiry of 1 January.
 - After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft (including the real company inbox) and wait for a clear yes.
 - apply_job sends CV + certificates only to the campaign's verified contractor inbox. Campaigns without an inbox are not listed. Never invent a company email. Never send to hello@ or DoneUnder as a fake listing desk. Never send without confirmed=true. If already_applied, do not send again.
 - list_diving_companies when they ask about diving companies, who hires juniors/graduates, contractors in a country/region, or want work beyond the open campaign board. Prefer hire_graduates=true for fresh school graduates. Show soft fit % and typical tickets; still list weak fits.

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveFullCvAccess } from "@/lib/cv-access";
+import { contextLineForCertificate, formatCertificateDate, resolveCertificateDates } from "@/lib/dates";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -161,7 +162,7 @@ export default async function DiverCvPage({
         .order("sort_order", { ascending: true }),
       supabase
         .from("diver_profiles")
-        .select("polished_cv_json")
+        .select("polished_cv_json,polished_cv_markdown")
         .eq("user_id", publicAmbassador.user_id)
         .maybeSingle(),
     ]);
@@ -259,7 +260,18 @@ export default async function DiverCvPage({
         <h2 className="font-display text-xl font-semibold text-heading">Certifications</h2>
         {displayCertifications.length > 0 ? (
           <ul className="space-y-3">
-            {displayCertifications.map((item, index) => (
+            {displayCertifications.map((item, index) => {
+              const dates = resolveCertificateDates({
+                name: item.name,
+                issuingBody: item.issuing_body,
+                issueDate: item.issue_date,
+                expiryDate: item.expiry_date,
+                context: contextLineForCertificate(
+                  (profileExtras as { polished_cv_markdown?: string | null } | null)?.polished_cv_markdown,
+                  item.name ?? "",
+                ),
+              });
+              return (
               <li
                 key={`${item.name}-${index}`}
                 className="rounded-xl border border-border/60 bg-card/60 p-4"
@@ -271,11 +283,12 @@ export default async function DiverCvPage({
                     .join(" · ")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Issued: {formatDate(item.issue_date) ?? "Not provided"} · Expires:{" "}
-                  {formatDate(item.expiry_date) ?? "Not provided"}
+                  Issued: {formatCertificateDate(dates.issue_date) ?? "Not provided"} · Expires:{" "}
+                  {formatCertificateDate(dates.expiry_date) ?? "Not provided"}
                 </p>
               </li>
-            ))}
+              );
+            })}
           </ul>
         ) : (
           <p className="text-muted-foreground">No certifications listed yet.</p>

@@ -86,6 +86,67 @@ export function isYearPlaceholderExpiry(value?: string | null) {
   return /^\d{4}-01-01(?:$|T)/.test(value.trim());
 }
 
+const YEAR_SPAN = /\b((?:19|20)\d{2})\s*(?:-|–|—|\bto\b)\s*((?:19|20)\d{2})\b/i;
+
+/** A printed range such as 2025–2027. Issue is the start year; expiry is the end of the last year. */
+export function yearSpanInText(text?: string | null) {
+  if (!text) return null;
+  const match = text.match(YEAR_SPAN);
+  if (!match?.[1] || !match[2]) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (end < start || end - start > 15) return null;
+  return {
+    issue_date: `${match[1]}-01-01`,
+    expiry_date: `${match[2]}-12-31`,
+  };
+}
+
+/** Show a year-only date as the year. Full dates keep day and month. */
+export function formatCertificateDate(value?: string | null) {
+  if (!value?.trim()) return null;
+  const trimmed = value.trim();
+  if (/^\d{4}-(?:01-01|12-31)(?:$|T)/.test(trimmed)) return trimmed.slice(0, 4);
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return trimmed;
+  return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function contextLineForCertificate(markdown: string | null | undefined, name: string) {
+  if (!markdown?.trim() || !name.trim()) return null;
+  const words = name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4);
+  if (words.length === 0) return null;
+  const needed = Math.min(2, words.length);
+  for (const line of markdown.split(/\n/)) {
+    const lower = line.toLowerCase();
+    const hits = words.filter((word) => lower.includes(word)).length;
+    if (hits >= needed && yearSpanInText(line)) return line;
+  }
+  return null;
+}
+
+export function resolveCertificateDates(input: {
+  name?: string | null;
+  issuingBody?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  context?: string | null;
+}) {
+  let issue = input.issueDate?.trim() || null;
+  let expiry = input.expiryDate?.trim() || null;
+  if (!issue || !expiry) {
+    const span = yearSpanInText([input.name, input.issuingBody, input.issueDate, input.expiryDate, input.context].filter(Boolean).join("\n"));
+    if (span) {
+      issue = issue || span.issue_date;
+      expiry = expiry || span.expiry_date;
+    }
+  }
+  return { issue_date: issue, expiry_date: expiry };
+}
+
 export function extractCertificateDates(text: string) {
   const compact = text.replace(/\s+/g, " ").trim();
   const squeezed = text.replace(/\s+/g, "");
@@ -114,8 +175,9 @@ export function extractCertificateDates(text: string) {
       /(?:issued|issue date|date of issue|from)[:\s\-]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}\s+[A-Za-z]+\s+\d{2,4}|[A-Za-z]+\s+\d{4})/i,
     );
 
+  const span = yearSpanInText(compact);
   return {
-    issue_date: parseFlexibleDate(issueMatch?.[1] ?? null),
-    expiry_date: parseFlexibleDate(expiryMatch?.[1] ?? null),
+    issue_date: parseFlexibleDate(issueMatch?.[1] ?? null) || span?.issue_date || null,
+    expiry_date: parseFlexibleDate(expiryMatch?.[1] ?? null) || span?.expiry_date || null,
   };
 }
