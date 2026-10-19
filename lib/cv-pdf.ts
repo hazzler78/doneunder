@@ -1,4 +1,4 @@
-import { formatCertificateDate, resolveCertificateDates, contextLineForCertificate } from "@/lib/dates";
+import { describeCertificateDates, resolveCertificateDates, contextLineForCertificate } from "@/lib/dates";
 import type { DiverProfileFull } from "@/lib/diver-profile";
 
 type PdfLine = {
@@ -26,8 +26,7 @@ function certificateDateLine(profile: DiverProfileFull, cert: DiverProfileFull["
   return [
     cert.issuing_body,
     cert.cert_number ? `#${cert.cert_number}` : null,
-    `Issued: ${formatCertificateDate(dates.issue_date) ?? "Not provided"}`,
-    `Expires: ${formatCertificateDate(dates.expiry_date) ?? "Not provided"}`,
+    describeCertificateDates(dates.issue_date, dates.expiry_date),
   ]
     .filter(Boolean)
     .join(" • ");

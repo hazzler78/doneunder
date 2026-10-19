@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractCertificateDates, formatCertificateDate, parseFlexibleDate, resolveCertificateDates, yearSpanInText } from "../lib/dates";
+import { describeCertificateDates, extractCertificateDates, formatCertificateDate, parseFlexibleDate, resolveCertificateDates, yearSpanInText } from "../lib/dates";
+import { isTicketExpired } from "../lib/jobs";
 
 describe("certificate date extraction", () => {
   it("pulls issue and expiry from 'date expiry date' junk in issuing_body", () => {
@@ -34,5 +35,14 @@ describe("certificate date extraction", () => {
     });
     assert.equal(formatCertificateDate(dates.issue_date), "2025");
     assert.equal(formatCertificateDate(dates.expiry_date), "2027");
+    assert.equal(describeCertificateDates(dates.issue_date, dates.expiry_date), "Years: 2025–2027");
+  });
+
+  it("shows a lone year as a year, not an expiry", () => {
+    const dates = resolveCertificateDates({ name: "HSE SCUBA 2025" });
+    assert.equal(dates.issue_date, "2025-01-01");
+    assert.equal(dates.expiry_date, null);
+    assert.equal(describeCertificateDates(null, "2025-12-31"), "Year: 2025");
+    assert.equal(isTicketExpired("2025-12-31", new Date("2026-10-19T08:00:00.000Z")), false);
   });
 });

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PreviewHighlightToHermes } from "@/components/preview-highlight-to-hermes";
 import { buttonVariants } from "@/components/ui/button";
-import { contextLineForCertificate, formatCertificateDate, resolveCertificateDates } from "@/lib/dates";
+import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
 import { getDiverProfile, persistMissingChildRowsFromJson } from "@/lib/diver-profile-service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -128,8 +128,7 @@ export default async function CvPreviewPage() {
                     {[item.issuing_body, item.cert_number ? `#${item.cert_number}` : null].filter(Boolean).join(" • ")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Issued: {formatCertificateDate(dates.issue_date) ?? "Not provided"} • Expires:{" "}
-                    {formatCertificateDate(dates.expiry_date) ?? "Not provided"}
+                    {describeCertificateDates(dates.issue_date, dates.expiry_date)}
                   </p>
                 </li>
                 );

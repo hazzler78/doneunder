@@ -80,10 +80,28 @@ export function parseFlexibleDate(value?: string | null) {
   return null;
 }
 
-/** True when a stored expiry is only a year that was saved as 1 January. */
+/**
+ * A year with no day was stored as 1 January or 31 December.
+ * That is the printed year, not a calendar expiry.
+ */
 export function isYearPlaceholderExpiry(value?: string | null) {
   if (!value?.trim()) return false;
-  return /^\d{4}-01-01(?:$|T)/.test(value.trim());
+  return /^\d{4}-(?:01-01|12-31)(?:$|T)/.test(value.trim());
+}
+
+/** How to show certificate dates when the CV only printed years. */
+export function describeCertificateDates(issue?: string | null, expiry?: string | null) {
+  const years = [issue, expiry]
+    .filter((value) => isYearPlaceholderExpiry(value))
+    .map((value) => value!.trim().slice(0, 4));
+  const unique = [...new Set(years)];
+  const issueReal = Boolean(issue?.trim()) && !isYearPlaceholderExpiry(issue);
+  const expiryReal = Boolean(expiry?.trim()) && !isYearPlaceholderExpiry(expiry);
+  if (!issueReal && !expiryReal && unique.length > 0) {
+    if (unique.length === 1) return `Year: ${unique[0]}`;
+    return `Years: ${unique[0]}–${unique[unique.length - 1]}`;
+  }
+  return `Issued: ${formatCertificateDate(issue) ?? "Not provided"} • Expires: ${formatCertificateDate(expiry) ?? "Not provided"}`;
 }
 
 const YEAR_SPAN = /\b((?:19|20)\d{2})\s*(?:-|–|—|\bto\b)\s*((?:19|20)\d{2})\b/i;
@@ -137,12 +155,18 @@ export function resolveCertificateDates(input: {
 }) {
   let issue = input.issueDate?.trim() || null;
   let expiry = input.expiryDate?.trim() || null;
+  const blob = [input.name, input.issuingBody, input.issueDate, input.expiryDate, input.context].filter(Boolean).join("\n");
   if (!issue || !expiry) {
-    const span = yearSpanInText([input.name, input.issuingBody, input.issueDate, input.expiryDate, input.context].filter(Boolean).join("\n"));
+    const span = yearSpanInText(blob);
     if (span) {
       issue = issue || span.issue_date;
       expiry = expiry || span.expiry_date;
     }
+  }
+  if (!issue && !expiry) {
+    const lone = blob.match(/\b((?:19|20)\d{2})\b/);
+    const labeledExpiry = /\b(?:expir|valid until|valid to|valid thru|giltig till)\b/i.test(blob);
+    if (lone?.[1] && !labeledExpiry) issue = `${lone[1]}-01-01`;
   }
   return { issue_date: issue, expiry_date: expiry };
 }

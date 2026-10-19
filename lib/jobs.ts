@@ -139,7 +139,7 @@ function calendarDay(value: Date | string) {
 /** True when the expiry calendar day is before today. Same-day expiry is still current. */
 export function isTicketExpired(expiryDate: string | null | undefined, now = new Date()) {
   if (!expiryDate?.trim()) return false;
-  // CV years were stored as 1 January. That is not a real expiry day.
+  // A printed year was stored as 1 January or 31 December. That is not a real expiry day.
   if (isYearPlaceholderExpiry(expiryDate)) return false;
   const exp = calendarDay(expiryDate);
   const today = calendarDay(now);

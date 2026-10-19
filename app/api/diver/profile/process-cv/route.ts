@@ -41,7 +41,7 @@ Return factual outputs only from provided material. Use "Not provided" when unkn
 Prioritize complete experience extraction: include all identifiable roles/projects from the source text, ordered most recent first.
 full_name must be the person's name as printed on the CV (not a Google account or email handle).
 Certificates: include only tickets named in the source. Do not invent IMCA, BOSIET, or a medical. A job title such as Commercial Diver or Air Diver is not a certificate.
-Dates: if a certificate shows a year range such as 2025–2027, set issue_date to the start year and expiry_date to 31 December of the end year (2027-12-31). A single validity year means valid through 31 December of that year. Keep those years on the certificate. Do not leave both dates empty when a year is printed, and do not use 1 January as the expiry.
+Dates: a year with no "issued" or "expires" label is only the year printed on the certificate. Put a single year such as 2025 in issue_date and leave expiry_date empty. A range such as 2025–2027 is the span printed on the certificate, not proof it expired. Only set expiry_date when the source says expires, valid until, or gives a full day.
 Respond in the exact JSON schema requested. Every string field must be English.`;
 
 function isRateLimitError(error: unknown) {

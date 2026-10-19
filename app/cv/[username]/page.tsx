@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveFullCvAccess } from "@/lib/cv-access";
-import { contextLineForCertificate, formatCertificateDate, resolveCertificateDates } from "@/lib/dates";
+import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -283,8 +283,7 @@ export default async function DiverCvPage({
                     .join(" · ")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Issued: {formatCertificateDate(dates.issue_date) ?? "Not provided"} · Expires:{" "}
-                  {formatCertificateDate(dates.expiry_date) ?? "Not provided"}
+                  {describeCertificateDates(dates.issue_date, dates.expiry_date)}
                 </p>
               </li>
               );

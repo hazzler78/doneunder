@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
@@ -1031,7 +1033,26 @@ export function AgentWorkspace({
                   {item.from === "agent" ? (
                     <p className="mb-1 text-[11px] font-medium text-primary/80">Hermes</p>
                   ) : null}
-                  <p className="whitespace-pre-wrap leading-relaxed">{item.text}</p>
+                  {item.from === "agent" ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="mb-2 leading-relaxed last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-4 last:mb-0">{children}</ul>,
+                        ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-4 last:mb-0">{children}</ol>,
+                        a: ({ href, children }) => (
+                          <a href={href} className="underline" target="_blank" rel="noreferrer">
+                            {children}
+                          </a>
+                        ),
+                      }}
+                    >
+                      {item.text}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{item.text}</p>
+                  )}
                 </div>
               ))}
 

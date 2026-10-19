@@ -21,7 +21,7 @@ import {
   formatProfileZodError,
   polishedCvJsonSchema,
 } from "@/lib/diver-profile";
-import { formatCertificateDate, parseFlexibleDate, resolveCertificateDates } from "@/lib/dates";
+import { describeCertificateDates, parseFlexibleDate, resolveCertificateDates } from "@/lib/dates";
 
 type DbClient = SupabaseClient;
 
@@ -272,10 +272,8 @@ export function buildPolishedCvMarkdown(payload: DiverProfilePayload): string {
         issueDate: cert.issue_date,
         expiryDate: cert.expiry_date,
       });
-      const issue = formatCertificateDate(dates.issue_date) || "Not provided";
-      const expiry = formatCertificateDate(dates.expiry_date) || "Not provided";
       const certId = cert.cert_number ? ` (#${cert.cert_number})` : "";
-      lines.push(`- **${cert.name}${certId}** — Issued: ${issue}, Expires: ${expiry}`);
+      lines.push(`- **${cert.name}${certId}** — ${describeCertificateDates(dates.issue_date, dates.expiry_date)}`);
     });
   }
   lines.push("");

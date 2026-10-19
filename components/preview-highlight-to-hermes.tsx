@@ -47,15 +47,11 @@ export function PreviewHighlightToHermes({ children, className }: Props) {
       clearToolbar();
       return;
     }
-    const rootRect = root.getBoundingClientRect();
-    setToolbar({
-      text,
-      top: rect.top - rootRect.top - 44,
-      left: Math.min(
-        Math.max(rect.left - rootRect.left + rect.width / 2, 80),
-        Math.max(rootRect.width - 80, 80),
-      ),
-    });
+    const headerClearance = 72;
+    const above = rect.top - 40;
+    const top = above < headerClearance ? Math.max(headerClearance, rect.bottom + 8) : above;
+    const left = Math.min(Math.max(rect.left + rect.width / 2, 96), window.innerWidth - 96);
+    setToolbar({ text, top, left });
   }, [clearToolbar]);
 
   useEffect(() => {
@@ -92,7 +88,7 @@ export function PreviewHighlightToHermes({ children, className }: Props) {
       {children}
       {toolbar ? (
         <div
-          className="absolute z-20 -translate-x-1/2 print:hidden"
+          className="fixed z-[60] -translate-x-1/2 print:hidden"
           style={{ top: toolbar.top, left: toolbar.left }}
         >
           <Link

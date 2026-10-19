@@ -62,7 +62,7 @@ export function HeroProductMockup() {
                   </p>
                 </div>
                 <span className="shrink-0 rounded-md bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
-                  {94 - index * 7}%
+                  Open
                 </span>
               </div>
             </div>
@@ -119,7 +119,7 @@ export function PipelineVisual({
               <p className="truncate font-medium text-heading">{job.title}</p>
               <p className="text-[11px] text-muted-foreground">{job.location}</p>
             </div>
-            <span className="text-xs font-semibold text-primary">{91 - i * 5}%</span>
+            <span className="text-xs font-semibold text-primary">Open</span>
           </div>
         ))}
         {children}
