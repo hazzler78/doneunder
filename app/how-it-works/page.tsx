@@ -7,7 +7,7 @@ const steps = [
     id: "01",
     key: "find" as const,
     title: "Create your profile",
-    body: "Divers talk to Hermes in English. Add jobs, tickets, and hours in the chat — or paste a CV and Hermes structures it.",
+    body: "Divers talk to Hermes in their own language. Add jobs, tickets, and hours in the chat — or paste a CV and Hermes structures it. The CV is saved in English.",
   },
   {
     id: "02",

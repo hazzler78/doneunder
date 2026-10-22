@@ -468,6 +468,7 @@ async function replaceChildRows(
         name: item.name,
         issue_date: normalizeDate(item.issue_date),
         expiry_date: normalizeDate(item.expiry_date),
+        expiry_confirmed: item.expiry_confirmed ?? true,
         cert_number: item.cert_number || null,
         issuing_body: item.issuing_body || null,
         sort_order: index,
@@ -905,6 +906,7 @@ export async function applyConversationalCvUpdate(
       ...item,
       source: "ai" as const,
       source_ref: sourceRef,
+      expiry_confirmed: item.expiry_confirmed ?? !sourceRef.includes("cert-read"),
     }));
     changed.push("certifications");
   }
@@ -967,12 +969,16 @@ export async function applyConversationalCvUpdate(
       errors.push(`Could not find certification to update (${describeMatch(item.match)}).`);
       continue;
     }
-    certifications[index] = {
+    const nextCert = {
       ...certifications[index],
       ...item.patch,
-      source: "ai",
+      source: "ai" as const,
       source_ref: sourceRef,
     };
+    if (item.patch.expiry_date !== undefined && item.patch.expiry_confirmed === undefined) {
+      nextCert.expiry_confirmed = !sourceRef.includes("cert-read");
+    }
+    certifications[index] = nextCert;
     if (!changed.includes("certifications")) changed.push("certifications");
   }
   for (const item of update.update_references ?? []) {
@@ -1004,6 +1010,7 @@ export async function applyConversationalCvUpdate(
       ...item,
       source: "ai" as const,
       source_ref: sourceRef,
+      expiry_confirmed: item.expiry_confirmed ?? !sourceRef.includes("cert-read"),
     }));
     certifications = [...certifications, ...incoming];
     if (!changed.includes("certifications")) changed.push("certifications");
@@ -1298,7 +1305,12 @@ export function aiCvOutputToPayload(
     bio_source_ref: meta.sourceRef,
     import_batch_id: meta.importBatchId,
     experiences: profile.experiences.map((item) => ({ ...item, source: "ai" as const, source_ref: meta.sourceRef })),
-    certifications: profile.certifications.map((item) => ({ ...item, source: "ai" as const, source_ref: meta.sourceRef })),
+    certifications: profile.certifications.map((item) => ({
+      ...item,
+      source: "ai" as const,
+      source_ref: meta.sourceRef,
+      expiry_confirmed: false,
+    })),
     references: profile.references.map((item) => ({
       name: item.name,
       company: item.company,

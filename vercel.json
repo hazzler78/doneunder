@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/stuck-divers",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/cert-expiry",
+      "schedule": "0 6 * * *"
     }
   ]
 }

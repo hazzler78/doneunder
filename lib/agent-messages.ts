@@ -88,6 +88,7 @@ export async function appendAgentTurn(
 export function agentMessagesToChatHistory(messages: AgentMessage[]) {
   return messages
     .filter((item) => item.role === "user" || item.role === "assistant")
+    .filter((item) => item.metadata?.source !== "cert_expiry_reminder")
     .map((item) => ({
       role: item.role === "user" ? ("user" as const) : ("assistant" as const),
       content: item.content,

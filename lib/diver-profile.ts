@@ -62,6 +62,8 @@ export const certificationInputSchema = z.object({
   issuing_body: optionalText,
   source: optionalSource,
   source_ref: optionalText,
+  expiry_confirmed: z.preprocess((value) => (typeof value === "boolean" ? value : undefined), z.boolean().optional())
+    .describe("True when the diver confirmed this expiry. False when a file read has not been confirmed."),
 });
 
 export const referenceInputSchema = z.object({
@@ -214,7 +216,9 @@ export const conversationalCvUpdateSchema = z
       )
       .max(20)
       .optional()
-      .describe("Change an existing ticket. Use this to set expiry_date / issue_date. Dates: YYYY-MM-DD or DD/MM/YYYY."),
+      .describe(
+        "Change an existing ticket. Use this to set expiry_date / issue_date. Dates: YYYY-MM-DD or DD/MM/YYYY. Set expiry_confirmed true when the diver confirms or corrects a date.",
+      ),
     remove_certifications: z.array(certificationMatchSchema).max(20).optional(),
     replace_certifications: z.array(certificationBodySchema).max(50).optional(),
     add_references: z.array(referenceBodySchema.partial({ phone: true })).max(10).optional(),
@@ -321,7 +325,7 @@ export const DIVER_EXPERIENCE_COLUMNS =
   "id,company,project_name,location,role_title,date_start,date_end,summary,source,source_ref" as const;
 
 export const DIVER_CERTIFICATION_COLUMNS =
-  "id,name,issue_date,expiry_date,cert_number,issuing_body,source,source_ref" as const;
+  "id,name,issue_date,expiry_date,expiry_confirmed,cert_number,issuing_body,source,source_ref" as const;
 
 export const DIVER_REFERENCE_COLUMNS = "id,name,company,phone,email,source,source_ref" as const;
 

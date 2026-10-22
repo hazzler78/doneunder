@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const WELCOME_DIVER =
-  "Hi — I'm Hermes. Update your CV just by talking, in English. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save it for you.";
+  "Hi — I'm Hermes. Update your CV just by talking, in whatever language you write. Tell me a job to add, a ticket to list, hours to change, or paste CV text. I'll save the CV in English.";
 const WELCOME_COMPANY =
   "Welcome. I can help draft job requests and shortlist matching diver profiles.";
 
@@ -94,12 +94,14 @@ export async function GET() {
       role,
       pendingInbound,
       appliedJobIds,
-      messages: stored.map((item) => ({
-        id: item.id,
-        role: item.role === "user" ? "user" : "assistant",
-        content: item.content,
-        created_at: item.created_at,
-      })),
+      messages: stored
+        .filter((item) => item.metadata?.source !== "cert_expiry_reminder")
+        .map((item) => ({
+          id: item.id,
+          role: item.role === "user" ? "user" : "assistant",
+          content: item.content,
+          created_at: item.created_at,
+        })),
     });
   } catch (error) {
     console.error("Failed to load chat messages:", error);

@@ -537,6 +537,7 @@ export async function applyCertificateRead(
     cert_number: read.cert_number ?? undefined,
     issue_date: issue_date ?? undefined,
     expiry_date: expiry_date ?? undefined,
+    ...(expiry_date ? { expiry_confirmed: false as const } : {}),
   };
 
   if (bestScore >= 45 && bestName) {
@@ -577,6 +578,7 @@ export async function applyCertificateRead(
           cert_number: read.cert_number ?? undefined,
           issue_date: issue_date ?? undefined,
           expiry_date: expiry_date ?? undefined,
+          ...(expiry_date ? { expiry_confirmed: false as const } : {}),
         },
       ],
     },

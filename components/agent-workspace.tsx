@@ -8,6 +8,7 @@ import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
+import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
@@ -139,6 +140,7 @@ export function AgentWorkspace({
   const [schoolListLoading, setSchoolListLoading] = useState(false);
   const [cvUpdatedParts, setCvUpdatedParts] = useState<string[]>([]);
   const [pendingInbound, setPendingInbound] = useState<PendingInboundNotice | null>(null);
+  const [certReloadKey, setCertReloadKey] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const matchSentRef = useRef(false);
@@ -356,6 +358,7 @@ export function AgentWorkspace({
       }
       if (data.cvUpdated) {
         setCvUpdatedParts(data.updatedParts?.length ? data.updatedParts : ["CV"]);
+        setCertReloadKey((value) => value + 1);
       }
       void loadDocuments();
       void loadChatHistory({ silent: true });
@@ -492,6 +495,7 @@ export function AgentWorkspace({
 
       setMainCv(null);
       setCerts([]);
+      setCertReloadKey((value) => value + 1);
       if (cvFile && !cvFailed) {
         setCvUpdatedParts(["CV upload"]);
       } else if (!cvFile) {
@@ -797,6 +801,8 @@ export function AgentWorkspace({
         </div>
       ) : null}
 
+      {role === "diver" ? <CertExpiryPanel reloadKey={certReloadKey} /> : null}
+
       <div className="space-y-2 rounded-xl border border-border/60 bg-card p-3">
         <div className="flex items-center justify-between">
           <p className="flex items-center gap-1.5 text-sm font-medium text-heading">
@@ -1005,7 +1011,7 @@ export function AgentWorkspace({
                       <p className="mt-1">
                         {firstRun
                           ? "Use the paperclip under the chat, or open Upload in the side panel. Main CV PDF plus ticket photos (IMCA, BOSIET, medical) — don't upload a seaman's book as your only CV."
-                          : "Type a change, paste CV text, or attach a ticket scan. Everything is saved in English."}
+                          : "Type a change, paste CV text, or attach a ticket scan. I reply in your language. The CV is saved in English."}
                       </p>
                       {firstRun ? (
                         <Button size="sm" className="mt-2 lg:hidden" onClick={() => setPanelOpen(true)}>
@@ -1222,9 +1228,7 @@ export function AgentWorkspace({
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground">
             {role === "diver"
-              ? hasStoredCv
-                ? "English · Attach certificate PDFs/photos, or type a CV change"
-                : "English · Type a change, or attach a CV PDF plus certificate PDFs/photos"
+              ? "Replies follow your language · CV is saved in English"
               : "Enter to send · Shift+Enter for a new line"}
           </p>
         </form>

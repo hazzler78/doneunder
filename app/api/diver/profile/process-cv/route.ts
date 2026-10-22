@@ -411,7 +411,7 @@ export async function POST(req: Request) {
     const roleLabel = experienceCount === 1 ? "1 role" : `${experienceCount} roles`;
     const certLabel = certCount === 1 ? "1 cert" : `${certCount} certs`;
     const cvReply =
-      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${roleLabel}, ${certLabel}). ` +
+      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${roleLabel}, ${certLabel}). Confirm the certificate expiry dates in your workspace. ` +
       visibilityLine +
       (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")} ` : "") +
       "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";

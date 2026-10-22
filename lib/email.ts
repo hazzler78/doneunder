@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { prepareOutboundEmailBody } from "@/lib/email-body";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import { CONTACT_EMAIL } from "@/lib/site";
 
 export type EmailAttachment = {
   filename: string;
@@ -196,4 +197,36 @@ export async function sendEmailAsLoggedInUser(
     replyTo,
     attached: attached.map((item) => item.filename),
   };
+}
+
+/**
+ * Mail from the platform mailbox (Hermes <hello@doneunder.ai>), not as the diver.
+ * Used for certificate reminders. Does not add an inbound footer.
+ */
+export async function sendPlatformEmail(input: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isEmailConfigured()) return { ok: false, error: "email_not_configured" };
+
+  const to = stripQuotes(input.to).toLowerCase();
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  const from = stripQuotes(process.env.RESEND_FROM_EMAIL || "");
+  if (!to.includes("@") || !subject || !body || !from) {
+    return { ok: false, error: "email_not_configured" };
+  }
+
+  const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
+  const { data, error } = await resend.emails.send({
+    from,
+    to: [to],
+    replyTo: CONTACT_EMAIL,
+    subject,
+    text: body,
+  });
+
+  if (error) return { ok: false, error: "send_failed" };
+  return { ok: true, id: data?.id ?? "sent" };
 }

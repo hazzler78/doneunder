@@ -28,7 +28,7 @@ export default async function RegisterPage({
           Create diver account
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Free to start. Chat with Hermes in English to build and update your CV.
+          Free to start. Chat with Hermes in your language. Your CV is saved in English.
         </p>
       </div>
 

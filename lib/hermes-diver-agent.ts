@@ -1,7 +1,7 @@
 import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
+import { aiModel } from "@/lib/ai";
 import {
   applyConversationalCvUpdate,
   getDiverProfile,
@@ -297,6 +297,7 @@ function buildProfileContext(
       cert_number: cert.cert_number,
       issue_date: cert.issue_date,
       expiry_date: cert.expiry_date,
+      expiry_confirmed: cert.expiry_confirmed !== false,
     })),
     references: profile.references.map((ref) => ({
       id: ref.id,
@@ -355,8 +356,9 @@ function buildSystemPrompt(
 You help commercial divers build, refine, review, and publish their CV and ambassador profile, find matching offshore jobs, and send professional emails on their behalf.
 
 Language:
-- ${ENGLISH_ONLY_INSTRUCTION}
-- Always reply in English, even if the diver writes in another language. Understand them, then answer and save CV text in English.
+- Reply in the same language as the diver's latest message. Swedish in, Swedish out. English in, English out. If one message mixes languages, follow the language of its last sentence.
+- Everything you store stays English: headline, bio, job summaries, and the public profile. Translate on save. Keep official certificate titles, company names, vessel names, and proper names as printed.
+- Do not rewrite the CV or the public profile into the chat language.
 
 Conversation style:
 - Talk naturally, like a knowledgeable recruiter — not a command menu.
@@ -370,7 +372,7 @@ One living CV:
 
 Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
-- They can talk in plain English: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
+- They can talk in their own language: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
 - If they paste or attach text/documents in another language, translate into English before saving. Confirm briefly that you translated.
 - If the message starts with "Please fix this part of my CV:" and quotes a passage, treat that quote as the target. Call update_cv to correct that section. Do not rewrite unrelated parts unless they ask.
 - Use add_* for new rows, update_* for existing rows (match by id, company, role, or certificate name), remove_* to delete, and replace_* only when they paste a full CV or clearly want a whole section rewritten.
@@ -404,6 +406,7 @@ Other tools:
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
 - If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). It also lifts dates that were stuck in issuing_body notes into expiry_date/issue_date. Do not say "not provided" if a stored scan or note has a date. If apply_errors is non-empty, quote the real error — do not invent a generic "data error". If unreadable is true, ask the diver to type the date. Do not tell them to split a multi-cert PDF unless extraction returned nothing.
+- A date read from a file is not confirmed. certifications[].expiry_confirmed false means you must list the ticket name and expiry and ask the diver to confirm or correct it, in their language. When they confirm, call update_cv with update_certifications setting expiry_confirmed true. When they give a different date, set expiry_date and expiry_confirmed true. A date they type themselves is confirmed.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
 - Do not put "please find my CV attached" in a draft unless you will call send_email with attach_cv=true.
@@ -993,6 +996,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           repaired_titles: repairedTitles,
           apply_errors: applyErrors.slice(0, 8),
           note: noteParts.length ? noteParts.join(" ") : undefined,
+          confirm_expiry: fromFiles.some((item) => Boolean(item.expiry_date)),
         };
       },
     }),
