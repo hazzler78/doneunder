@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
-import { resolveFullCvAccess } from "@/lib/cv-access";
+import { resolveFullCvAccess, showsReferences } from "@/lib/cv-access";
 import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
@@ -118,7 +118,11 @@ export default async function DiverCvPage({
             active company subscription can unlock the full living CV. Divers use DoneUnder free.
           </p>
           <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:flex-wrap">
-            {needsCompany ? (
+            {access.reason === "company_not_revealed" ? (
+              <Link href="/company/search" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
+                Find divers with Search &amp; Match
+              </Link>
+            ) : needsCompany ? (
               <>
                 <Link href="/login" className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}>
                   Company sign in
@@ -155,11 +159,13 @@ export default async function DiverCvPage({
         .select("name,issue_date,expiry_date,cert_number,issuing_body")
         .eq("diver_id", publicAmbassador.user_id)
         .order("sort_order", { ascending: true }),
-      supabase
-        .from("diver_references")
-        .select("name,company,phone,email")
-        .eq("diver_id", publicAmbassador.user_id)
-        .order("sort_order", { ascending: true }),
+      showsReferences(access)
+        ? supabase
+            .from("diver_references")
+            .select("name,company,phone,email")
+            .eq("diver_id", publicAmbassador.user_id)
+            .order("sort_order", { ascending: true })
+        : Promise.resolve({ data: [] as { name: string; company: string | null; phone: string | null; email: string | null }[] }),
       supabase
         .from("diver_profiles")
         .select("polished_cv_json,polished_cv_markdown")
@@ -175,7 +181,7 @@ export default async function DiverCvPage({
   const displayReferences =
     (references?.length ?? 0) > 0
       ? references ?? []
-      : (polishedJson?.references ?? []).map((item) => ({
+      : (showsReferences(access) ? polishedJson?.references ?? [] : []).map((item) => ({
           name: item.name,
           company: item.company,
           phone: item.phone ?? null,
