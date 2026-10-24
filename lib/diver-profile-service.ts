@@ -21,7 +21,9 @@ import {
   formatProfileZodError,
   polishedCvJsonSchema,
 } from "@/lib/diver-profile";
+import { AnalyticsEvent } from "@/lib/analytics-events";
 import { describeCertificateDates, parseFlexibleDate, resolveCertificateDates } from "@/lib/dates";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 
 type DbClient = SupabaseClient;
 
@@ -1123,6 +1125,8 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
   if (error) {
     throw new Error(error.message);
   }
+
+  await trackAnalyticsEventServer(AnalyticsEvent.ProfilePublished);
 
   const profile = await getDiverProfile(supabase, diverId);
   return { ok: true as const, validation, profile };
