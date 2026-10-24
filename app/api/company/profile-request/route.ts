@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { AnalyticsEvent } from "@/lib/analytics-events";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 
 const requestSchema = z.object({
   username: z.string().min(2).max(80),
@@ -48,6 +50,8 @@ export async function POST(req: Request) {
     if (error) {
       return NextResponse.json({ error: "Could not create request message." }, { status: 400 });
     }
+
+    await trackAnalyticsEventServer(AnalyticsEvent.CompanyProfileRequest);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

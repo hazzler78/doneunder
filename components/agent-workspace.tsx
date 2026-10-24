@@ -11,7 +11,9 @@ import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
+import { AnalyticsEvent } from "@/lib/analytics-events";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
+import { trackAnalyticsEvent } from "@/lib/track-analytics";
 import type { UserRole } from "@/lib/types";
 
 type ChatResponse = {
@@ -54,6 +56,8 @@ type Props = {
   /** Prefill chat from CV preview highlight (`/workspace?fix=…`). */
   initialFixPrompt?: string | null;
   schoolOutreachEnabled?: boolean;
+  /** Set when returning from Stripe checkout success URL. */
+  stripeCheckoutPlan?: string | null;
 };
 
 type Message = {
@@ -111,6 +115,7 @@ export function AgentWorkspace({
   initialMatchPrompt = null,
   initialFixPrompt = null,
   schoolOutreachEnabled = false,
+  stripeCheckoutPlan = null,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -188,6 +193,14 @@ export function AgentWorkspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, schoolOutreachEnabled]);
+
+  useEffect(() => {
+    if (!stripeCheckoutPlan) return;
+    trackAnalyticsEvent(AnalyticsEvent.StripeCheckoutComplete, { plan: stripeCheckoutPlan });
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/workspace");
+    }
+  }, [stripeCheckoutPlan]);
 
   useEffect(() => {
     if (role !== "diver") return;

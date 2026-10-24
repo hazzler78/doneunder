@@ -1,5 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { AnalyticsEvent } from "@/lib/analytics-events";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 import { claimPreferredUsername } from "@/lib/usernames";
 
 export type AppUserRecord = {
@@ -80,6 +82,7 @@ export async function ensureDiverProfileForAuthUser(user: User): Promise<AppUser
       return null;
     }
     record = inserted ?? null;
+    await trackAnalyticsEventServer(AnalyticsEvent.DiverSignup, { signup_method: "oauth" });
   }
 
   if (record && record.role === "diver") {
