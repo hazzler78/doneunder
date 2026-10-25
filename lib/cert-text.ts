@@ -313,6 +313,49 @@ export async function pdfCopyFromImage(bytes: Buffer, filename: string, contentT
   }
 }
 
+export function certificationNameMatchesDiver(name: string, diverFullName?: string | null) {
+  if (!diverFullName?.trim() || !name.trim()) return false;
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z]+/g, " ")
+      .trim();
+  const left = normalize(name);
+  const right = normalize(diverFullName);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftTokens = left.split(/\s+/).filter(Boolean);
+  const rightTokens = new Set(right.split(/\s+/).filter(Boolean));
+  if (leftTokens.length < 2 || rightTokens.size < 2) return false;
+  const hits = leftTokens.filter((token) => rightTokens.has(token)).length;
+  return hits >= 2 || (hits === leftTokens.length && leftTokens.length >= 2);
+}
+
+/** Fix AI/OCR cert rows that used the diver's name instead of the ticket title. */
+export function sanitizeParsedCertificationName(
+  name: string,
+  issuingBody?: string | null,
+  diverFullName?: string | null,
+) {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return trimmed;
+  const bad = looksLikePersonName(trimmed) || certificationNameMatchesDiver(trimmed, diverFullName);
+  if (!bad) return trimmed;
+  const inferred = inferCertificateTitle({
+    name: trimmed,
+    issuingBody,
+  });
+  if (inferred) return inferred;
+  const body = issuingBody?.trim();
+  if (body && !looksLikePersonName(body)) {
+    const fromBody = inferCertificateTitle({ issuingBody: body });
+    return fromBody ?? body;
+  }
+  return trimmed;
+}
+
 function looksLikePersonName(name: string) {
   const trimmed = name.trim();
   if (!trimmed) return false;
@@ -402,8 +445,16 @@ export async function repairMisnamedCertifications(
   const profile = await getDiverProfile(supabase, diverId);
   const updates: Array<{ match: { name: string }; patch: { name: string } }> = [];
 
+  const { data: userRow } = await supabase
+    .from("users")
+    .select("full_name")
+    .eq("id", diverId)
+    .maybeSingle();
+  const diverFullName =
+    typeof userRow?.full_name === "string" ? userRow.full_name : profile.profile.polished_cv_json?.full_name;
+
   for (const cert of profile.certifications) {
-    if (!looksLikePersonName(cert.name)) continue;
+    if (!looksLikePersonName(cert.name) && !certificationNameMatchesDiver(cert.name, diverFullName)) continue;
     const inferred = inferCertificateTitle({
       name: cert.name,
       issuingBody: cert.issuing_body,

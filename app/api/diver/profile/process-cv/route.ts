@@ -17,7 +17,19 @@ import {
   listDiverDocumentFiles,
   upsertDiverCertificateFile,
 } from "@/lib/diver-documents";
-import { autoPublishIfEligible, aiCvOutputToPayload, saveDiverProfile } from "@/lib/diver-profile-service";
+import { repairMisnamedCertifications } from "@/lib/cert-text";
+import {
+  CV_PDF_ONLY_MESSAGE,
+  isAcceptedMainCvFile,
+  isWordCvFile,
+} from "@/lib/cv-upload";
+import {
+  applyDerivedHeadlineIfMissing,
+  autoPublishIfEligible,
+  aiCvOutputToPayload,
+  saveDiverProfile,
+} from "@/lib/diver-profile-service";
+import { formatAutoPublishSkippedMessage } from "@/lib/publish-blockers";
 import { nudgeMissingPhotoAfterPublish } from "@/lib/photo-nudge";
 import { SITE_URL } from "@/lib/site";
 
@@ -155,8 +167,11 @@ export async function POST(req: Request) {
     if (!mainCvFile && certificateFiles.length === 0) {
       return NextResponse.json({ error: "Upload a CV PDF and/or certificate files (PDF, JPG, PNG)." }, { status: 400 });
     }
-    if (mainCvFile && mainCvFile.type !== "application/pdf" && !mainCvFile.name.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json({ error: "Main CV must be a PDF." }, { status: 400 });
+    if (mainCvFile && isWordCvFile(mainCvFile)) {
+      return NextResponse.json({ error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "word" }, { status: 400 });
+    }
+    if (mainCvFile && !isAcceptedMainCvFile(mainCvFile)) {
+      return NextResponse.json({ error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "not_pdf" }, { status: 400 });
     }
 
     if (certificateFiles.length > MAX_CERT_FILES) {
@@ -357,6 +372,9 @@ export async function POST(req: Request) {
       preserveEmptyChildSections: true,
     });
 
+    await repairMisnamedCertifications(serviceSupabase, diverId);
+    await applyDerivedHeadlineIfMissing(serviceSupabase, diverId, cvPath);
+
     const extractedName = parsed.full_name?.trim();
     if (extractedName) {
       await serviceSupabase.from("users").update({ full_name: extractedName }).eq("id", diverId);
@@ -397,12 +415,15 @@ export async function POST(req: Request) {
         (needsPhoto
           ? "Add a clear face photo on /preview so contractors see a finished card. "
           : "");
-    } else if (autoPublish.skippedReason === "intentional_unpublish") {
-      visibilityLine =
-        "Your page stays offline (you unpublished earlier). Say Publish my profile or use Publish page when you want it live again. ";
-    } else if (autoPublish.skippedReason === "validation_failed") {
-      const reasons = autoPublish.validation?.errors?.join(" ") || "Profile still needs a headline.";
-      visibilityLine = `Could not auto-publish yet (${reasons}). Fix that, then say Publish my profile. `;
+    } else if (
+      autoPublish.skippedReason === "validation_failed" ||
+      autoPublish.skippedReason === "intentional_unpublish" ||
+      autoPublish.skippedReason === "not_ready"
+    ) {
+      visibilityLine = `${formatAutoPublishSkippedMessage({
+        skippedReason: autoPublish.skippedReason,
+        validation: autoPublish.validation,
+      })} `;
     } else {
       visibilityLine =
         "Your page is still a draft. Open Preview to check, then say Publish my profile when it looks right. ";
@@ -429,6 +450,14 @@ export async function POST(req: Request) {
       },
     });
 
+    const publishBlockedMessage =
+      profileStatus === "draft" && !autoPublish.published && autoPublish.skippedReason
+        ? formatAutoPublishSkippedMessage({
+            skippedReason: autoPublish.skippedReason,
+            validation: autoPublish.validation,
+          })
+        : undefined;
+
     return NextResponse.json({
       ok: true,
       disclaimer: AI_DISCLAIMER,
@@ -436,6 +465,7 @@ export async function POST(req: Request) {
       suggestPublish: profileStatus === "draft",
       profileStatus,
       autoPublished: autoPublish.published,
+      publishBlockedMessage,
       needsPhoto,
       photoNudged,
       importBatchId,

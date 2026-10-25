@@ -21,7 +21,9 @@ import {
   formatProfileZodError,
   polishedCvJsonSchema,
 } from "@/lib/diver-profile";
+import { sanitizeParsedCertificationName } from "@/lib/cert-text";
 import { describeCertificateDates, parseFlexibleDate, resolveCertificateDates } from "@/lib/dates";
+import { deriveProfessionalHeadline } from "@/lib/headline-derive";
 
 type DbClient = SupabaseClient;
 
@@ -297,6 +299,60 @@ function effectiveHeadline(payload: Pick<DiverProfilePayload, "headline" | "amba
 
 function effectiveBio(payload: Pick<DiverProfilePayload, "bio" | "ambassador_short_bio">) {
   return payload.bio.trim() || payload.ambassador_short_bio?.trim() || "";
+}
+
+async function diverDisplayName(supabase: DbClient, diverId: string, profile?: DiverProfileFull) {
+  const { data: userRow } = await supabase.from("users").select("full_name").eq("id", diverId).maybeSingle();
+  const fromUser = typeof userRow?.full_name === "string" ? userRow.full_name.trim() : "";
+  if (fromUser) return fromUser;
+  return profile?.profile.polished_cv_json?.full_name?.trim() || null;
+}
+
+/**
+ * When validation would fail on a missing headline but certs/CV text exist, derive a headline from that data.
+ */
+export async function applyDerivedHeadlineIfMissing(
+  supabase: DbClient,
+  diverId: string,
+  sourceRef: string,
+): Promise<{ applied: boolean; headline?: string; profile: DiverProfileFull }> {
+  const current = await getDiverProfile(supabase, diverId);
+  if (
+    effectiveHeadline({
+      headline: current.profile.headline,
+      ambassador_public_headline: current.profile.ambassador_public_headline ?? undefined,
+    })
+  ) {
+    return { applied: false, profile: current };
+  }
+
+  const diverFullName = await diverDisplayName(supabase, diverId, current);
+  const certifications = current.certifications.map((cert) => ({
+    ...cert,
+    name: sanitizeParsedCertificationName(cert.name, cert.issuing_body, diverFullName),
+  }));
+
+  const headline = deriveProfessionalHeadline({
+    diverFullName,
+    certifications,
+    experiences: current.experiences,
+    polishedCvMarkdown: current.profile.polished_cv_markdown,
+  });
+  if (!headline) {
+    return { applied: false, profile: current };
+  }
+
+  const patch: DiverProfilePatch = {
+    headline,
+    headline_source: "ai",
+    headline_source_ref: sourceRef,
+  };
+  if (!current.profile.ambassador_public_headline?.trim()) {
+    patch.ambassador_public_headline = headline;
+  }
+
+  const profile = await patchDiverProfileScalars(supabase, diverId, patch, current);
+  return { applied: true, headline, profile };
 }
 
 /** Fills empty core fields from ambassador copy before publish validation. */
@@ -1083,6 +1139,7 @@ export async function applyConversationalCvUpdate(
 }
 
 export async function publishDiverProfile(supabase: DbClient, diverId: string) {
+  await applyDerivedHeadlineIfMissing(supabase, diverId, "source: publish");
   const current = await getDiverProfile(supabase, diverId);
 
   const { data: existingRow } = await supabase.from("diver_profiles").select("user_id").eq("user_id", diverId).maybeSingle();
@@ -1175,6 +1232,7 @@ export async function autoPublishIfEligible(supabase: DbClient, diverId: string)
     };
   }
 
+  await applyDerivedHeadlineIfMissing(supabase, diverId, "source: auto-publish");
   const result = await publishDiverProfile(supabase, diverId);
   if (!result.ok) {
     return {
@@ -1282,9 +1340,25 @@ export function aiCvOutputToPayload(
   meta: { sourceRef: string; importBatchId: string },
 ): DiverProfilePayload {
   const profile = output.polished_cv_json;
+  const diverFullName = output.full_name?.trim() || profile.full_name?.trim() || null;
+  const certifications = profile.certifications.map((item) => {
+    const name = sanitizeParsedCertificationName(item.name, item.issuing_body, diverFullName);
+    return { ...item, name };
+  });
+  const experiences = profile.experiences;
+  const derivedHeadline =
+    output.professional_headline?.trim() ||
+    output.ambassador_page.public_headline?.trim() ||
+    deriveProfessionalHeadline({
+      diverFullName,
+      certifications,
+      experiences,
+      polishedCvMarkdown: output.polished_cv_markdown,
+    }) ||
+    "";
 
   return {
-    headline: output.professional_headline,
+    headline: derivedHeadline,
     bio: output.ambassador_page.short_bio,
     location: profile.location ?? "",
     mobilization_notice: profile.mobilization_notice ?? "",
@@ -1296,7 +1370,8 @@ export function aiCvOutputToPayload(
       ...profile,
       full_name: output.full_name?.trim() || profile.full_name,
     },
-    ambassador_public_headline: output.ambassador_page.public_headline,
+    ambassador_public_headline:
+      output.ambassador_page.public_headline?.trim() || derivedHeadline || undefined,
     ambassador_short_bio: output.ambassador_page.short_bio,
     ambassador_key_highlights: output.ambassador_page.key_highlights,
     headline_source: "ai",
@@ -1304,8 +1379,8 @@ export function aiCvOutputToPayload(
     bio_source: "ai",
     bio_source_ref: meta.sourceRef,
     import_batch_id: meta.importBatchId,
-    experiences: profile.experiences.map((item) => ({ ...item, source: "ai" as const, source_ref: meta.sourceRef })),
-    certifications: profile.certifications.map((item) => ({
+    experiences: experiences.map((item) => ({ ...item, source: "ai" as const, source_ref: meta.sourceRef })),
+    certifications: certifications.map((item) => ({
       ...item,
       source: "ai" as const,
       source_ref: meta.sourceRef,

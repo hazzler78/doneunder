@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
+import { CV_PDF_ONLY_MESSAGE, isWordCvFile } from "@/lib/cv-upload";
 import { cn } from "@/lib/utils";
 import type {
   DiverCertificationInput,
@@ -454,6 +455,10 @@ export function DiverProfileEditor({
   async function onProcessWithAi() {
     if (!mainCv && certFiles.length === 0) {
       setMessage("Select certificate files, or a new CV PDF if you want to replace the current one.");
+      return;
+    }
+    if (mainCv && isWordCvFile(mainCv)) {
+      setMessage(CV_PDF_ONLY_MESSAGE);
       return;
     }
     if (hasUnsavedChanges) {
