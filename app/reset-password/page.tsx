@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { updatePasswordAction } from "@/app/auth/actions";
+import { userHasEmailPasswordIdentity, userHasGoogleIdentity } from "@/lib/auth-identities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -40,6 +41,10 @@ export default async function ResetPasswordPage({
     );
   }
 
+  const hasGoogle = userHasGoogleIdentity(user);
+  const hasEmailIdentity = userHasEmailPasswordIdentity(user);
+  const googleAddingPassword = hasGoogle && !hasEmailIdentity;
+
   return (
     <div className="mx-auto flex w-full max-w-md flex-col justify-center section-pad py-12 sm:py-16">
       <div className="mb-8 text-center">
@@ -47,10 +52,13 @@ export default async function ResetPasswordPage({
           doneunder.ai
         </p>
         <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-heading">
-          Choose a new password
+          {googleAddingPassword ? "Add a password" : "Choose a new password"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Signed in as {user.email}. Pick a password of at least 8 characters.
+          Signed in as {user.email}.{" "}
+          {googleAddingPassword
+            ? "You can keep using Continue with Google, or add a password here to sign in with email as well."
+            : "Pick a password of at least 8 characters."}
         </p>
       </div>
 
@@ -87,7 +95,7 @@ export default async function ResetPasswordPage({
             />
           </label>
           <Button type="submit" className="h-11 w-full">
-            Save new password
+            {googleAddingPassword ? "Save password" : "Save new password"}
           </Button>
         </form>
       </div>

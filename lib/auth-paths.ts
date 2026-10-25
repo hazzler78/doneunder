@@ -1,3 +1,8 @@
+import {
+  oauthForwardCallbackPath,
+  oauthForwardNextPath,
+} from "@/lib/auth-recovery";
+
 /** Only allow same-origin relative paths after OAuth. */
 export function safeInternalPath(next: string | null | undefined, fallback = "/workspace") {
   if (next && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
@@ -12,7 +17,13 @@ export function safeInternalPath(next: string | null | undefined, fallback = "/w
  * the session is never exchanged. Forward it.
  */
 export function oauthForwardPath(pathname: string, searchParams: URLSearchParams): string | null {
-  if (pathname === "/auth/callback" || pathname === "/auth/google") return null;
+  if (
+    pathname === "/auth/callback" ||
+    pathname === "/auth/google" ||
+    pathname === "/auth/recovery"
+  ) {
+    return null;
+  }
   const code = searchParams.get("code");
   const error = searchParams.get("error");
   if (!code && !error) return null;
@@ -22,6 +33,10 @@ export function oauthForwardPath(pathname: string, searchParams: URLSearchParams
   if (error) next.set("error", error);
   const description = searchParams.get("error_description");
   if (description) next.set("error_description", description);
-  next.set("next", safeInternalPath(searchParams.get("next")));
-  return `/auth/callback?${next.toString()}`;
+  const type = searchParams.get("type");
+  if (type) next.set("type", type);
+  next.set("next", oauthForwardNextPath(pathname, searchParams));
+
+  const callbackPath = oauthForwardCallbackPath(pathname, searchParams);
+  return `${callbackPath}?${next.toString()}`;
 }
