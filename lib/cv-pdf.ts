@@ -110,7 +110,16 @@ function wrapWords(text: string, maxChars: number) {
   return lines.length > 0 ? lines : [""];
 }
 
-export function buildCvPdfLines(profile: DiverProfileFull, displayName: string): PdfLine[] {
+export type DiverCvPdfContact = {
+  email: string;
+  phone?: string | null;
+};
+
+export function buildCvPdfLines(
+  profile: DiverProfileFull,
+  displayName: string,
+  contact?: DiverCvPdfContact | null,
+): PdfLine[] {
   const p = profile.profile;
   const headline = p.ambassador_public_headline || p.headline || "Commercial Diver CV";
   const summary = p.ambassador_short_bio || p.bio || "Professional summary not provided yet.";
@@ -120,8 +129,19 @@ export function buildCvPdfLines(profile: DiverProfileFull, displayName: string):
     {
       text: [p.location || "Location not provided", p.mobilization_notice || null].filter(Boolean).join(" • "),
       size: 10,
-      gapAfter: 14,
+      gapAfter: contact ? 8 : 14,
     },
+  ];
+
+  if (contact?.email?.trim()) {
+    lines.push({ text: "Contact", size: 13, bold: true, gapAfter: 4 });
+    lines.push({ text: `Email: ${contact.email.trim()}`, size: 10 });
+    const phone = contact.phone?.trim() || p.phone?.trim();
+    if (phone) lines.push({ text: `Phone: ${phone}`, size: 10, gapAfter: 12 });
+    else lines.push({ text: " ", size: 8, gapAfter: 10 });
+  }
+
+  lines.push(
     { text: "Professional Summary", size: 13, bold: true, gapAfter: 6 },
     { text: summary, size: 10, gapAfter: 12 },
     { text: "Career Metrics", size: 13, bold: true, gapAfter: 6 },
@@ -135,7 +155,7 @@ export function buildCvPdfLines(profile: DiverProfileFull, displayName: string):
       gapAfter: 12,
     },
     { text: "Professional Experience", size: 13, bold: true, gapAfter: 8 },
-  ];
+  );
 
   if (profile.experiences.length === 0) {
     lines.push({ text: "No project history has been added yet.", size: 10, gapAfter: 12 });
@@ -289,8 +309,12 @@ export function renderCvPdf(lines: PdfLine[]): Buffer {
   return Buffer.concat(chunks);
 }
 
-export function buildDiverCvPdf(profile: DiverProfileFull, displayName: string) {
-  return renderCvPdf(buildCvPdfLines(profile, displayName));
+export function buildDiverCvPdf(
+  profile: DiverProfileFull,
+  displayName: string,
+  contact?: DiverCvPdfContact | null,
+) {
+  return renderCvPdf(buildCvPdfLines(profile, displayName, contact));
 }
 
 export function buildDiverCertificatesPdf(profile: DiverProfileFull, displayName: string) {

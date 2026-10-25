@@ -1,16 +1,31 @@
+import { validateCvShareToken } from "@/lib/cv-share-links";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type FullCvAccess =
-  | { allowed: true; reason: "owner" | "admin" | "active_company" }
+  | { allowed: true; reason: "owner" | "admin" | "active_company" | "diver_shared" }
   | { allowed: false; reason: "anonymous" | "diver_other" | "company_inactive" | "company_not_revealed" | "unknown" };
+
+export type ResolveFullCvAccessOptions = {
+  shareToken?: string | null;
+};
 
 /**
  * Who may see the full living CV (experiences, cert numbers, references).
  * Public ambassador cards stay free; full pack is owner / admin / paying company
  * that has revealed this diver through Search & Match (reveal_match RPC).
+ * Employers may also open a time-limited share link from a Hermes application email.
  * Companies never see reference contact details (see `showsReferences`).
  */
-export async function resolveFullCvAccess(diverUserId: string): Promise<FullCvAccess> {
+export async function resolveFullCvAccess(
+  diverUserId: string,
+  options?: ResolveFullCvAccessOptions,
+): Promise<FullCvAccess> {
+  const shareToken = options?.shareToken?.trim();
+  if (shareToken) {
+    const valid = await validateCvShareToken(shareToken, diverUserId);
+    if (valid) return { allowed: true, reason: "diver_shared" };
+  }
+
   const supabase = await createSupabaseServerClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return { allowed: false, reason: "anonymous" };
@@ -52,4 +67,9 @@ export async function resolveFullCvAccess(diverUserId: string): Promise<FullCvAc
 /** Reference names/phone/email are only for the diver themself and admins. */
 export function showsReferences(access: FullCvAccess) {
   return access.allowed && (access.reason === "owner" || access.reason === "admin");
+}
+
+/** Share-link viewers and companies use service role or company RLS — not anonymous session. */
+export function cvSectionsNeedServiceRole(access: FullCvAccess) {
+  return access.allowed && access.reason === "diver_shared";
 }

@@ -101,6 +101,11 @@ export const diverProfilePayloadSchema = z.object({
   headline: z.string().max(180),
   bio: z.string().max(2000),
   location: z.string().max(180),
+  phone: z.preprocess((value) => {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  }, z.string().max(40).optional()),
   mobilization_notice: z.string().max(180),
   availability_status: z.enum(AVAILABILITY_STATUSES).default("available"),
   sat_hours: z.number().int().min(0),
@@ -270,6 +275,7 @@ export type DiverProfileScalars = {
   headline: string;
   bio: string;
   location: string;
+  phone: string | null;
   mobilization_notice: string;
   availability_status: AvailabilityStatus;
   sat_hours: number;
@@ -319,7 +325,7 @@ export type DiverProfileFull = {
 };
 
 export const DIVER_PROFILE_SCALAR_COLUMNS =
-  "headline,bio,location,mobilization_notice,availability_status,sat_hours,dive_hours,polished_cv_markdown,polished_cv_json,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id,profile_status,published_at,cv_last_processed_at,last_verified_at,verified,updated_at" as const;
+  "headline,bio,location,phone,mobilization_notice,availability_status,sat_hours,dive_hours,polished_cv_markdown,polished_cv_json,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id,profile_status,published_at,cv_last_processed_at,last_verified_at,verified,updated_at" as const;
 
 export const DIVER_EXPERIENCE_COLUMNS =
   "id,company,project_name,location,role_title,date_start,date_end,summary,source,source_ref" as const;
@@ -334,6 +340,7 @@ export function emptyDiverProfileScalars(): DiverProfileScalars {
     headline: "",
     bio: "",
     location: "",
+    phone: null,
     mobilization_notice: "",
     availability_status: "available",
     sat_hours: 0,

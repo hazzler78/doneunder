@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
-import { resolveFullCvAccess, showsReferences } from "@/lib/cv-access";
+import { cvSectionsNeedServiceRole, resolveFullCvAccess, showsReferences } from "@/lib/cv-access";
+import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
@@ -53,10 +54,13 @@ export async function generateMetadata({
 
 export default async function DiverCvPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ share?: string }>;
 }) {
   const { username: rawUsername } = await params;
+  const { share: shareToken } = await searchParams;
   const username = rawUsername.trim().toLowerCase();
   const supabase = await createSupabaseServerClient();
 
@@ -70,7 +74,8 @@ export default async function DiverCvPage({
 
   if (!publicAmbassador) notFound();
 
-  const access = await resolveFullCvAccess(publicAmbassador.user_id);
+  const access = await resolveFullCvAccess(publicAmbassador.user_id, { shareToken });
+  const dataClient = cvSectionsNeedServiceRole(access) ? createServiceSupabaseClient() : supabase;
   const fullName = publicAmbassador.full_name ?? "Commercial Diver";
   const headline =
     publicAmbassador.ambassador_public_headline ||
@@ -149,24 +154,24 @@ export default async function DiverCvPage({
 
   const [{ data: experiences }, { data: certifications }, { data: references }, { data: profileExtras }] =
     await Promise.all([
-      supabase
+      dataClient
         .from("diver_experiences")
         .select("company,project_name,location,role_title,date_start,date_end,summary")
         .eq("diver_id", publicAmbassador.user_id)
         .order("sort_order", { ascending: true }),
-      supabase
+      dataClient
         .from("diver_certifications")
         .select("name,issue_date,expiry_date,cert_number,issuing_body")
         .eq("diver_id", publicAmbassador.user_id)
         .order("sort_order", { ascending: true }),
       showsReferences(access)
-        ? supabase
+        ? dataClient
             .from("diver_references")
             .select("name,company,phone,email")
             .eq("diver_id", publicAmbassador.user_id)
             .order("sort_order", { ascending: true })
         : Promise.resolve({ data: [] as { name: string; company: string | null; phone: string | null; email: string | null }[] }),
-      supabase
+      dataClient
         .from("diver_profiles")
         .select("polished_cv_json,polished_cv_markdown")
         .eq("user_id", publicAmbassador.user_id)

@@ -108,6 +108,7 @@ async function patchDiverProfileScalars(
   if (patch.headline !== undefined) update.headline = patch.headline;
   if (patch.bio !== undefined) update.bio = patch.bio;
   if (patch.location !== undefined) update.location = patch.location;
+  if (patch.phone !== undefined) update.phone = patch.phone?.trim() || null;
   if (patch.mobilization_notice !== undefined) update.mobilization_notice = patch.mobilization_notice;
   if (patch.availability_status !== undefined) update.availability_status = patch.availability_status;
   if (patch.sat_hours !== undefined) update.sat_hours = patch.sat_hours;
@@ -163,6 +164,7 @@ function mapProfileRow(row: Record<string, unknown> | null): DiverProfileScalars
     headline: (row.headline as string | null) ?? "",
     bio: (row.bio as string | null) ?? "",
     location: (row.location as string | null) ?? "",
+    phone: (row.phone as string | null)?.trim() || null,
     mobilization_notice: (row.mobilization_notice as string | null) ?? "",
     availability_status: row.availability_status === "deployed" ? "deployed" : "available",
     sat_hours: Number(row.sat_hours ?? 0),
@@ -370,6 +372,7 @@ export function normalizeProfileForPublish(current: DiverProfileFull): DiverProf
     headline,
     bio,
     location: current.profile.location,
+    phone: current.profile.phone ?? undefined,
     mobilization_notice: current.profile.mobilization_notice,
     availability_status: current.profile.availability_status,
     sat_hours: current.profile.sat_hours,
@@ -426,6 +429,7 @@ function payloadToProfileRecord(
     headline: payload.headline,
     bio: payload.bio,
     location: payload.location,
+    phone: payload.phone ?? null,
     mobilization_notice: payload.mobilization_notice,
     availability_status: payload.availability_status,
     sat_hours: payload.sat_hours,
@@ -781,6 +785,7 @@ export async function patchDiverProfile(
     headline: patch.headline ?? current.profile.headline,
     bio: patch.bio ?? current.profile.bio,
     location: patch.location ?? current.profile.location,
+    phone: patch.phone ?? current.profile.phone ?? undefined,
     mobilization_notice: patch.mobilization_notice ?? current.profile.mobilization_notice,
     availability_status: patch.availability_status ?? current.profile.availability_status,
     sat_hours: patch.sat_hours ?? current.profile.sat_hours,
@@ -866,6 +871,7 @@ function toSaveablePayload(current: DiverProfileFull): DiverProfilePayload {
     headline: current.profile.headline,
     bio: current.profile.bio,
     location: current.profile.location,
+    phone: current.profile.phone ?? undefined,
     mobilization_notice: current.profile.mobilization_notice,
     availability_status: current.profile.availability_status,
     sat_hours: current.profile.sat_hours,

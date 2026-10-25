@@ -768,6 +768,21 @@ export function DiverProfileEditor({
               }
             />
           </label>
+          <label className="space-y-1">
+            <span className="text-xs text-muted-foreground">Phone (employer contact, optional)</span>
+            <input
+              type="tel"
+              className="w-full rounded-md border bg-transparent p-2"
+              value={form.profile.phone ?? ""}
+              maxLength={40}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  profile: { ...prev.profile, phone: event.target.value || undefined },
+                }))
+              }
+            />
+          </label>
           <label className="space-y-1 md:col-span-2">
             <span className="text-xs text-muted-foreground">Professional Summary</span>
             <textarea
