@@ -15,6 +15,13 @@ import { contextLineForCertificate, resolveCertificateDates, yearSpanInText } fr
 import { sendEmailAsLoggedInUser, inboundReplyToAddress, parseEmailAddress, type EmailAttachment } from "@/lib/email";
 import { buildDiverCvPdf, cvPdfFilename, livingCvDisplayName } from "@/lib/cv-pdf";
 import {
+  buildCvShareUrl,
+  createCvShareLink,
+  formatApplicationContactBlock,
+  listCvShareLinksForDiver,
+  revokeCvShareLink,
+} from "@/lib/cv-share-links";
+import {
   applyCertificateReads,
   readAllCertificatesFromBytes,
   repairCertificationDatesFromProfileText,
@@ -397,7 +404,7 @@ Other tools:
 - match_job accepts a job id or a title fragment from open_campaigns (company name in the title is enough).
 - match_job and find_matching_jobs return the same verdict the job cards show. Repeat that reason. Do not say the diver lacks a ticket the reason lists as Current, and do not say they hold one it lists as Missing. "via …" names the certificate on their CV that satisfied the requirement. Offshore Diver Medical counts as HSE Diver Medical. A row that is only the word IMCA, with no dates, is not a held ticket. A year with no issued or expires label is not an expiry, so do not call HSE SCUBA 2025 expired. A range such as 2025–2027 is the years printed on the certificate.
 - After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft (including the real company inbox) and wait for a clear yes.
-- apply_job sends CV + certificates only to the campaign's verified contractor inbox. Campaigns without an inbox are not listed. Never invent a company email. Never send to hello@ or DoneUnder as a fake listing desk. Never send without confirmed=true. If already_applied, do not send again.
+- apply_job sends CV + certificates only to the campaign's verified contractor inbox. Campaigns without an inbox are not listed. Never invent a company email. Never send to hello@ or DoneUnder as a fake listing desk. Never send without confirmed=true. If already_applied, do not send again. Each application email includes a private online CV link (about 90 days). The diver can list or revoke links with list_cv_share_links / revoke_cv_share_link or in workspace under Contact & CV sharing.
 - list_diving_companies when they ask about diving companies, who hires juniors/graduates, contractors in a country/region, or want work beyond the open campaign board. Prefer hire_graduates=true for fresh school graduates. Show soft fit % and typical tickets; still list weak fits.
 - apply_to_company only when has_apply_email / canApply is true for that company (verified careers inbox on file). Warn about missing typical tickets but do NOT hard-block — grads may still send after a clear yes. Never invent a company email. Never send without confirmed=true. If already applied to that company, do not send again.
 - If a company has no apply email, browse only: share website/notes and suggest building the CV / open campaigns; do not invent contacts.
@@ -592,6 +599,7 @@ async function sendDiverFollowUpEmail(input: {
   attachCv?: boolean;
   attachCertificates?: boolean;
   pendingInbound?: PendingInbound | null;
+  shareContext?: { jobId?: string | null; companyId?: string | null };
 }) {
   const displayName = livingCvDisplayName(input.profile, input.displayName);
   const attachments: EmailAttachment[] = [];
@@ -609,9 +617,17 @@ async function sendDiverFollowUpEmail(input: {
     body: input.body,
   });
 
+  const outboundContact =
+    attachCv || attachCertificates
+      ? {
+          email: input.userEmail,
+          phone: input.profile.profile.phone,
+        }
+      : null;
+
   if (attachCv) {
     const filename = cvPdfFilename(displayName);
-    const content = buildDiverCvPdf(input.profile, displayName);
+    const content = buildDiverCvPdf(input.profile, displayName, outboundContact);
     if (content.length < 100 || !content.subarray(0, 5).toString("utf8").startsWith("%PDF")) {
       return { ok: false as const, error: "Could not build a CV PDF to attach.", attachCv, attachCertificates };
     }
@@ -636,9 +652,26 @@ async function sendDiverFollowUpEmail(input: {
     attachments.push(...certs);
   }
 
-  let outgoingBody = input.body;
-  if (attachCv && input.username && !outgoingBody.includes(`/${input.username}`)) {
-    outgoingBody = `${outgoingBody.trim()}\n\nOnline CV: https://doneunder.ai/cv/${input.username}`;
+  let outgoingBody = input.body.trim();
+  if (outboundContact) {
+    const contactBlock = formatApplicationContactBlock(outboundContact.email, outboundContact.phone);
+    if (!outgoingBody.toLowerCase().includes(outboundContact.email.toLowerCase())) {
+      outgoingBody = `${outgoingBody}\n\n${contactBlock}`;
+    }
+  }
+
+  if (attachCv && input.username) {
+    const share = await createCvShareLink({
+      diverId: input.diverId,
+      recipientEmail: input.to,
+      jobId: input.shareContext?.jobId,
+      companyId: input.shareContext?.companyId,
+    });
+    const cvUrl =
+      "error" in share ? `https://doneunder.ai/cv/${input.username}` : buildCvShareUrl(input.username, share.token);
+    if (!outgoingBody.includes(cvUrl)) {
+      outgoingBody = `${outgoingBody}\n\nOnline CV: ${cvUrl}`;
+    }
   }
 
   const result = await sendEmailAsLoggedInUser({
@@ -1135,6 +1168,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           attachCv: true,
           attachCertificates: true,
           pendingInbound: input.pendingInbound ?? null,
+          shareContext: { jobId: job.id },
         });
 
         await logAgentInteraction({
@@ -1288,6 +1322,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           attachCv: true,
           attachCertificates: true,
           pendingInbound: input.pendingInbound ?? null,
+          shareContext: { companyId: company.id },
         });
 
         await logAgentInteraction({
@@ -1401,6 +1436,27 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           }),
         }
       : {}),
+    list_cv_share_links: tool({
+      description:
+        "List private CV share links the diver has sent to employers (recipient, expiry, active/revoked). Use when they ask who can see their CV or want to audit links.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const links = await listCvShareLinksForDiver(input.supabase, input.diverId);
+        return { ok: true, links };
+      },
+    }),
+    revoke_cv_share_link: tool({
+      description:
+        "Revoke one private CV share link so the employer can no longer open the full online CV. Requires the link id from list_cv_share_links.",
+      inputSchema: z.object({
+        link_id: z.string().uuid(),
+      }),
+      execute: async ({ link_id: linkId }) => {
+        const result = await revokeCvShareLink(input.supabase, input.diverId, linkId);
+        if (!result.ok) return { ok: false, error: result.error ?? "Could not revoke." };
+        return { ok: true, revoked: linkId };
+      },
+    }),
     send_email: tool({
       description:
         "Send an email as the logged-in diver after they confirm recipient, subject, and body. Set attach_cv=true when sending a CV. Set attach_certificates=true to attach one combined Certificates PDF (all stored PDFs and photos). Never send without confirmed=true.",

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
+import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
@@ -802,6 +803,7 @@ export function AgentWorkspace({
       ) : null}
 
       {role === "diver" ? <CertExpiryPanel reloadKey={certReloadKey} /> : null}
+      {role === "diver" ? <DiverProfileSettingsPanel reloadKey={certReloadKey} /> : null}
 
       <div className="space-y-2 rounded-xl border border-border/60 bg-card p-3">
         <div className="flex items-center justify-between">
