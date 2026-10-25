@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import { publishDiverProfile } from "@/lib/diver-profile-service";
+import { formatManualPublishFailure } from "@/lib/publish-blockers";
 import { nudgeMissingPhotoAfterPublish } from "@/lib/photo-nudge";
 
 export async function POST() {
@@ -14,7 +15,7 @@ export async function POST() {
       return NextResponse.json(
         {
           ok: false,
-          error: "Profile is not ready to publish.",
+          error: formatManualPublishFailure(result.validation),
           validation: result.validation,
         },
         { status: 422 },

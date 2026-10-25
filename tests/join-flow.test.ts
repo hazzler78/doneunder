@@ -125,6 +125,10 @@ describe("oauthForwardPath", () => {
   it("does not loop on the real callback route", () => {
     assert.equal(oauthForwardPath("/auth/callback", new URLSearchParams("code=abc")), null);
   });
+
+  it("does not loop on the recovery route", () => {
+    assert.equal(oauthForwardPath("/auth/recovery", new URLSearchParams("code=abc")), null);
+  });
 });
 
 describe("Google diver bootstrap", () => {

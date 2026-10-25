@@ -10,6 +10,7 @@ import { logoutAction } from "@/app/auth/actions";
 import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
+import { CV_PDF_ONLY_MESSAGE, isWordCvFile, rejectWordCvFiles } from "@/lib/cv-upload";
 import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
@@ -394,8 +395,23 @@ export function AgentWorkspace({
     const classified = classifyDroppedFiles(selected);
     const cvFile = classified.cvFile;
     const certFiles = classified.certFiles;
+    const wordUploads = rejectWordCvFiles(selected);
+    if (wordUploads.length > 0) {
+      const message = CV_PDF_ONLY_MESSAGE;
+      setUploadError(message);
+      setPanelOpen(true);
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), from: "agent", text: message },
+      ]);
+      return;
+    }
     if (!cvFile && certFiles.length === 0) {
-      setUploadError("Select a CV PDF and/or certificate files (PDF, JPG, PNG).");
+      const onlyWord = selected.some((file) => isWordCvFile(file));
+      const message = onlyWord
+        ? CV_PDF_ONLY_MESSAGE
+        : "Select a CV PDF and/or certificate files (PDF, JPG, PNG).";
+      setUploadError(message);
       setPanelOpen(true);
       return;
     }
@@ -437,6 +453,7 @@ export function AgentWorkspace({
           profileStatus?: "draft" | "published";
           needsPhoto?: boolean;
           autoPublished?: boolean;
+          publishBlockedMessage?: string;
         };
         if (data.unreadablePdf || data.ok === false) {
           cvFailed = true;
@@ -468,7 +485,17 @@ export function AgentWorkspace({
           } else if (data.suggestPublish || data.profileStatus === "draft") {
             setSuggestPublish(true);
             setPanelOpen(true);
-            setUploadNotice("CV processed. Still a draft — tap Publish page when it looks right.");
+            setUploadNotice(
+              data.publishBlockedMessage ??
+                "CV processed. Still a draft — fix any gaps below, then tap Publish page.",
+            );
+            if (data.publishBlockedMessage) {
+              setUploadError(data.publishBlockedMessage);
+              setMessages((prev) => [
+                ...prev,
+                { id: crypto.randomUUID(), from: "agent", text: data.publishBlockedMessage! },
+              ]);
+            }
           }
           if (data.warnings?.length) {
             setUploadNotice((prev) => [prev, ...data.warnings!].filter(Boolean).join(" "));
@@ -539,7 +566,11 @@ export function AgentWorkspace({
         needsPhoto?: boolean;
       };
       if (!response.ok || data.ok === false) {
-        setUploadError(data.error ?? (next === "published" ? "Could not publish." : "Could not unpublish."));
+        const message = data.error ?? (next === "published" ? "Could not publish." : "Could not unpublish.");
+        setUploadError(message);
+        if (next === "published" && message) {
+          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+        }
         return;
       }
       const status = data.profile?.profile_status ?? next;

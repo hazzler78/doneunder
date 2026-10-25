@@ -252,11 +252,11 @@ export const aiCvOutputSchema = z.object({
     .min(2)
     .max(80)
     .describe("Person's name as printed on the CV, not a Google/account display name."),
-  professional_headline: z.string().min(1).max(220),
+  professional_headline: z.string().max(220),
   polished_cv_markdown: z.string().min(1),
   polished_cv_json: polishedCvJsonSchema,
   ambassador_page: z.object({
-    public_headline: z.string().min(1).max(220),
+    public_headline: z.string().max(220),
     short_bio: z.string().min(1).max(1200),
     key_highlights: z.array(z.string().min(1).max(180)).max(12),
   }),
