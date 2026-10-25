@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { passwordResetEligibilityForEmail } from "@/lib/auth-identities";
 import { safeInternalPath } from "@/lib/auth-paths";
 import { SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -196,20 +197,30 @@ export async function forgotPasswordAction(formData: FormData) {
   }
 
   const email = await resolveEmailForLogin(identifier);
-  // Always show the same success copy — do not reveal whether the account exists.
+  // Generic success — do not reveal whether the account exists.
   const successPath = withMessage(
     "/forgot-password",
-    "If an account exists for that address, we sent a reset link. Check your inbox (and spam). Use Continue with Google on the sign-in page if you registered with Google.",
+    "If an account exists for that address, we sent a reset link. Check your inbox (and spam).",
   );
 
   if (!email) {
     redirect(successPath);
   }
 
+  const eligibility = await passwordResetEligibilityForEmail(email);
+  if (eligibility.status === "google_only") {
+    redirect(
+      withMessage(
+        "/forgot-password",
+        "This account uses Google sign-in. On the sign-in page, choose Continue with Google instead of resetting a password.",
+      ),
+    );
+  }
+
   const origin = await requestOrigin();
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
+    redirectTo: `${origin}/auth/recovery`,
   });
 
   if (error) {
