@@ -7,6 +7,8 @@ import { passwordResetEligibilityForEmail } from "@/lib/auth-identities";
 import { safeInternalPath } from "@/lib/auth-paths";
 import { SITE_URL } from "@/lib/site";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { AnalyticsEvent } from "@/lib/analytics-events";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 import { claimPreferredUsername, isValidPublicUsername, normalizeUsername } from "@/lib/usernames";
 
 function withMessage(path: string, message: string) {
@@ -179,6 +181,8 @@ export async function registerAction(formData: FormData) {
   if (userInsertError) {
     redirect(withMessage("/register", userInsertError.message));
   }
+
+  await trackAnalyticsEventServer(AnalyticsEvent.DiverSignup, { signup_method: "email" });
 
   redirect(safeInternalPath(String(formData.get("next") ?? "/workspace")));
 }

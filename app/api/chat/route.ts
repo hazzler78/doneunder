@@ -9,6 +9,8 @@ import { runHermesDiverTurn } from "@/lib/hermes-diver-agent";
 import { readPendingInbound } from "@/lib/inbound-email";
 import { maybePollReceivedEmails } from "@/lib/inbound-email-process";
 import type { UserRole } from "@/lib/types";
+import { AnalyticsEvent } from "@/lib/analytics-events";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 import { claimPreferredUsername } from "@/lib/usernames";
 
 const chatSchema = z.object({
@@ -129,6 +131,7 @@ export async function POST(req: Request) {
         input: { message, threadId: thread?.id ?? null },
         output: { reply },
       });
+      await trackAnalyticsEventServer(AnalyticsEvent.ChatMessage, { sender_type: "company" });
       return NextResponse.json({ ok: true, role, reply });
     }
 
@@ -180,6 +183,8 @@ export async function POST(req: Request) {
         updatedParts: agentResult.updatedParts,
       },
     });
+
+    await trackAnalyticsEventServer(AnalyticsEvent.ChatMessage, { sender_type: "diver" });
 
     return NextResponse.json({
       ok: true,

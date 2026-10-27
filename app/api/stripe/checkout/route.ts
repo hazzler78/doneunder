@@ -1,6 +1,9 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { AnalyticsEvent } from "@/lib/analytics-events";
 import { isStripeConfigured } from "@/lib/feature-flags";
+import { stripeCheckoutPlanLabel } from "@/lib/stripe-plan-labels";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 
 const planMap: Record<string, string | undefined> = {
   "149": process.env.STRIPE_PRICE_149,
@@ -26,13 +29,18 @@ export async function POST(req: Request) {
     const price = planMap[plan];
     if (!price) return NextResponse.json({ error: "Invalid plan selected." }, { status: 400 });
 
+    const planLabel = stripeCheckoutPlanLabel(plan);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price, quantity: 1 }],
       customer_email: customerEmail,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/company?billing=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing?billing=cancelled`,
+      success_url: `${appUrl}/workspace?billing=success&plan=${encodeURIComponent(planLabel)}`,
+      cancel_url: `${appUrl}/pricing?billing=cancelled`,
     });
+
+    await trackAnalyticsEventServer(AnalyticsEvent.StripeCheckoutStart, { plan: planLabel });
 
     return NextResponse.json({ url: session.url });
   } catch (error) {

@@ -80,6 +80,9 @@ export async function ensureDiverProfileForAuthUser(user: User): Promise<AppUser
       return null;
     }
     record = inserted ?? null;
+    const { AnalyticsEvent } = await import("@/lib/analytics-events");
+    const { trackAnalyticsEventServer } = await import("@/lib/track-analytics-server");
+    await trackAnalyticsEventServer(AnalyticsEvent.DiverSignup, { signup_method: "oauth" });
   }
 
   if (record && record.role === "diver") {
