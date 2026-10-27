@@ -1187,6 +1187,10 @@ export async function publishDiverProfile(supabase: DbClient, diverId: string) {
     throw new Error(error.message);
   }
 
+  const { AnalyticsEvent } = await import("@/lib/analytics-events");
+  const { trackAnalyticsEventServer } = await import("@/lib/track-analytics-server");
+  await trackAnalyticsEventServer(AnalyticsEvent.ProfilePublished);
+
   const profile = await getDiverProfile(supabase, diverId);
   return { ok: true as const, validation, profile };
 }

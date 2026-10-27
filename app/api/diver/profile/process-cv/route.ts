@@ -6,6 +6,8 @@ import { createWorker } from "tesseract.js";
 import { extractPdfTextOrOcr } from "@/lib/pdf-ocr";
 import { z } from "zod";
 import { AI_DISCLAIMER, ENGLISH_ONLY_INSTRUCTION, aiModel } from "@/lib/ai";
+import { AnalyticsEvent } from "@/lib/analytics-events";
+import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
@@ -448,6 +450,10 @@ export async function POST(req: Request) {
         autoPublished: autoPublish.published,
         photoNudged,
       },
+    });
+
+    await trackAnalyticsEventServer(AnalyticsEvent.CvUploaded, {
+      auto_published: autoPublish.published,
     });
 
     const publishBlockedMessage =

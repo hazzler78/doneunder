@@ -15,9 +15,11 @@ export const metadata: Metadata = {
 export default async function WorkspacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ job?: string; fix?: string }>;
+  searchParams: Promise<{ job?: string; fix?: string; billing?: string; plan?: string }>;
 }) {
-  const { job: jobId, fix: fixPrompt } = await searchParams;
+  const { job: jobId, fix: fixPrompt, billing, plan } = await searchParams;
+  const stripeCheckoutPlan =
+    billing === "success" && typeof plan === "string" && plan.trim() ? plan.trim().slice(0, 64) : null;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -59,6 +61,7 @@ export default async function WorkspacePage({
       initialMatchPrompt={matchJob ? matchPromptForJob(matchJob) : null}
       initialFixPrompt={initialFixPrompt}
       schoolOutreachEnabled={canUseSchoolOutreach(userRow?.username, userRow?.email ?? user.email)}
+      stripeCheckoutPlan={stripeCheckoutPlan}
     />
   );
 }
