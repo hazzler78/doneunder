@@ -243,12 +243,16 @@ describe("upload classification", () => {
     assert.equal(cv?.name, "CV_Alex_Holm_TEST.pdf");
   });
 
-  it("treats a seaman's book PDF as the main CV when no named CV is present", () => {
+  it("treats a seaman's book PDF as the main CV when the filename names a CV document", () => {
     const cv = pickMainCvFile([
       { name: "seamansbook.pdf" },
       { name: "OPITO_BOSIET_TEST.pdf" },
     ]);
     assert.equal(cv?.name, "seamansbook.pdf");
+  });
+
+  it("does not treat a lone ambiguous PDF as the CV", () => {
+    assert.equal(pickMainCvFile([{ name: "basil_DMT.pdf" }]), null);
   });
 });
 

@@ -7,11 +7,17 @@ import remarkGfm from "remark-gfm";
 import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
-import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
+import {
+  readApiJson,
+  stageCertificateFileDirect,
+  uploadCertificateFilesSequentially,
+  uploadMainCvDirect,
+} from "@/lib/browser-upload";
+import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
 import { CV_PDF_ONLY_MESSAGE, isWordCvFile, rejectWordCvFiles } from "@/lib/cv-upload";
-import { isStoredMainCvFilename, pickMainCvFile } from "@/lib/document-names";
+import { isStoredMainCvFilename, pickMainCvFromChatAttachment } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import { AnalyticsEvent } from "@/lib/analytics-events";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
@@ -394,20 +400,16 @@ export function AgentWorkspace({
 
   const hasStoredCv = livingCv.present || documents.some((doc) => isStoredMainCvFilename(doc.name));
 
-  function classifyDroppedFiles(files: File[]) {
-    const cvFile = pickMainCvFile(files);
-    return {
-      cvFile,
-      certFiles: files.filter((file) => file !== cvFile),
-    };
-  }
-
   async function processCvUpload(fileOverride?: File | File[]) {
     const dropped = fileOverride ? (Array.isArray(fileOverride) ? fileOverride : [fileOverride]) : [];
-    const selected = dropped.length > 0 ? dropped : ([mainCv, ...certs].filter(Boolean) as File[]);
-    const classified = classifyDroppedFiles(selected);
-    const cvFile = classified.cvFile;
-    const certFiles = classified.certFiles;
+    const fromChat = dropped.length > 0;
+    const cvFile = fromChat
+      ? pickMainCvFromChatAttachment(dropped, { hasStoredCv })
+      : mainCv;
+    const certFiles = fromChat
+      ? dropped.filter((file) => file !== cvFile)
+      : certs;
+    const selected = fromChat ? dropped : ([mainCv, ...certs].filter(Boolean) as File[]);
     const wordUploads = rejectWordCvFiles(selected);
     if (wordUploads.length > 0) {
       const message = CV_PDF_ONLY_MESSAGE;
@@ -447,16 +449,29 @@ export function AgentWorkspace({
     try {
       let cvFailed = false;
       if (cvFile) {
-        const form = new FormData();
-        form.append("mainCv", cvFile);
+        const stagedCerts = [];
         for (const cert of certFiles) {
-          form.append("certificates", cert);
+          stagedCerts.push(await stageCertificateFileDirect(cert));
         }
+        const mainCvStored = await uploadMainCvDirect(cvFile);
         const response = await fetch("/api/diver/profile/process-cv", {
           method: "POST",
-          body: form,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mainCv: {
+              path: mainCvStored.path,
+              name: mainCvStored.fileName,
+              fileSize: cvFile.size,
+            },
+            certificates: stagedCerts.map((item, index) => ({
+              path: item.path,
+              name: item.fileName,
+              contentType: item.contentType,
+              fileSize: certFiles[index]?.size ?? 0,
+            })),
+          }),
         });
-        const data = (await response.json()) as {
+        const data = (await readApiJson(response)) as {
           ok?: boolean;
           error?: string;
           detail?: string;
@@ -763,7 +778,7 @@ export function AgentWorkspace({
             </span>
             <input
               type="file"
-              accept="application/pdf,.pdf"
+              accept={CV_ACCEPT}
               onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
               className="w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1.5 file:text-xs file:text-heading"
             />
@@ -773,7 +788,7 @@ export function AgentWorkspace({
             <span className="text-[11px] text-muted-foreground">Certificates (PDF/JPG/PNG)</span>
             <input
               type="file"
-              accept="application/pdf,image/png,image/jpeg,.pdf,.jpg,.jpeg,.png"
+              accept={CERT_ACCEPT}
               multiple
               onChange={(event) => {
                 const next = Array.from(event.target.files ?? []);
@@ -1221,7 +1236,7 @@ export function AgentWorkspace({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="application/pdf,image/png,image/jpeg"
+                  accept={`${CV_ACCEPT},${CERT_ACCEPT}`}
                   multiple
                   className="sr-only"
                   onChange={(event) => {

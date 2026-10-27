@@ -1,5 +1,5 @@
 const CERT_NAME_HINT =
-  /\b(cert|certificate|ticket|bosiet|medical|imca|huet|ebs|oguk|oeuk|hse|ndt|alst|first.?aid)\b/i;
+  /\b(certs?|certificate|ticket|bosiet|medical|imca|huet|ebs|oguk|oeuk|hse|ndt|alst|first.?aid|dmt|cda|pt\d+)\b/i;
 const CV_NAME_HINT =
   /\b(cv|curriculum|resume|r[eé]sum[eé]|seaman|seamansbook|cdc|logbook)\b/i;
 
@@ -19,13 +19,23 @@ export function looksLikeMainCvFilename(name: string) {
   return CV_NAME_HINT.test(spaced);
 }
 
-/** First CV-named PDF, else the only PDF that is not a ticket scan. */
+/** Picks a PDF only when the filename clearly indicates a CV/resume (not from a lone ambiguous PDF). */
 export function pickMainCvFile<T extends { name: string }>(files: T[]): T | null {
-  const named = files.find((file) => looksLikeMainCvFilename(file.name));
-  if (named) return named;
-  const pdfs = files.filter((file) => file.name.toLowerCase().endsWith(".pdf"));
-  const notTickets = pdfs.filter((file) => !looksLikeCertificateFilename(file.name));
-  return notTickets.length === 1 ? notTickets[0]! : null;
+  return files.find((file) => looksLikeMainCvFilename(file.name)) ?? null;
+}
+
+/**
+ * Chat attachments: never replace an existing stored CV unless the filename clearly names a CV.
+ * Panel uploads pass an explicit CV file via the CV control instead.
+ */
+export function pickMainCvFromChatAttachment<T extends { name: string }>(
+  files: T[],
+  options: { hasStoredCv: boolean },
+): T | null {
+  const candidate = pickMainCvFile(files);
+  if (!candidate) return null;
+  if (options.hasStoredCv && !looksLikeMainCvFilename(candidate.name)) return null;
+  return candidate;
 }
 
 export function isStoredMainCvFilename(name: string) {
