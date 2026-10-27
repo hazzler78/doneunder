@@ -28,6 +28,10 @@ function isMainCvFilename(name: string, path?: string) {
 function contentTypeForName(name: string) {
   const kind = classifyCertificateFile(name);
   if (kind === "pdf") return "application/pdf";
+  if (kind === "docx") {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (kind === "doc") return "application/msword";
   if (kind === "png") return "image/png";
   if (kind === "jpg") return "image/jpeg";
   if (kind === "webp") return "image/webp";

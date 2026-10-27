@@ -290,6 +290,18 @@ export async function readAllCertificatesFromBytes(
     const read = await readImageWithVision(bytes, kind === "png" ? "image/png" : "image/jpeg");
     return read.unreadable && !read.name && !read.expiry_date && !read.issue_date ? [] : [read];
   }
+  if (kind === "doc" || kind === "docx") {
+    try {
+      const { extractTextFromWordBytes } = await import("@/lib/word-text");
+      const extracted = await extractTextFromWordBytes(bytes, filename);
+      if (extracted.text.trim().length >= 40) {
+        const fromText = await extractMultipleFromText(extracted.text);
+        if (fromText.length > 0) return fromText;
+      }
+    } catch {
+      return [];
+    }
+  }
   return [];
 }
 

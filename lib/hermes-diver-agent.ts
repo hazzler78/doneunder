@@ -47,7 +47,7 @@ import {
   type PublicJob,
 } from "@/lib/jobs";
 import { formatManualPublishFailure } from "@/lib/publish-blockers";
-import { CV_PDF_ONLY_MESSAGE } from "@/lib/cv-upload";
+import { SUPPORTED_CV_FORMATS_MESSAGE } from "@/lib/document-bytes";
 import { logAgentInteraction } from "@/lib/audit";
 import {
   isInboundFollowUpConfirmation,
@@ -391,7 +391,7 @@ Updating the CV from chat (this is the main way to edit):
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
 - If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos or a multi-ticket PDF (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
-- CV uploads must be PDF (not Word .doc/.docx). If they only have Word, tell them: ${CV_PDF_ONLY_MESSAGE}
+- CV uploads: ${SUPPORTED_CV_FORMATS_MESSAGE} Certificates: PDF, Word (.doc/.docx), JPG, or PNG.
 - When validation.errors block publish or auto-publish failed, quote validation.errors and validation.warnings and give concrete next steps (headline, references, upload readable PDF, etc.). Never leave them guessing why they are still draft.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.

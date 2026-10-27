@@ -10,7 +10,6 @@ import {
   uploadMainCvDirect,
 } from "@/lib/browser-upload";
 import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
-import { CV_PDF_ONLY_MESSAGE, isWordCvFile } from "@/lib/cv-upload";
 import { cn } from "@/lib/utils";
 import type {
   DiverCertificationInput,
@@ -459,11 +458,7 @@ export function DiverProfileEditor({
 
   async function onProcessWithAi() {
     if (!mainCv && certFiles.length === 0) {
-      setMessage("Select certificate files, or a new CV PDF if you want to replace the current one.");
-      return;
-    }
-    if (mainCv && isWordCvFile(mainCv)) {
-      setMessage(CV_PDF_ONLY_MESSAGE);
+      setMessage("Select certificate files, or a new CV (PDF or Word) if you want to replace the current one.");
       return;
     }
     if (hasUnsavedChanges) {

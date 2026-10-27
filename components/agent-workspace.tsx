@@ -16,7 +16,6 @@ import {
 import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
-import { CV_PDF_ONLY_MESSAGE, isWordCvFile, rejectWordCvFiles } from "@/lib/cv-upload";
 import { isStoredMainCvFilename, pickMainCvFromChatAttachment } from "@/lib/document-names";
 import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
 import { AnalyticsEvent } from "@/lib/analytics-events";
@@ -410,22 +409,9 @@ export function AgentWorkspace({
       ? dropped.filter((file) => file !== cvFile)
       : certs;
     const selected = fromChat ? dropped : ([mainCv, ...certs].filter(Boolean) as File[]);
-    const wordUploads = rejectWordCvFiles(selected);
-    if (wordUploads.length > 0) {
-      const message = CV_PDF_ONLY_MESSAGE;
-      setUploadError(message);
-      setPanelOpen(true);
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), from: "agent", text: message },
-      ]);
-      return;
-    }
     if (!cvFile && certFiles.length === 0) {
-      const onlyWord = selected.some((file) => isWordCvFile(file));
-      const message = onlyWord
-        ? CV_PDF_ONLY_MESSAGE
-        : "Select a CV PDF and/or certificate files (PDF, JPG, PNG).";
+      const message =
+        "Select a CV (PDF or Word) and/or certificate files (PDF, Word, JPG, PNG).";
       setUploadError(message);
       setPanelOpen(true);
       return;

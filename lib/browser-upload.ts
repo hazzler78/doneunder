@@ -1,4 +1,8 @@
 import {
+  validateCertificateFileOnClient,
+  validateCvFileOnClient,
+} from "@/lib/browser-file-validation";
+import {
   CV_MAX_BYTES,
   isOversizeCertificate,
   isOversizeCv,
@@ -136,6 +140,10 @@ async function putFileToSignedUrl(file: File, signedUrl: string, contentType: st
 }
 
 export async function uploadMainCvDirect(file: File) {
+  const clientError = await validateCvFileOnClient(file);
+  if (clientError) {
+    throw new Error(clientError);
+  }
   if (isOversizeCv(file.size)) {
     throw new Error(oversizeMessage(file.name, 12));
   }
@@ -151,6 +159,10 @@ export type StagedCertificateUpload = {
 };
 
 export async function stageCertificateFileDirect(file: File): Promise<StagedCertificateUpload> {
+  const clientError = await validateCertificateFileOnClient(file);
+  if (clientError) {
+    throw new Error(clientError);
+  }
   if (isOversizeCertificate(file.size)) {
     throw new Error(oversizeMessage(file.name, 10));
   }
