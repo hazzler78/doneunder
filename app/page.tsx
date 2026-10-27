@@ -10,6 +10,8 @@ import {
   PipelineVisual,
 } from "@/components/landing/product-mockups";
 
+export const revalidate = 300;
+
 const pipeline = [
   {
     id: "01",

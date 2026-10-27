@@ -7,6 +7,7 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { contextLineForCertificate, describeCertificateDates, resolveCertificateDates } from "@/lib/dates";
 import { polishedCvJsonSchema } from "@/lib/diver-profile";
 import { CONTACT_MAILTO, SITE_URL } from "@/lib/site";
+import { createSupabasePublicServerClient } from "@/lib/supabase/public-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 import { cn } from "@/lib/utils";
@@ -29,7 +30,7 @@ export async function generateMetadata({
     return { title: "CV", robots: { index: false, follow: false } };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabasePublicServerClient();
   const { data } = await supabase
     .from("public_diver_ambassador")
     .select("full_name, ambassador_public_headline, headline")
@@ -62,9 +63,9 @@ export default async function DiverCvPage({
   const { username: rawUsername } = await params;
   const { share: shareToken } = await searchParams;
   const username = rawUsername.trim().toLowerCase();
-  const supabase = await createSupabaseServerClient();
+  const publicSupabase = createSupabasePublicServerClient();
 
-  const { data: publicAmbassador } = await supabase
+  const { data: publicAmbassador } = await publicSupabase
     .from("public_diver_ambassador")
     .select(
       "user_id,full_name,headline,bio,location,mobilization_notice,sat_hours,dive_hours,ambassador_public_headline,ambassador_short_bio",
@@ -75,7 +76,9 @@ export default async function DiverCvPage({
   if (!publicAmbassador) notFound();
 
   const access = await resolveFullCvAccess(publicAmbassador.user_id, { shareToken });
-  const dataClient = cvSectionsNeedServiceRole(access) ? createServiceSupabaseClient() : supabase;
+  const dataClient = cvSectionsNeedServiceRole(access)
+    ? createServiceSupabaseClient()
+    : await createSupabaseServerClient();
   const fullName = publicAmbassador.full_name ?? "Commercial Diver";
   const headline =
     publicAmbassador.ambassador_public_headline ||
