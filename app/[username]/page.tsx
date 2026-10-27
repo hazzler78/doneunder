@@ -5,7 +5,7 @@ import { AmbassadorProfileView } from "@/components/ambassador-profile-view";
 import { resolveFullCvAccess } from "@/lib/cv-access";
 import { loadAmbassadorSwipeContext } from "@/lib/public-ambassadors";
 import { SITE_URL } from "@/lib/site";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabasePublicServerClient } from "@/lib/supabase/public-server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 
 /** Skip OCR person-name junk on public ticket teasers. */
@@ -32,7 +32,7 @@ export async function generateMetadata({
     return { title: "Profile", robots: { index: false, follow: false } };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabasePublicServerClient();
   const { data } = await supabase
     .from("public_diver_ambassador")
     .select("user_id, full_name, ambassador_public_headline, headline")
@@ -80,7 +80,7 @@ export default async function AmbassadorPage({
 }) {
   const { username: rawUsername } = await params;
   const username = rawUsername.trim().toLowerCase();
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabasePublicServerClient();
   const { data: publicAmbassador } = await supabase
     .from("public_diver_ambassador")
     .select(

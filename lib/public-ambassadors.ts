@@ -1,5 +1,6 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { unstable_rethrow } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
+import { createSupabasePublicServerClient } from "@/lib/supabase/public-server";
 import { isIndexableAmbassadorUsername } from "@/lib/usernames";
 
 export type PublicAmbassadorCard = {
@@ -15,7 +16,7 @@ export type PublicAmbassadorCard = {
 export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbassadorCard[]> {
   if (!isSupabaseConfigured()) return [];
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabasePublicServerClient();
     const { data, error } = await supabase
       .from("public_diver_ambassador")
       .select(
@@ -38,6 +39,7 @@ export async function loadPublicAmbassadorCards(limit = 4): Promise<PublicAmbass
       avatarUrl: (row as { avatar_url?: string | null }).avatar_url ?? null,
     }));
   } catch (error) {
+    unstable_rethrow(error);
     console.error("Failed to load public ambassadors:", error);
     return [];
   }
@@ -61,7 +63,7 @@ export async function loadAmbassadorSwipeContext(
 ): Promise<AmbassadorSwipeContext | null> {
   if (!isSupabaseConfigured()) return null;
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabasePublicServerClient();
     const { data, error } = await supabase
       .from("public_diver_ambassador")
       .select("username,full_name")
@@ -88,6 +90,7 @@ export async function loadAmbassadorSwipeContext(
       next: index < neighbors.length - 1 ? neighbors[index + 1] : null,
     };
   } catch (error) {
+    unstable_rethrow(error);
     console.error("Failed to load ambassador swipe context:", error);
     return null;
   }

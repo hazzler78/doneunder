@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { SiteHeaderClient } from "@/components/site-header-client";
 import { isSupabaseConfigured } from "@/lib/feature-flags";
 import { loadPendingInboundForUser } from "@/lib/inbound-email-process";
@@ -31,7 +32,8 @@ export async function SiteHeader() {
           }
         }
       }
-    } catch {
+    } catch (error) {
+      unstable_rethrow(error);
       isLoggedIn = false;
     }
   }
