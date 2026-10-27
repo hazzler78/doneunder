@@ -1,23 +1,26 @@
-/** Main CV uploads are PDF-only on Vercel serverless (no reliable Word extraction in this runtime). */
-export const CV_PDF_ONLY_MESSAGE =
-  "Please upload your CV as a PDF. In Microsoft Word use File → Save As → PDF, then upload that file.";
+import {
+  classifyDocumentFile,
+  isWordFileMeta,
+  SUPPORTED_CV_FORMATS_MESSAGE,
+  type DocumentFileKind,
+} from "@/lib/document-bytes";
 
-const WORD_CV_PATTERN = /\.(doc|docx)$/i;
-
-const WORD_CV_MIME =
-  /^(application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/i;
+/** @deprecated Use SUPPORTED_CV_FORMATS_MESSAGE */
+export const CV_PDF_ONLY_MESSAGE = SUPPORTED_CV_FORMATS_MESSAGE;
 
 export function isWordCvFile(file: { name: string; type?: string }) {
-  const name = file.name.toLowerCase();
-  if (WORD_CV_PATTERN.test(name)) return true;
-  const type = file.type?.trim() ?? "";
-  return type ? WORD_CV_MIME.test(type) : false;
+  return isWordFileMeta(file);
 }
 
 export function isAcceptedMainCvFile(file: { name: string; type?: string }) {
-  if (isWordCvFile(file)) return false;
+  if (isWordCvFile(file)) return true;
   const lower = file.name.toLowerCase();
   return file.type === "application/pdf" || lower.endsWith(".pdf");
+}
+
+export function mainCvKindFromFile(file: { name: string; type?: string }): DocumentFileKind | null {
+  if (!isAcceptedMainCvFile(file)) return null;
+  return classifyDocumentFile(file.name, file.type);
 }
 
 export function rejectWordCvFiles(files: { name: string; type?: string }[]) {

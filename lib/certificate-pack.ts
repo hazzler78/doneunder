@@ -13,6 +13,13 @@ export function classifyCertificateFile(name: string, contentType?: string) {
   const lower = name.toLowerCase();
   const type = (contentType ?? "").toLowerCase();
   if (type === "application/pdf" || lower.endsWith(".pdf")) return "pdf" as const;
+  if (
+    type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    lower.endsWith(".docx")
+  ) {
+    return "docx" as const;
+  }
+  if (type === "application/msword" || lower.endsWith(".doc")) return "doc" as const;
   if (type === "image/png" || lower.endsWith(".png")) return "png" as const;
   if (type === "image/jpeg" || type === "image/jpg" || /\.jpe?g$/.test(lower)) return "jpg" as const;
   if (type === "image/webp" || lower.endsWith(".webp")) return "webp" as const;
@@ -128,7 +135,7 @@ export async function buildCertificatePackPdf(sources: CertificatePackSource[]) 
 
   for (const source of sources) {
     const kind = classifyCertificateFile(source.name, source.contentType);
-    if (!kind || kind === "webp") {
+    if (!kind || kind === "webp" || kind === "doc" || kind === "docx") {
       skipped.push(source.name);
       continue;
     }

@@ -37,5 +37,9 @@ describe("pickMainCvFile conservative classification", () => {
       pickMainCvFromChatAttachment([{ name: "my_resume.pdf" }], { hasStoredCv: false })?.name,
       "my_resume.pdf",
     );
+    assert.equal(
+      pickMainCvFromChatAttachment([{ name: "my_resume.docx" }], { hasStoredCv: false })?.name,
+      "my_resume.docx",
+    );
   });
 });

@@ -11,6 +11,15 @@ import {
 import { CERT_MAX_BYTES, CV_MAX_BYTES } from "../lib/diver-upload-constants";
 
 describe("diver storage upload validation", () => {
+  it("accepts Word certificates by extension", () => {
+    const result = validateCertificateUploadMeta({
+      name: "imca-ticket.docx",
+      size: 8_000,
+      contentType: "",
+    });
+    assert.equal(result.ok, true);
+  });
+
   it("accepts PDF certificates with empty MIME when name ends with .pdf", () => {
     const result = validateCertificateUploadMeta({
       name: "imca-log.pdf",
@@ -47,5 +56,17 @@ describe("diver storage upload validation", () => {
     assert.equal(assertCertificateStagingPath(diverId, staging), staging);
     assert.throws(() => assertDiverOwnsStoragePath(diverId, "other-user/certs/x.pdf"));
     assert.equal(mainCvStoragePath(diverId), `${diverId}/source/original-cv.pdf`);
+    assert.equal(mainCvStoragePath(diverId, "resume.docx"), `${diverId}/source/original-cv.docx`);
+  });
+
+  it("validates CV upload accepts docx meta", () => {
+    assert.equal(
+      validateCvUploadMeta({
+        name: "cv.docx",
+        size: CV_MAX_BYTES,
+        contentType: "",
+      }).ok,
+      true,
+    );
   });
 });

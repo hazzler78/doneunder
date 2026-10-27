@@ -24,17 +24,18 @@ import {
   CERT_MAX_BYTES,
   CV_MAX_BYTES,
   downloadDiverDocumentBytes,
+  mainCvStoragePath as buildMainCvStoragePath,
+  mimeForCvUpload,
   validateCertificateUploadMeta,
+  validateCvBytes,
   validateCvUploadMeta,
 } from "@/lib/diver-storage-upload";
+import { classifyDocumentFile, LEGACY_DOC_NO_TEXT_MESSAGE } from "@/lib/document-bytes";
+import { extractTextFromWordBytes } from "@/lib/word-text";
 import { processCertificateFromStagingPath } from "@/lib/process-certificate-upload";
 import { logDiverUploadFailure } from "@/lib/upload-failure-log";
 import { repairMisnamedCertifications } from "@/lib/cert-text";
-import {
-  CV_PDF_ONLY_MESSAGE,
-  isAcceptedMainCvFile,
-  isWordCvFile,
-} from "@/lib/cv-upload";
+import { SUPPORTED_CERTIFICATE_FORMATS_MESSAGE } from "@/lib/document-bytes";
 import {
   applyDerivedHeadlineIfMissing,
   autoPublishIfEligible,
@@ -121,6 +122,20 @@ async function extractPdfText(buffer: Buffer) {
   return result.text;
 }
 
+async function extractMainCvText(buffer: Buffer, fileName: string) {
+  const kind = classifyDocumentFile(fileName);
+  if (kind === "doc" || kind === "docx") {
+    const word = await extractTextFromWordBytes(buffer, fileName);
+    return {
+      text: truncateText(word.text),
+      legacyDocNoText: word.legacyDocNoText,
+      warning: word.warning,
+    };
+  }
+  const pdf = await extractPdfTextOrOcr(buffer);
+  return { text: truncateText(pdf.text), legacyDocNoText: false, warning: undefined };
+}
+
 async function extractImageText(buffer: Buffer) {
   if (IS_VERCEL_RUNTIME) {
     // Tesseract workers are fragile in serverless runtimes; skip OCR rather than failing the entire flow.
@@ -183,15 +198,9 @@ export async function POST(req: Request) {
         const cvCheck = validateCvUploadMeta({
           name: mainCvName,
           size: mainCvStorageSize > 0 ? mainCvStorageSize : 1,
-          contentType: "application/pdf",
+          contentType: mimeForCvUpload(mainCvName),
         });
         if (!cvCheck.ok) {
-          if (cvCheck.error === "word_cv" || cvCheck.error === "not_pdf") {
-            return NextResponse.json(
-              { error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: cvCheck.error },
-              { status: 400 },
-            );
-          }
           return NextResponse.json({ error: cvCheck.error }, { status: 400 });
         }
       }
@@ -218,13 +227,19 @@ export async function POST(req: Request) {
 
     const totalCerts = certificateFiles.length + stagedCertificates.length;
     if (!mainCvFile && !mainCvStoragePath && totalCerts === 0) {
-      return NextResponse.json({ error: "Upload a CV PDF and/or certificate files (PDF, JPG, PNG)." }, { status: 400 });
+      return NextResponse.json({
+        error: `Upload a CV (PDF or Word) and/or certificate files. ${SUPPORTED_CERTIFICATE_FORMATS_MESSAGE}`,
+      }, { status: 400 });
     }
-    if (mainCvFile && isWordCvFile(mainCvFile)) {
-      return NextResponse.json({ error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "word" }, { status: 400 });
-    }
-    if (mainCvFile && !isAcceptedMainCvFile(mainCvFile)) {
-      return NextResponse.json({ error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "not_pdf" }, { status: 400 });
+    if (mainCvFile) {
+      const cvMeta = validateCvUploadMeta({
+        name: mainCvFile.name,
+        size: mainCvFile.size,
+        contentType: mainCvFile.type,
+      });
+      if (!cvMeta.ok) {
+        return NextResponse.json({ error: cvMeta.error }, { status: 400 });
+      }
     }
 
     if (totalCerts > MAX_CERT_FILES) {
@@ -273,11 +288,22 @@ export async function POST(req: Request) {
       if (cvBuffer.length > CV_MAX_BYTES) {
         return NextResponse.json({ error: `${mainCvName} exceeds ${MAX_MAIN_CV_MB}MB.` }, { status: 400 });
       }
+      const cvBytesCheck = validateCvBytes(cvBuffer, { name: mainCvName, contentType: mimeForCvUpload(mainCvName) });
+      if (!cvBytesCheck.ok) {
+        return NextResponse.json({ error: cvBytesCheck.error }, { status: 400 });
+      }
     } else if (mainCvFile) {
       cvBuffer = Buffer.from(await mainCvFile.arrayBuffer());
-      cvPath = `${diverId}/source/original-cv.pdf`;
+      const cvBytesCheck = validateCvBytes(cvBuffer, {
+        name: mainCvFile.name,
+        contentType: mainCvFile.type,
+      });
+      if (!cvBytesCheck.ok) {
+        return NextResponse.json({ error: cvBytesCheck.error }, { status: 400 });
+      }
+      cvPath = buildMainCvStoragePath(diverId, mainCvFile.name);
       const cvUpload = await serviceSupabase.storage.from(BUCKET_NAME).upload(cvPath, cvBuffer, {
-        contentType: "application/pdf",
+        contentType: mimeForCvUpload(mainCvFile.name, mainCvFile.type),
         upsert: true,
       });
       if (cvUpload.error) {
@@ -317,6 +343,15 @@ export async function POST(req: Request) {
         } catch {
           extractionWarnings.push(`Could not parse certificate PDF text for ${certFileName}.`);
         }
+      } else if (kind === "doc" || kind === "docx") {
+        try {
+          const extracted = await extractTextFromWordBytes(certBuffer, certFileName);
+          if (extracted.text) {
+            certExtractedTextParts.push(`[${certFileName}] ${truncateText(extracted.text, 12000)}`);
+          }
+        } catch {
+          extractionWarnings.push(`Could not read Word text for ${certFileName}.`);
+        }
       } else {
         const extracted = await extractImageText(certBuffer);
         if (extracted) certExtractedTextParts.push(`[${certFileName}] ${truncateText(extracted, 6000)}`);
@@ -354,6 +389,15 @@ export async function POST(req: Request) {
             if (extracted) certExtractedTextParts.push(`[${processed.name}] ${truncateText(extracted, 12000)}`);
           } catch {
             extractionWarnings.push(`Could not parse certificate PDF text for ${processed.name}.`);
+          }
+        } else if (kind === "doc" || kind === "docx") {
+          try {
+            const extracted = await extractTextFromWordBytes(certBuffer, processed.name);
+            if (extracted.text) {
+              certExtractedTextParts.push(`[${processed.name}] ${truncateText(extracted.text, 12000)}`);
+            }
+          } catch {
+            extractionWarnings.push(`Could not read Word text for ${processed.name}.`);
           }
         } else {
           const extracted = await extractImageText(certBuffer);
@@ -420,13 +464,18 @@ export async function POST(req: Request) {
       });
     }
 
-    const cvRead = await extractPdfTextOrOcr(cvBuffer);
-    const cvText = truncateText(cvRead.text);
+    const cvExtracted = await extractMainCvText(cvBuffer, mainCvName);
+    const cvText = cvExtracted.text;
+    if (cvExtracted.warning) {
+      extractionWarnings.push(cvExtracted.warning);
+    }
     if (!cvText) {
-      const unreadableReply =
-        "I saved your PDF, but I could not read usable text from it (common with scanned seaman's books or photo-PDFs). " +
-        "Please either: (1) upload a text-based CV PDF, (2) paste your CV text in this chat, or (3) attach ticket photos as JPG/PNG under certificates. " +
-        "Then upload again or say “build my CV from this text”.";
+      const isLegacyDoc = cvExtracted.legacyDocNoText;
+      const unreadableReply = isLegacyDoc
+        ? LEGACY_DOC_NO_TEXT_MESSAGE
+        : "I saved your CV file, but I could not read usable text from it (common with scanned seaman's books or photo-PDFs). " +
+          "Please either: (1) upload a text-based CV PDF or Word file, (2) paste your CV text in this chat, or (3) attach ticket photos as JPG/PNG under certificates. " +
+          "Then upload again or say “build my CV from this text”.";
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,
         userContent: `Please process this CV PDF: ${mainCvName}`,

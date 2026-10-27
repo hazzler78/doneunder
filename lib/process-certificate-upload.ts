@@ -9,6 +9,7 @@ import {
   downloadDiverDocumentBytes,
   removeDiverDocumentPaths,
   assertCertificateStagingPath,
+  validateCertificateBytes,
 } from "@/lib/diver-storage-upload";
 
 export type ProcessedCertificateUpload = {
@@ -90,6 +91,13 @@ export async function processCertificateFromStagingPath(
 ) {
   const path = assertCertificateStagingPath(diverId, input.storagePath);
   const bytes = await downloadDiverDocumentBytes(supabase, path);
+  const byteCheck = validateCertificateBytes(bytes, {
+    name: input.name,
+    contentType: input.contentType,
+  });
+  if (!byteCheck.ok) {
+    throw new Error(byteCheck.error);
+  }
   const processed = await processCertificateFromBytes(supabase, diverId, {
     name: input.name,
     bytes,

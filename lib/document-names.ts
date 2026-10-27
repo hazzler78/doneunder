@@ -11,9 +11,12 @@ export function looksLikeCertificateFilename(name: string) {
   return CERT_NAME_HINT.test(spacedFilename(name));
 }
 
+function isCvDocumentExtension(name: string) {
+  return /\.(pdf|docx?)$/i.test(name.toLowerCase());
+}
+
 export function looksLikeMainCvFilename(name: string) {
-  const lower = name.toLowerCase();
-  if (!lower.endsWith(".pdf")) return false;
+  if (!isCvDocumentExtension(name)) return false;
   const spaced = spacedFilename(name);
   if (looksLikeCertificateFilename(name) && !CV_NAME_HINT.test(spaced)) return false;
   return CV_NAME_HINT.test(spaced);
@@ -39,7 +42,11 @@ export function pickMainCvFromChatAttachment<T extends { name: string }>(
 }
 
 export function isStoredMainCvFilename(name: string) {
-  return /^main-cv-/i.test(name) || name === "original-cv.pdf" || looksLikeMainCvFilename(name);
+  return (
+    /^main-cv-/i.test(name) ||
+    /^original-cv\.(pdf|docx?)$/i.test(name) ||
+    looksLikeMainCvFilename(name)
+  );
 }
 
 export function certificateSlug(name: string) {

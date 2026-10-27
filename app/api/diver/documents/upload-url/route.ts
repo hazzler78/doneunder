@@ -5,23 +5,15 @@ import {
   certificateStagingPath,
   createDiverDocumentSignedUploadUrl,
   mainCvStoragePath,
+  mimeForCertificateUpload,
+  mimeForCvUpload,
   newUploadId,
   validateCertificateUploadMeta,
   validateCvUploadMeta,
   type DiverUploadKind,
 } from "@/lib/diver-storage-upload";
-import { classifyCertificateFile } from "@/lib/certificate-pack";
-import { CV_PDF_ONLY_MESSAGE } from "@/lib/cv-upload";
 
 export const runtime = "nodejs";
-
-function mimeForCertificate(name: string, contentType?: string) {
-  const kind = classifyCertificateFile(name, contentType);
-  if (kind === "pdf") return "application/pdf";
-  if (kind === "png") return "image/png";
-  if (kind === "jpg") return "image/jpeg";
-  return contentType?.trim() || "application/octet-stream";
-}
 
 export async function POST(req: Request) {
   try {
@@ -53,7 +45,7 @@ export async function POST(req: Request) {
       }
       const uploadId = newUploadId();
       const path = certificateStagingPath(diverId, uploadId, fileName);
-      const mime = mimeForCertificate(fileName, contentType);
+      const mime = mimeForCertificateUpload(fileName, contentType);
       const signed = await createDiverDocumentSignedUploadUrl(supabase, path, mime);
       return NextResponse.json({
         ok: true,
@@ -69,29 +61,18 @@ export async function POST(req: Request) {
     if (kind === "cv") {
       const validation = validateCvUploadMeta({ name: fileName, size: fileSize, contentType });
       if (!validation.ok) {
-        if (validation.error === "word_cv") {
-          return NextResponse.json(
-            { error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "word" },
-            { status: 400 },
-          );
-        }
-        if (validation.error === "not_pdf") {
-          return NextResponse.json(
-            { error: CV_PDF_ONLY_MESSAGE, unsupportedCvFormat: "not_pdf" },
-            { status: 400 },
-          );
-        }
         return NextResponse.json({ error: validation.error }, { status: 400 });
       }
-      const path = mainCvStoragePath(diverId);
-      const signed = await createDiverDocumentSignedUploadUrl(supabase, path, "application/pdf");
+      const path = mainCvStoragePath(diverId, fileName);
+      const mime = mimeForCvUpload(fileName, contentType);
+      const signed = await createDiverDocumentSignedUploadUrl(supabase, path, mime);
       return NextResponse.json({
         ok: true,
         kind,
         path: signed.path,
         signedUrl: signed.signedUrl,
         token: signed.token,
-        contentType: "application/pdf",
+        contentType: mime,
       });
     }
 
