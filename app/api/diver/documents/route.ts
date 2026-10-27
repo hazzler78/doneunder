@@ -4,15 +4,10 @@ import { appendAgentTurn } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
 import {
-  applyCertificateReads,
-  pdfCopyFromImage,
-  readAllCertificatesFromBytes,
-} from "@/lib/cert-text";
-import {
   listCertificateDocumentFiles,
   listDiverDocumentFiles,
-  upsertDiverCertificateFile,
 } from "@/lib/diver-documents";
+import { processCertificateFromBytes } from "@/lib/process-certificate-upload";
 import { displayCertificateName } from "@/lib/document-names";
 
 export const runtime = "nodejs";
@@ -152,52 +147,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `${file.name} exceeds 10MB.` }, { status: 400 });
       }
       const bytes = Buffer.from(await file.arrayBuffer());
-      const result = await upsertDiverCertificateFile(
+      const processed = await processCertificateFromBytes(
         supabase,
         authResult.diverId,
         { name: file.name, bytes, contentType: file.type || "" },
         existing,
       );
       existing.push({
-        name: result.name,
-        path: result.path,
+        name: processed.path.split("/").pop() ?? processed.name,
+        path: processed.path,
         created_at: new Date().toISOString(),
         size: bytes.length,
       });
-      const reads = await readAllCertificatesFromBytes(bytes, file.name, file.type);
-      if (reads.length > 0) {
-        await applyCertificateReads(supabase, authResult.diverId, reads, file.name);
-      }
-      const pdfCopy = await pdfCopyFromImage(bytes, file.name, file.type);
-      if (pdfCopy) {
-        await upsertDiverCertificateFile(
-          supabase,
-          authResult.diverId,
-          {
-            name: file.name.replace(/\.[a-z0-9]+$/i, ".pdf"),
-            bytes: pdfCopy,
-            contentType: "application/pdf",
-          },
-          existing,
-        );
-      }
-      const primary = reads[0];
-      uploaded.push({
-        name: file.name,
-        action: result.action,
-        path: result.path,
-        issue_date: primary?.issue_date ?? null,
-        expiry_date: primary?.expiry_date ?? null,
-        ticket: primary?.name ?? null,
-        tickets: reads.map((read) => ({
-          name: read.name,
-          issue_date: read.issue_date,
-          expiry_date: read.expiry_date,
-          source: read.source,
-        })),
-        ticketCount: reads.length,
-        source: primary?.source ?? "none",
-      });
+      uploaded.push(processed);
     }
 
     return NextResponse.json({ ok: true, uploaded });

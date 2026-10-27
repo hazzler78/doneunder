@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
-import { uploadCertificateFilesSequentially } from "@/lib/browser-upload";
+import {
+  readApiJson,
+  uploadCertificateFilesSequentially,
+  uploadMainCvDirect,
+} from "@/lib/browser-upload";
+import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { CV_PDF_ONLY_MESSAGE, isWordCvFile } from "@/lib/cv-upload";
 import { cn } from "@/lib/utils";
 import type {
@@ -482,13 +487,19 @@ export function DiverProfileEditor({
     let data: AiProcessResponse | null = null;
     try {
       if (mainCv) {
-        const payload = new FormData();
-        payload.append("mainCv", mainCv);
+        const mainCvStored = await uploadMainCvDirect(mainCv);
         const response = await fetch("/api/diver/profile/process-cv", {
           method: "POST",
-          body: payload,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mainCv: {
+              path: mainCvStored.path,
+              name: mainCvStored.fileName,
+              fileSize: mainCv.size,
+            },
+          }),
         });
-        const parsed = (await response.json().catch(() => ({}))) as AiProcessResponse & { error?: string };
+        const parsed = (await readApiJson(response)) as AiProcessResponse & { error?: string };
         if (!response.ok) {
           setMessage(parsed.error ?? "Failed to process CV.");
           setProcessing(false);
@@ -672,7 +683,7 @@ export function DiverProfileEditor({
             <input
               ref={mainCvInputRef}
               type="file"
-              accept="application/pdf"
+              accept={CV_ACCEPT}
               onChange={(event) => setMainCv(event.target.files?.[0] ?? null)}
               className="hidden"
             />
@@ -695,7 +706,7 @@ export function DiverProfileEditor({
               ref={certInputRef}
               type="file"
               multiple
-              accept="application/pdf,image/jpeg,image/png"
+              accept={CERT_ACCEPT}
               onChange={(event) => onCertFilesSelected(event.target.files)}
               className="hidden"
             />
