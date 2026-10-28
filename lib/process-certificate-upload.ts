@@ -50,7 +50,7 @@ export async function processCertificateFromBytes(
   });
   const reads = await readAllCertificatesFromBytes(input.bytes, input.name, input.contentType);
   if (reads.length > 0) {
-    await applyCertificateReads(supabase, diverId, reads, input.name);
+    await applyCertificateReads(supabase, diverId, reads, input.name, result.path);
   }
   const pdfCopy = await pdfCopyFromImage(input.bytes, input.name, input.contentType);
   if (pdfCopy) {

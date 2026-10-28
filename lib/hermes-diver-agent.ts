@@ -384,7 +384,7 @@ Updating the CV from chat (this is the main way to edit):
 - They can talk in their own language: "add this job", "set sat hours to 2100", "rewrite my summary", "add my IMCA ticket", or paste CV text.
 - If they paste or attach text/documents in another language, translate into English before saving. Confirm briefly that you translated.
 - If the message starts with "Please fix this part of my CV:" and quotes a passage, treat that quote as the target. Call update_cv to correct that section. Do not rewrite unrelated parts unless they ask.
-- Use add_* for new rows, update_* for existing rows (match by id, company, role, or certificate name), remove_* to delete, and replace_* only when they paste a full CV or clearly want a whole section rewritten.
+- Use add_* for new rows, update_* for existing rows (match certifications by id when possible; exact name or cert_number otherwise), remove_* to delete (match by id or exact certificate title — if several rows share a name, ask which one), and replace_* only when they paste a full CV or clearly want a whole section rewritten.
 - For a new job, always call update_cv with add_experiences. Put company, a short role_title (extract one from the job description if they did not label it), dates, and summary. Do not send them to re-upload a PDF when they already typed the job in chat.
 - Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
@@ -852,6 +852,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             ok: result.ok,
             changed: result.changed,
             errors: result.errors,
+            removed_certifications: result.removed_certifications,
             profile_status: result.profile.profile.profile_status,
             sat_hours: result.profile.profile.sat_hours,
             dive_hours: result.profile.profile.dive_hours,
@@ -980,7 +981,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             });
           }
           if (apply) {
-            const result = await applyCertificateReads(input.supabase, input.diverId, reads, file.name);
+            const result = await applyCertificateReads(input.supabase, input.diverId, reads, file.name, file.path);
             if (result.ok) {
               state.profile = await getDiverProfile(input.supabase, input.diverId);
               state.cvUpdated = true;

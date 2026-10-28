@@ -135,7 +135,7 @@ export const diverProfilePatchSchema = diverProfilePayloadSchema
   .refine((value) => Object.keys(value).length > 0, { message: "Patch payload cannot be empty." });
 
 const experienceBodySchema = experienceInputSchema.omit({ id: true, source: true, source_ref: true });
-const certificationBodySchema = certificationInputSchema.omit({ id: true, source: true, source_ref: true });
+const certificationBodySchema = certificationInputSchema.omit({ id: true, source: true });
 const referenceBodySchema = referenceInputSchema.omit({ id: true, source: true, source_ref: true });
 
 export const experienceMatchSchema = z
@@ -152,9 +152,10 @@ export const certificationMatchSchema = z
   .object({
     id: z.string().uuid().optional(),
     name: z.string().min(1).optional(),
+    cert_number: z.string().min(1).optional(),
   })
-  .refine((value) => Boolean(value.id || value.name), {
-    message: "Provide a certification id or name to match.",
+  .refine((value) => Boolean(value.id || value.name || value.cert_number), {
+    message: "Provide a certification id, cert_number, or name to match.",
   });
 
 export const referenceMatchSchema = z
