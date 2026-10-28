@@ -22,8 +22,14 @@ import {
   polishedCvJsonSchema,
 } from "@/lib/diver-profile";
 import { sanitizeParsedCertificationName } from "@/lib/cert-text";
+import {
+  mergeDefinedCertificationPatch,
+  resolveCertificationMatchIndexes,
+  storagePathsFromCertificationSourceRef,
+} from "@/lib/certification-profile-utils";
 import { describeCertificateDates, parseFlexibleDate, resolveCertificateDates } from "@/lib/dates";
 import { deriveProfessionalHeadline } from "@/lib/headline-derive";
+import { removeDiverDocumentPaths } from "@/lib/diver-storage-upload";
 
 type DbClient = SupabaseClient;
 
@@ -832,17 +838,6 @@ function findExperienceIndex(
   });
 }
 
-function findCertificationIndex(
-  items: DiverCertificationInput[],
-  match: { id?: string; name?: string },
-) {
-  if (match.id) {
-    const byId = items.findIndex((item) => item.id === match.id);
-    if (byId >= 0) return byId;
-  }
-  if (!match.name) return -1;
-  return items.findIndex((item) => includesLoose(item.name, match.name!));
-}
 
 function findReferenceIndex(
   items: DiverReferenceInput[],
@@ -865,6 +860,13 @@ function describeMatch(match: Record<string, string | undefined>) {
     .map(([key, value]) => `${key}=${value}`)
     .join(", ");
 }
+
+export {
+  certificationDocumentSourceRef,
+  mergeDefinedCertificationPatch,
+  resolveCertificationMatchIndexes,
+  storagePathsFromCertificationSourceRef,
+} from "@/lib/certification-profile-utils";
 
 function toSaveablePayload(current: DiverProfileFull): DiverProfilePayload {
   return {
@@ -895,6 +897,7 @@ export type ConversationalCvUpdateResult = {
   profile: DiverProfileFull;
   changed: string[];
   errors: string[];
+  removed_certifications?: string[];
 };
 
 /**
@@ -920,6 +923,7 @@ export async function applyConversationalCvUpdate(
   const sourceRef = meta.sourceRef ?? "source: web-chat";
   const changed: string[] = [];
   const errors: string[] = [];
+  const removedCertifications: string[] = [];
 
   const payload = toSaveablePayload(current);
   let experiences: DiverExperienceInput[] = [...payload.experiences];
@@ -993,12 +997,21 @@ export async function applyConversationalCvUpdate(
     if (!changed.includes("experiences")) changed.push("experiences");
   }
   for (const match of update.remove_certifications ?? []) {
-    const index = findCertificationIndex(certifications, match);
-    if (index < 0) {
-      errors.push(`Could not find certification to remove (${describeMatch(match)}).`);
+    const resolved = resolveCertificationMatchIndexes(certifications, match);
+    if (resolved.indexes.length !== 1) {
+      errors.push(
+        resolved.error ?? `Could not find certification to remove (${describeMatch(match)}).`,
+      );
       continue;
     }
+    const index = resolved.indexes[0];
+    const removed = certifications[index];
+    const storagePaths = storagePathsFromCertificationSourceRef(removed.source_ref);
+    removedCertifications.push(removed.name);
     certifications.splice(index, 1);
+    if (storagePaths.length > 0) {
+      await removeDiverDocumentPaths(supabase, storagePaths);
+    }
     if (!changed.includes("certifications")) changed.push("certifications");
   }
   for (const match of update.remove_references ?? []) {
@@ -1026,16 +1039,19 @@ export async function applyConversationalCvUpdate(
     if (!changed.includes("experiences")) changed.push("experiences");
   }
   for (const item of update.update_certifications ?? []) {
-    const index = findCertificationIndex(certifications, item.match);
-    if (index < 0) {
-      errors.push(`Could not find certification to update (${describeMatch(item.match)}).`);
+    const resolved = resolveCertificationMatchIndexes(certifications, item.match);
+    if (resolved.indexes.length !== 1) {
+      errors.push(
+        resolved.error ?? `Could not find certification to update (${describeMatch(item.match)}).`,
+      );
       continue;
     }
-    const nextCert = {
-      ...certifications[index],
-      ...item.patch,
+    const index = resolved.indexes[0];
+    let nextCert = mergeDefinedCertificationPatch(certifications[index], item.patch);
+    nextCert = {
+      ...nextCert,
       source: "ai" as const,
-      source_ref: sourceRef,
+      source_ref: nextCert.source_ref ?? sourceRef,
     };
     if (item.patch.expiry_date !== undefined && item.patch.expiry_confirmed === undefined) {
       nextCert.expiry_confirmed = !sourceRef.includes("cert-read");
@@ -1071,7 +1087,7 @@ export async function applyConversationalCvUpdate(
     const incoming = update.add_certifications.map((item) => ({
       ...item,
       source: "ai" as const,
-      source_ref: sourceRef,
+      source_ref: item.source_ref ?? sourceRef,
       expiry_confirmed: item.expiry_confirmed ?? !sourceRef.includes("cert-read"),
     }));
     certifications = [...certifications, ...incoming];
@@ -1093,6 +1109,9 @@ export async function applyConversationalCvUpdate(
     return { ok: false, profile: current, changed, errors };
   }
 
+  const removedExtras =
+    removedCertifications.length > 0 ? { removed_certifications: removedCertifications } : {};
+
   payload.experiences = experiences;
   payload.certifications = certifications;
   payload.references = references;
@@ -1102,7 +1121,7 @@ export async function applyConversationalCvUpdate(
 
   if (!childSectionChanged) {
     const profile = await patchDiverProfileScalars(supabase, diverId, payload, current);
-    return { ok: true, profile, changed, errors };
+    return { ok: true, profile, changed, errors, ...removedExtras };
   }
 
   payload.polished_cv_json = syncPolishedCvJson(payload);
@@ -1137,11 +1156,11 @@ export async function applyConversationalCvUpdate(
       new Date().toISOString(),
     );
     const profile = await patchDiverProfileScalars(supabase, diverId, payload, current);
-    return { ok: true, profile, changed, errors };
+    return { ok: true, profile, changed, errors, ...removedExtras };
   }
 
   const profile = await saveDiverProfile(supabase, diverId, normalizeProfilePayloadForSave(payload));
-  return { ok: true, profile, changed, errors };
+  return { ok: true, profile, changed, errors, ...removedExtras };
 }
 
 export async function publishDiverProfile(supabase: DbClient, diverId: string) {

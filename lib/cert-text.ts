@@ -5,6 +5,7 @@ import { extractPdfText } from "@/lib/pdf-text";
 import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import { classifyCertificateFile, imageBytesToCertificatePdf } from "@/lib/certificate-pack";
 import { extractCertificateDates, parseFlexibleDate } from "@/lib/dates";
+import { certificationDocumentSourceRef } from "@/lib/certification-profile-utils";
 import { applyConversationalCvUpdate, getDiverProfile } from "@/lib/diver-profile-service";
 import { isAiConfigured } from "@/lib/feature-flags";
 
@@ -539,6 +540,7 @@ export async function applyCertificateRead(
   diverId: string,
   read: CertificateRead,
   fallbackName: string,
+  sourceFilePath?: string,
 ) {
   if (!read.expiry_date && !read.issue_date && !read.name) {
     return { ok: false as const, error: "No certificate fields to save." };
@@ -569,51 +571,61 @@ export async function applyCertificateRead(
   }
 
   const profile = await getDiverProfile(supabase, diverId);
-  let bestName: string | null = null;
+  const fileSourceRef = sourceFilePath ? certificationDocumentSourceRef(sourceFilePath) : undefined;
+  const certsFromSameFile = fileSourceRef
+    ? profile.certifications.filter((cert) => cert.source_ref === fileSourceRef)
+    : profile.certifications;
+
+  let bestCert: (typeof profile.certifications)[number] | null = null;
   let bestScore = 0;
-  for (const cert of profile.certifications) {
+  for (const cert of certsFromSameFile) {
     const score = Math.max(
       scoreCertNameMatch(cert.name, candidateName),
       scoreCertNameMatch(cert.name, rawName),
       inferredName ? scoreCertNameMatch(cert.name, inferredName) : 0,
+      read.cert_number && cert.cert_number && read.cert_number.trim() === cert.cert_number.trim() ? 80 : 0,
     );
     // Prefer filling tickets that still lack expiry when scores are close.
     const preferMissing = !cert.expiry_date ? 5 : 0;
     const total = score + preferMissing;
     if (total > bestScore) {
       bestScore = total;
-      bestName = cert.name;
+      bestCert = cert;
     }
   }
 
-  const patch = {
-    // Keep the known profile title when we matched; avoid renaming to OCR person names.
-    name:
-      bestScore >= 45 && bestName
-        ? looksLikePersonName(bestName) && inferredName
-          ? inferredName
-          : undefined
-        : looksLikePersonName(candidateName)
-          ? inferredName ?? undefined
-          : read.name ?? inferredName ?? undefined,
-    issuing_body,
-    cert_number: read.cert_number ?? undefined,
-    issue_date: issue_date ?? undefined,
-    expiry_date: expiry_date ?? undefined,
-    ...(expiry_date ? { expiry_confirmed: false as const } : {}),
-  };
+  const patchFields: Partial<{
+    name: string;
+    issuing_body: string;
+    cert_number: string;
+    issue_date: string;
+    expiry_date: string;
+    expiry_confirmed: boolean;
+    source_ref: string;
+  }> = {};
 
-  if (bestScore >= 45 && bestName) {
+  if (issuing_body) patchFields.issuing_body = issuing_body;
+  if (read.cert_number?.trim()) patchFields.cert_number = read.cert_number.trim();
+  if (issue_date) patchFields.issue_date = issue_date;
+  if (expiry_date) {
+    patchFields.expiry_date = expiry_date;
+    patchFields.expiry_confirmed = false;
+  }
+  if (fileSourceRef) patchFields.source_ref = fileSourceRef;
+
+  if (bestScore >= 45 && bestCert) {
     const updated = await applyConversationalCvUpdate(
       supabase,
       diverId,
-      { update_certifications: [{ match: { name: bestName }, patch }] },
+      { update_certifications: [{ match: { id: bestCert.id! }, patch: patchFields }] },
       { sourceRef: "source: cert-read" },
     );
-    if (updated.ok) return { ok: true as const, mode: "updated" as const, read, matched: bestName };
+    if (updated.ok) {
+      return { ok: true as const, mode: "updated" as const, read, matched: bestCert.name };
+    }
     return {
       ok: false as const,
-      error: updated.errors.join("; ") || `Could not update "${bestName}".`,
+      error: updated.errors.join("; ") || `Could not update "${bestCert.name}".`,
       read,
     };
   }
@@ -638,10 +650,11 @@ export async function applyCertificateRead(
         {
           name: candidateName,
           issuing_body,
-          cert_number: read.cert_number ?? undefined,
+          cert_number: read.cert_number?.trim() || undefined,
           issue_date: issue_date ?? undefined,
           expiry_date: expiry_date ?? undefined,
           ...(expiry_date ? { expiry_confirmed: false as const } : {}),
+          ...(fileSourceRef ? { source_ref: fileSourceRef } : {}),
         },
       ],
     },
@@ -660,10 +673,11 @@ export async function applyCertificateReads(
   diverId: string,
   reads: CertificateRead[],
   fallbackName: string,
+  sourceFilePath?: string,
 ) {
   const results = [];
   for (const read of reads) {
-    results.push(await applyCertificateRead(supabase, diverId, read, fallbackName));
+    results.push(await applyCertificateRead(supabase, diverId, read, fallbackName, sourceFilePath));
   }
   return {
     ok: results.some((item) => item.ok),
