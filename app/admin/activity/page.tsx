@@ -21,6 +21,9 @@ type ActivityRow = {
   reveals_30d: number;
   reveals_24h: number;
   last_reveal: string | null;
+  subscription_current_period_end: string | null;
+  open_one_time_searches: number | null;
+  one_time_purchases_30d: number | null;
 };
 
 type RevealRow = {
@@ -45,7 +48,9 @@ export default async function AdminActivityPage() {
   const [{ data: activity }, { data: reveals }] = await Promise.all([
     supabase
       .from("admin_company_activity")
-      .select("user_id,company_name,plan,subscription_status,searches_30d,reveals_30d,reveals_24h,last_reveal")
+      .select(
+        "user_id,company_name,plan,subscription_status,searches_30d,reveals_30d,reveals_24h,last_reveal,subscription_current_period_end,open_one_time_searches,one_time_purchases_30d",
+      )
       .order("reveals_30d", { ascending: false })
       .returns<ActivityRow[]>(),
     supabase
@@ -75,6 +80,8 @@ export default async function AdminActivityPage() {
               <th className="py-2">Company</th>
               <th>Plan</th>
               <th>Status</th>
+              <th>Renews</th>
+              <th>One-time open / bought 30d</th>
               <th>Searches</th>
               <th>Reveals</th>
               <th>Reveals 24h</th>
@@ -87,6 +94,14 @@ export default async function AdminActivityPage() {
                 <td className="py-2">{row.company_name ?? row.user_id}</td>
                 <td>{row.plan ?? "–"}</td>
                 <td>{row.subscription_status ?? "–"}</td>
+                <td>
+                  {row.subscription_current_period_end
+                    ? new Date(row.subscription_current_period_end).toLocaleDateString("en-GB")
+                    : "–"}
+                </td>
+                <td>
+                  {row.open_one_time_searches ?? 0} / {row.one_time_purchases_30d ?? 0}
+                </td>
                 <td>{row.searches_30d}</td>
                 <td>{row.reveals_30d}</td>
                 <td className={row.reveals_24h >= REVEALS_PER_DAY_FLAG ? "font-bold text-destructive" : undefined}>

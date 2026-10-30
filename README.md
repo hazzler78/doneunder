@@ -43,7 +43,8 @@ copy .env.example .env.local
 - `XAI_MODEL` (example: `grok-3-mini`)
 - `STRIPE_SECRET_KEY` (optional, required to enable billing)
 - `STRIPE_WEBHOOK_SECRET` (optional, required to enable billing)
-- `STRIPE_PRICE_149`, `STRIPE_PRICE_199`, `STRIPE_PRICE_249` (optional, required to enable billing)
+- `STRIPE_PRICE_ONE_TIME` (USD 190 one-time search) and `STRIPE_PRICE_MONTHLY` (USD 250/month Unlimited) (optional, required to enable billing; see `docs/billing.md`)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (optional, only for Stripe.js)
 - `HERMES_AGENT_SECRET` (optional, required for Telegram/Hermes agent API routes)
 
 Hermes agent integration guide: `docs/hermes-diver-profile.md`
