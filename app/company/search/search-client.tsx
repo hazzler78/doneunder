@@ -69,7 +69,16 @@ export function CompanySearch() {
         </div>
       </form>
 
-      {state && !state.ok ? <p className="text-sm text-destructive">{state.error}</p> : null}
+      {state && !state.ok ? (
+        <p className="text-sm text-destructive">
+          {state.error}{" "}
+          {state.error.includes("USD") ? (
+            <Link href="/pricing" className="text-primary underline">
+              Go to pricing
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
 
       {result ? (
         result.teasers.length === 0 ? (
@@ -77,8 +86,8 @@ export function CompanySearch() {
         ) : (
           <section className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Up to 10 anonymous matches. You can reveal <strong>one</strong> diver per search; the search expires
-              after 30 minutes. Run a new search for the next match.
+              Up to 10 anonymous matches. You can reveal <strong>one</strong> diver per search. On Unlimited the search
+              expires after 30 minutes; a one-time search stays open until its 30 days run out.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {result.teasers.map(({ slot, teaser }) => (
