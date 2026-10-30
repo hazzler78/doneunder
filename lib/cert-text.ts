@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractPdfText } from "@/lib/pdf-text";
 import { aiModel, ENGLISH_ONLY_INSTRUCTION } from "@/lib/ai";
 import { classifyCertificateFile, imageBytesToCertificatePdf } from "@/lib/certificate-pack";
+import { logAgentInteraction } from "@/lib/audit";
 import { extractCertificateDates, parseFlexibleDate } from "@/lib/dates";
 import { certificationDocumentSourceRef } from "@/lib/certification-profile-utils";
 import { applyConversationalCvUpdate, getDiverProfile } from "@/lib/diver-profile-service";
@@ -22,6 +23,52 @@ export type CertificateRead = {
 
 const MAX_MULTI_CERTS = 20;
 const MAX_VISION_PAGES = 8;
+const MIN_VISION_MAX_EDGE = 1200;
+
+export type CertificateReadContext = {
+  actorId?: string;
+  filename?: string;
+};
+
+export function certificateReadsFromVisionResult(read: CertificateRead): CertificateRead[] {
+  return read.unreadable && !read.name && !read.expiry_date && !read.issue_date ? [] : [read];
+}
+
+/** Auto-rotate (EXIF), normalize contrast, and upscale small photos before vision. */
+export async function prepareCertificateImageForVision(
+  bytes: Buffer,
+  mediaType: "image/jpeg" | "image/png",
+): Promise<{ bytes: Buffer; mediaType: "image/jpeg" | "image/png" }> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const base = sharp(bytes, { failOn: "none" }).rotate();
+    const meta = await base.clone().metadata();
+    const width = meta.width ?? 0;
+    const height = meta.height ?? 0;
+    const maxEdge = Math.max(width, height);
+    let pipeline = base.normalize();
+    if (maxEdge > 0 && maxEdge < MIN_VISION_MAX_EDGE) {
+      const scale = MIN_VISION_MAX_EDGE / maxEdge;
+      pipeline = pipeline.resize(Math.round(width * scale), Math.round(height * scale), {
+        fit: "inside",
+        withoutEnlargement: false,
+      });
+    }
+    if (mediaType === "image/png") {
+      return { bytes: await pipeline.png().toBuffer(), mediaType: "image/png" };
+    }
+    return {
+      bytes: await pipeline.jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
+      mediaType: "image/jpeg",
+    };
+  } catch (error) {
+    console.error(
+      "Certificate image preprocess failed:",
+      error instanceof Error ? error.message : error,
+    );
+    return { bytes, mediaType };
+  }
+}
 
 const visionSchema = z.object({
   name: z.string().nullable(),
@@ -180,7 +227,7 @@ export async function extractDatesFromPdfBuffer(bytes: Buffer) {
   };
 }
 
-async function readPdfTextSingle(bytes: Buffer): Promise<CertificateRead> {
+async function readPdfTextSingle(bytes: Buffer, context?: CertificateReadContext): Promise<CertificateRead> {
   try {
     const text = await extractPdfText(bytes);
     const dates = extractCertificateDates(text);
@@ -204,13 +251,13 @@ async function readPdfTextSingle(bytes: Buffer): Promise<CertificateRead> {
     const first = pages[0];
     if (!first) return emptyRead();
     const mediaType = first.length >= 2 && first[0] === 0xff && first[1] === 0xd8 ? "image/jpeg" : "image/png";
-    return readImageWithVision(first, mediaType);
+    return readImageWithVision(first, mediaType, context);
   } catch {
     return emptyRead();
   }
 }
 
-async function readAllFromPdf(bytes: Buffer): Promise<CertificateRead[]> {
+async function readAllFromPdf(bytes: Buffer, context?: CertificateReadContext): Promise<CertificateRead[]> {
   let text = "";
   try {
     text = await extractPdfText(bytes);
@@ -232,49 +279,124 @@ async function readAllFromPdf(bytes: Buffer): Promise<CertificateRead[]> {
     // Fall through to legacy single-cert path.
   }
 
-  const single = await readPdfTextSingle(bytes);
-  return single.unreadable && !single.name && !single.expiry_date && !single.issue_date ? [] : [single];
+  const single = await readPdfTextSingle(bytes, context);
+  return certificateReadsFromVisionResult(single);
 }
 
-async function readImageWithVision(bytes: Buffer, mediaType: "image/jpeg" | "image/png"): Promise<CertificateRead> {
+async function runCertificateVisionObject(
+  bytes: Buffer,
+  mediaType: "image/jpeg" | "image/png",
+) {
+  return generateObject({
+    model: aiModel,
+    schema: visionSchema,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              `${ENGLISH_ONLY_INSTRUCTION}\n` +
+              "This is a photo of a commercial diving certificate or medical. " +
+              "The document may be in any language. Read it carefully and translate field values into English where needed, " +
+              "but keep official certificate titles and proper names as printed when that is clearer. " +
+              "Extract only what is clearly printed. Do not guess. " +
+              "Dates are usually day/month/year (European). Return issue_date and expiry_date as YYYY-MM-DD. " +
+              "If a field is blurry or missing, use null and set unreadable true if you cannot read the document.",
+          },
+          { type: "image", image: bytes, mediaType },
+        ],
+      },
+    ],
+  });
+}
+
+async function readImageWithVision(
+  bytes: Buffer,
+  mediaType: "image/jpeg" | "image/png",
+  context?: CertificateReadContext,
+): Promise<CertificateRead> {
   if (!isAiConfigured()) return emptyRead();
-  try {
-    const { object } = await generateObject({
-      model: aiModel,
-      schema: visionSchema,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text:
-                `${ENGLISH_ONLY_INSTRUCTION}\n` +
-                "This is a photo of a commercial diving certificate or medical. " +
-                "The document may be in any language. Read it carefully and translate field values into English where needed, " +
-                "but keep official certificate titles and proper names as printed when that is clearer. " +
-                "Extract only what is clearly printed. Do not guess. " +
-                "Dates are usually day/month/year (European). Return issue_date and expiry_date as YYYY-MM-DD. " +
-                "If a field is blurry or missing, use null and set unreadable true if you cannot read the document.",
-            },
-            { type: "image", image: bytes, mediaType },
-          ],
-        },
-      ],
-    });
-    return normalizeRead({
-      name: object.name,
-      issuing_body: object.issuing_body,
-      cert_number: object.cert_number,
-      issue_date: object.issue_date,
-      expiry_date: object.expiry_date,
-      excerpt: object.visible_text,
-      source: "vision",
-      unreadable: object.unreadable,
-    });
-  } catch {
-    return emptyRead();
+  const prepared = await prepareCertificateImageForVision(bytes, mediaType);
+  const label = context?.filename ? ` (${context.filename})` : "";
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { object } = await runCertificateVisionObject(prepared.bytes, prepared.mediaType);
+      const read = normalizeRead({
+        name: object.name,
+        issuing_body: object.issuing_body,
+        cert_number: object.cert_number,
+        issue_date: object.issue_date,
+        expiry_date: object.expiry_date,
+        excerpt: object.visible_text,
+        source: "vision",
+        unreadable: object.unreadable,
+      });
+      if (read.unreadable && !read.name && !read.expiry_date && !read.issue_date) {
+        console.error(
+          `Certificate vision marked unreadable${label}:`,
+          read.excerpt.slice(0, 160) || "(no visible text returned)",
+        );
+      }
+      return read;
+    } catch (error) {
+      console.error(
+        `Certificate vision read failed${label}${attempt === 0 ? ", retrying once" : ""}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
+
+  return emptyRead();
+}
+
+async function readAllFromImageBytes(
+  bytes: Buffer,
+  filename: string,
+  kind: "jpg" | "png",
+  context?: CertificateReadContext,
+): Promise<CertificateRead[]> {
+  const mediaType = kind === "png" ? "image/png" : "image/jpeg";
+  let reads = certificateReadsFromVisionResult(await readImageWithVision(bytes, mediaType, context));
+  if (reads.length > 0) return reads;
+
+  let pdfFallbackTried = false;
+  try {
+    pdfFallbackTried = true;
+    const pdfBytes = await imageBytesToCertificatePdf(bytes, kind);
+    reads = await readAllFromPdf(pdfBytes, context);
+    if (reads.length > 0) {
+      console.error(
+        `Certificate vision read empty for ${filename}; PDF fallback extracted ${reads.length} ticket(s).`,
+      );
+      return reads;
+    }
+  } catch (error) {
+    console.error(
+      `Certificate PDF fallback read failed for ${filename}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  if (context?.actorId) {
+    await logAgentInteraction({
+      actorId: context.actorId,
+      feature: "cert_vision_zero_read",
+      input: {
+        filename,
+        bytes: bytes.length,
+        pdfFallbackTried,
+      },
+      output: {
+        ticketCount: 0,
+        source: "vision",
+      },
+    });
+  }
+
+  return [];
 }
 
 /** Read every distinct certificate from a PDF/JPG/PNG (multi-ticket packs supported). */
@@ -282,14 +404,15 @@ export async function readAllCertificatesFromBytes(
   bytes: Buffer,
   filename: string,
   contentType?: string,
+  context?: CertificateReadContext,
 ): Promise<CertificateRead[]> {
+  const readContext = { ...context, filename: context?.filename ?? filename };
   const kind = classifyCertificateFile(filename, contentType);
   if (kind === "pdf") {
-    return readAllFromPdf(bytes);
+    return readAllFromPdf(bytes, readContext);
   }
   if (kind === "jpg" || kind === "png") {
-    const read = await readImageWithVision(bytes, kind === "png" ? "image/png" : "image/jpeg");
-    return read.unreadable && !read.name && !read.expiry_date && !read.issue_date ? [] : [read];
+    return readAllFromImageBytes(bytes, filename, kind, readContext);
   }
   if (kind === "doc" || kind === "docx") {
     try {

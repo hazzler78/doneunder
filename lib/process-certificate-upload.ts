@@ -48,7 +48,10 @@ export async function processCertificateFromBytes(
     created_at: new Date().toISOString(),
     size: input.bytes.length,
   });
-  const reads = await readAllCertificatesFromBytes(input.bytes, input.name, input.contentType);
+  const reads = await readAllCertificatesFromBytes(input.bytes, input.name, input.contentType, {
+    actorId: diverId,
+    filename: input.name,
+  });
   if (reads.length > 0) {
     await applyCertificateReads(supabase, diverId, reads, input.name, result.path);
   }
