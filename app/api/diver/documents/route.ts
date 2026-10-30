@@ -9,6 +9,7 @@ import {
 } from "@/lib/diver-documents";
 import { processCertificateFromBytes } from "@/lib/process-certificate-upload";
 import { displayCertificateName } from "@/lib/document-names";
+import { buildCertificateUploadAssistantReply } from "@/lib/certificate-upload-reply";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -83,31 +84,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Nothing to complete." }, { status: 400 });
       }
       const files = body.files ?? [];
-      const added = files.filter((item) => item.action === "added").map((item) => item.name);
-      const renewed = files.filter((item) => item.action === "renewed").map((item) => item.name);
-      const duplicates = files.filter((item) => item.action === "duplicate").map((item) => item.name);
-      const dated = files.flatMap((item) => {
-        const tickets = Array.isArray(item.tickets) ? item.tickets : null;
-        if (tickets && tickets.length > 0) {
-          return tickets.map((ticket) => {
-            const label = ticket.name || item.ticket || item.name;
-            return ticket.expiry_date ? `${label} (exp ${ticket.expiry_date})` : label;
-          });
-        }
-        if (item.ticket || item.expiry_date) {
-          const label = item.ticket || item.name;
-          return [item.expiry_date ? `${label} (exp ${item.expiry_date})` : label];
-        }
-        return [] as string[];
-      });
-      const parts = [
-        added.length ? `New file(s): ${added.join(", ")}.` : "",
-        renewed.length ? `Renewed: ${renewed.join(", ")}.` : "",
-        duplicates.length ? `Already on file: ${duplicates.join(", ")}.` : "",
-        dated.length
-          ? `Read ${dated.length} ticket(s) from the upload: ${dated.join("; ")}.`
-          : "",
-      ].filter(Boolean);
+      const reply = buildCertificateUploadAssistantReply(files);
       const thread =
         (await getAgentThread(supabase, "web", authResult.diverId)) ??
         (await upsertWorkspaceThread(supabase, {
@@ -119,12 +96,13 @@ export async function POST(req: Request) {
       await appendAgentTurn(supabase, {
         threadId: thread.id,
         userContent: `Please store these certificate files: ${files.map((item) => item.name).join(", ") || "batch"}`,
-        assistantContent:
-          `${parts.join(" ") || `Stored ${files.length} certificate file(s).`} ` +
-          "One PDF can contain many tickets — Hermes reads each one. " +
-          "Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. " +
-          "If an expiry is missing, type the date. Then say match me to open campaigns.",
-        metadata: { source: "documents-upload", count: files.length, ticketsRead: dated.length },
+        assistantContent: reply.content,
+        metadata: {
+          source: "documents-upload",
+          count: files.length,
+          ticketsRead: reply.ticketsRead,
+          zeroReadFiles: reply.zeroReadFilenames,
+        },
       });
       return NextResponse.json({ ok: true });
     }
