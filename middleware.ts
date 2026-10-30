@@ -64,6 +64,6 @@ export const config = {
      * Match page navigations and cookie-auth APIs. Skip static assets, image
      * optimization, and bearer/webhook/cron APIs that do not need a session refresh.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/resend|api/agent|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/resend|api/agent|api/stripe/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

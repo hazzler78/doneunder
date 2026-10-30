@@ -1,10 +1,9 @@
 export function isStripeConfigured() {
   return Boolean(
-    process.env.STRIPE_SECRET_KEY &&
-      process.env.STRIPE_WEBHOOK_SECRET &&
-      process.env.STRIPE_PRICE_149 &&
-      process.env.STRIPE_PRICE_199 &&
-      process.env.STRIPE_PRICE_249,
+    process.env.STRIPE_SECRET_KEY?.trim() &&
+      process.env.STRIPE_WEBHOOK_SECRET?.trim() &&
+      process.env.STRIPE_PRICE_ONE_TIME?.trim() &&
+      process.env.STRIPE_PRICE_MONTHLY?.trim(),
   );
 }
 

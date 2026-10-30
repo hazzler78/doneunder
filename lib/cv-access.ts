@@ -12,6 +12,7 @@ export type ResolveFullCvAccessOptions = {
 /**
  * Who may see the full living CV (experiences, cert numbers, references).
  * Public ambassador cards stay free; full pack is owner / admin / paying company
+ * (Unlimited subscription, or a one-time search valid 30 days from payment)
  * that has revealed this diver through Search & Match (reveal_match RPC).
  * Employers may also open a time-limited share link from a Hermes application email.
  * Companies never see reference contact details (see `showsReferences`).
@@ -42,13 +43,11 @@ export async function resolveFullCvAccess(
   if (actor.role === "admin") return { allowed: true, reason: "admin" };
 
   if (actor.role === "company") {
-    const { data: company } = await supabase
-      .from("companies")
-      .select("subscription_status")
-      .eq("user_id", actor.id)
-      .maybeSingle();
-    const status = company?.subscription_status?.trim().toLowerCase() || "inactive";
-    if (status !== "active") return { allowed: false, reason: "company_inactive" };
+    // Access = revealed this diver AND (active subscription OR the reveal came from a one-time search
+    // whose 30-day entitlement is still valid). Decided in SQL (migration 022) so it matches search_divers.
+    const { data: hasAccess, error } = await supabase.rpc("company_has_cv_access", { p_diver: diverUserId });
+    if (!error && hasAccess === true) return { allowed: true, reason: "active_company" };
+
     const { data: reveal } = await supabase
       .from("match_reveals")
       .select("id")
@@ -56,8 +55,8 @@ export async function resolveFullCvAccess(
       .eq("diver_id", diverUserId)
       .limit(1)
       .maybeSingle();
-    if (reveal) return { allowed: true, reason: "active_company" };
-    return { allowed: false, reason: "company_not_revealed" };
+    if (!reveal) return { allowed: false, reason: "company_not_revealed" };
+    return { allowed: false, reason: "company_inactive" };
   }
 
   if (actor.role === "diver") return { allowed: false, reason: "diver_other" };

@@ -91,10 +91,11 @@ export function parseSearchRows(rows: unknown): SearchResult {
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_authenticated: "Sign in with your company account to search.",
-  company_subscription_required: "Search & Match needs an active company subscription.",
+  company_subscription_required:
+    "Search & Match needs Unlimited (USD 250/month) or a one-time search (USD 190). See Pricing.",
   rate_limited: "Search limit reached (20 per hour, 100 per day). Try again later.",
   search_not_found: "That search was not found. Run a new search.",
-  search_expired: "This search expired after 30 minutes. Run a new search.",
+  search_expired: "This search has expired. Run a new search.",
   already_revealed: "You already revealed a diver from this search. Run a new search for the next match.",
   invalid_slot: "Pick one of the listed matches.",
 };
