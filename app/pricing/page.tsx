@@ -18,10 +18,11 @@ const NOTICES: Record<string, { tone: "info" | "error"; text: string }> = {
 };
 
 const REASONS: Record<string, string> = {
-  not_company: "Checkout needs a company account. Email us and we will set one up.",
-  no_company_row: "Checkout needs a company account. Email us and we will set one up.",
+  not_company: "Create a company account to buy Search & Match, then return to checkout.",
+  no_company_row: "Create a company account to buy Search & Match, then return to checkout.",
   already_subscribed: "You already have Unlimited. Manage it from Search & Match → Manage billing.",
   unavailable: "Online payment is not switched on yet. Email us to get access.",
+  checkout_failed: "We could not start checkout. Try again, or email us.",
 };
 
 type Plan = {
@@ -133,7 +134,7 @@ export default async function PricingPage({
 
       <div className="mx-auto mt-8 max-w-2xl space-y-2 text-center text-sm text-muted-foreground">
         <p>
-          You need a company account to buy. No account yet?{" "}
+          No company account yet? Choosing a plan opens signup, then Stripe checkout. Need help?{" "}
           <a href={CONTACT_MAILTO} className="text-primary hover:underline">
             Email {CONTACT_EMAIL}
           </a>

@@ -99,6 +99,15 @@ export function withInboundReplyFooter(body: string, replyTo: string) {
 }
 
 /**
+ * Platform From must be exactly hello@doneunder.ai (display name allowed).
+ * Prevents silent fallback to Resend onboarding addresses or personal Gmail.
+ */
+export function assertPlatformFromAddress(fromHeader: string): string | null {
+  const address = parseEmailAddress(fromHeader);
+  return address === CONTACT_EMAIL ? address : null;
+}
+
+/**
  * Resolve the From header so mail appears to come from the logged-in person.
  *
  * - If the user's email domain matches RESEND_FROM_DOMAIN (or the domain of
@@ -115,8 +124,11 @@ export function resolveSenderIdentity(
 ) {
   const accountEmail = stripQuotes(userEmail).toLowerCase();
   const displayName = userDisplayName.trim() || accountEmail.split("@")[0] || "doneunder user";
-  const platformFrom = stripQuotes(process.env.RESEND_FROM_EMAIL || "Hermes <onboarding@resend.dev>");
-  const platformAddress = parseEmailAddress(platformFrom);
+  // Never fall back to Resend's onboarding mailbox or personal Gmail — platform From is hello@.
+  const platformFrom = stripQuotes(
+    process.env.RESEND_FROM_EMAIL || `Hermes <${CONTACT_EMAIL}>`,
+  );
+  const platformAddress = assertPlatformFromAddress(platformFrom) ?? CONTACT_EMAIL;
   const allowedDomain =
     stripQuotes(process.env.RESEND_FROM_DOMAIN || "").toLowerCase() || emailDomain(platformAddress);
 
@@ -163,6 +175,10 @@ export async function sendEmailAsLoggedInUser(
     input.username,
     input.userId,
   );
+  // Relay From must be hello@doneunder.ai — never a personal Gmail From header.
+  if (identity.mode === "relay" && !assertPlatformFromAddress(identity.from)) {
+    return { ok: false, error: "platform_from_mismatch" };
+  }
   const replyTo = stripQuotes(input.replyTo || "").includes("@")
     ? stripQuotes(input.replyTo || "").toLowerCase()
     : identity.replyTo;
@@ -201,7 +217,8 @@ export async function sendEmailAsLoggedInUser(
 
 /**
  * Mail from the platform mailbox (Hermes <hello@doneunder.ai>), not as the diver.
- * Used for certificate reminders. Does not add an inbound footer.
+ * Used for certificate reminders and ops replies. Does not add an inbound footer.
+ * Refuses to send if RESEND_FROM_EMAIL is not hello@doneunder.ai.
  */
 export async function sendPlatformEmail(input: {
   to: string;
@@ -216,6 +233,9 @@ export async function sendPlatformEmail(input: {
   const from = stripQuotes(process.env.RESEND_FROM_EMAIL || "");
   if (!to.includes("@") || !subject || !body || !from) {
     return { ok: false, error: "email_not_configured" };
+  }
+  if (!assertPlatformFromAddress(from)) {
+    return { ok: false, error: "platform_from_mismatch" };
   }
 
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));

@@ -10,6 +10,7 @@
     "seed:gareth": "node --env-file=.env.local scripts/seed-gareth-from-zip.mjs",
     "bootstrap:gareth-auth": "node --env-file=.env.local scripts/bootstrap-gareth-auth.mjs",
     "bootstrap:auth": "node --env-file=.env.local scripts/bootstrap-auth-user.mjs",
+    "send:hello": "node --env-file=.env.local scripts/send-hello-email.mjs",
     "test": "tsx --test tests/**/*.test.ts",
     "probe:join": "node scripts/probe-join-flow.mjs"
   },

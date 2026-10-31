@@ -9,6 +9,11 @@ import {
   parseBillingStatus,
   priceIdFor,
 } from "../lib/billing";
+import {
+  companyRegisterPath,
+  normalizeCompanyName,
+  productFromSearchParam,
+} from "../lib/company-register";
 
 describe("billing", () => {
   it("parses products and aliases", () => {
@@ -57,5 +62,14 @@ describe("billing", () => {
     assert.equal(s.subscription_active, true);
     assert.equal(s.open_one_time_searches, 2);
     assert.equal(s.current_period_end, null);
+  });
+
+  it("builds company register paths from the chosen product", () => {
+    assert.equal(productFromSearchParam("one_time"), "one_time");
+    assert.equal(productFromSearchParam("monthly"), "monthly");
+    assert.equal(productFromSearchParam("nope"), null);
+    assert.equal(companyRegisterPath("one_time"), "/register/company?product=one_time");
+    assert.equal(companyRegisterPath(null), "/register/company");
+    assert.equal(normalizeCompanyName("  Acme   Diving  "), "Acme Diving");
   });
 });

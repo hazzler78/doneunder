@@ -14,8 +14,10 @@ Subscriptions are managed in the Stripe Customer Portal (`POST /api/stripe/porta
 
 ## Flow
 
-1. `/pricing` posts `product=one_time|monthly` to `POST /api/stripe/checkout` (signed-in company only).
-2. The route reuses or creates the Stripe Customer (`companies.stripe_customer_id`) and redirects (303) to Checkout.
+1. `/pricing` posts `product=one_time|monthly` to `POST /api/stripe/checkout`.
+   - Signed-in company → Checkout.
+   - No company account → `/register/company?product=…` (company name, contact, work email, password). That creates `users.role=company` + inactive `companies` row, signs in, then opens Checkout for the same product.
+2. Checkout reuses or creates the Stripe Customer (`companies.stripe_customer_id`) and redirects (303) to Stripe.
 3. Stripe calls `POST https://doneunder.ai/api/stripe/webhook` (custom domain; Vercel SSO blocks preview URLs).
 4. The webhook verifies the signature, logs the event id in `stripe_events` (idempotency) and:
    - `checkout.session.completed` / `checkout.session.async_payment_succeeded`: payment → insert entitlement (unique per session); subscription → sync.

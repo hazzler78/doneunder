@@ -1,0 +1,20 @@
+---
+description: All DoneUnder outbound mail must leave from hello@doneunder.ai — never personal Gmail
+alwaysApply: true
+---
+
+# Outbound email = hello@doneunder.ai only
+
+## Root cause (do not repeat)
+
+Cursor’s **Gmail MCP** (`plugin-gmail-gmail` / `send_message`) sends as the **authenticated personal Gmail** (e.g. `hazzler@gmail.com`). It has **no From override**. Using it for DoneUnder replies makes mail leave from the personal account even when the body says hello@.
+
+## Rules
+
+1. **Read** `hello@doneunder.ai` via Gmail MCP if that mailbox is linked for inbox search — OK.
+2. **Never send** DoneUnder customer/diver/company mail with Gmail MCP `send_message`, `create_draft`+send, or any personal Gmail SMTP.
+3. **Send** only through Resend with `RESEND_FROM_EMAIL` resolving to `hello@doneunder.ai`:
+   - App: `sendPlatformEmail` in `lib/email.ts` (hard-fails if From is not hello@).
+   - CLI: `node --env-file=.env.local scripts/send-hello-email.mjs --to … --subject … --body …`
+4. If Resend / `hello@` is unavailable, **stop and report** — do not fall back to personal Gmail.
+5. Do not put API keys in commits or chat.

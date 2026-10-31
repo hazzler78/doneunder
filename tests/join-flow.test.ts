@@ -6,6 +6,7 @@ import { sessionCookieOptions } from "../lib/supabase/route-handler";
 import { diverFieldsFromAuthUser, ensureDiverProfileRow } from "../lib/diver-bootstrap";
 import { upsertWorkspaceThread } from "../lib/agent-threads";
 import {
+  assertPlatformFromAddress,
   contractorReplyToAddress,
   inboundReplyToAddress,
   resolveSenderIdentity,
@@ -314,6 +315,13 @@ describe("outbound email identity", () => {
     process.env.RESEND_FROM_EMAIL = previous.RESEND_FROM_EMAIL;
     process.env.RESEND_FROM_DOMAIN = previous.RESEND_FROM_DOMAIN;
     process.env.RESEND_INBOUND_DOMAIN = previous.RESEND_INBOUND_DOMAIN;
+  });
+
+  it("accepts only hello@doneunder.ai as the platform From address", () => {
+    assert.equal(assertPlatformFromAddress("doneunder.ai <hello@doneunder.ai>"), "hello@doneunder.ai");
+    assert.equal(assertPlatformFromAddress("Hermes <hello@doneunder.ai>"), "hello@doneunder.ai");
+    assert.equal(assertPlatformFromAddress("hazzler@gmail.com"), null);
+    assert.equal(assertPlatformFromAddress("Hermes <onboarding@resend.dev>"), null);
   });
 
   it("relays Gmail divers through doneunder and keeps Hermes Reply-To", () => {

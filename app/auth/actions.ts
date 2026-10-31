@@ -5,11 +5,20 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { passwordResetEligibilityForEmail } from "@/lib/auth-identities";
 import { safeInternalPath } from "@/lib/auth-paths";
+import { parseBillingProduct } from "@/lib/billing";
+import {
+  companyRegisterPath,
+  normalizeCompanyName,
+  normalizeContactName,
+} from "@/lib/company-register";
 import { SITE_URL } from "@/lib/site";
+import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AnalyticsEvent } from "@/lib/analytics-events";
+import { createCompanyCheckoutUrl } from "@/lib/stripe-checkout";
 import { trackAnalyticsEventServer } from "@/lib/track-analytics-server";
 import { claimPreferredUsername, isValidPublicUsername, normalizeUsername } from "@/lib/usernames";
+import { isStripeConfigured } from "@/lib/feature-flags";
 
 function withMessage(path: string, message: string) {
   const query = new URLSearchParams({ message }).toString();
@@ -185,6 +194,125 @@ export async function registerAction(formData: FormData) {
   await trackAnalyticsEventServer(AnalyticsEvent.DiverSignup, { signup_method: "email" });
 
   redirect(safeInternalPath(String(formData.get("next") ?? "/workspace")));
+}
+
+/**
+ * Company self-registration: create auth user + users.role=company + inactive companies row,
+ * sign in, then continue into Stripe Checkout for the chosen plan (one_time | monthly).
+ * Does not change diver /register.
+ */
+export async function registerCompanyAction(formData: FormData) {
+  const companyName = normalizeCompanyName(String(formData.get("companyName") ?? ""));
+  const contactName = normalizeContactName(String(formData.get("contactName") ?? ""));
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const product = parseBillingProduct(formData.get("product"));
+  const registerPath = companyRegisterPath(product);
+
+  const fail = (message: string) => redirect(withMessage(registerPath, message));
+
+  if (!companyName || !contactName || !email || !password) {
+    return fail("Company name, contact name, work email, and password are required.");
+  }
+  if (!email.includes("@")) {
+    return fail("Enter a valid work email.");
+  }
+  if (password.length < 8) {
+    return fail("Password must be at least 8 characters.");
+  }
+  if (!product) {
+    return fail("Choose a plan on the pricing page, then create your company account.");
+  }
+  if (!isStripeConfigured()) {
+    return fail("Online payment is not available yet. Email hello@doneunder.ai for access.");
+  }
+
+  let admin;
+  try {
+    admin = createServiceSupabaseClient();
+  } catch {
+    return fail("Registration is temporarily unavailable. Please try again later.");
+  }
+
+  const { data: existingUser } = await admin.from("users").select("id, role").eq("email", email).maybeSingle();
+  if (existingUser) {
+    if (existingUser.role === "company") {
+      return fail("That email already has a company account. Sign in, then buy from Pricing.");
+    }
+    return fail("That email is already registered. Use a work email, or sign in if you already have access.");
+  }
+
+  const created = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: contactName,
+      company_name: companyName,
+      account_type: "company",
+    },
+  });
+  if (created.error || !created.data.user?.id) {
+    const msg = created.error?.message ?? "Registration failed. Please try again.";
+    if (/already|registered|exists/i.test(msg)) {
+      return fail("That email is already registered. Sign in, or use another work email.");
+    }
+    return fail(msg);
+  }
+
+  const userId = created.data.user.id;
+
+  const { error: userInsertError } = await admin.from("users").upsert(
+    {
+      id: userId,
+      role: "company",
+      email,
+      username: null,
+      full_name: contactName,
+    },
+    { onConflict: "id" },
+  );
+  if (userInsertError) {
+    return fail(userInsertError.message);
+  }
+
+  const { error: companyInsertError } = await admin.from("companies").upsert(
+    {
+      user_id: userId,
+      company_name: companyName,
+      subscription_status: "inactive",
+      plan: product === "monthly" ? "unlimited_250" : "one_time_190",
+    },
+    { onConflict: "user_id" },
+  );
+  if (companyInsertError) {
+    return fail(companyInsertError.message);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInError) {
+    return fail(`Account created, but sign-in failed: ${signInError.message}. Sign in and open Pricing.`);
+  }
+
+  try {
+    const origin = await requestOrigin();
+    const checkoutUrl = await createCompanyCheckoutUrl(
+      {
+        userId,
+        email,
+        companyName,
+        stripeCustomerId: null,
+        subscriptionStatus: "inactive",
+      },
+      product,
+      { baseUrl: origin },
+    );
+    redirect(checkoutUrl);
+  } catch (error) {
+    console.error("[registerCompany] checkout failed", error);
+    redirect(`/pricing?billing=error&reason=checkout_failed`);
+  }
 }
 
 export async function logoutAction() {
