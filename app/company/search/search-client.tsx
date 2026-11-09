@@ -58,16 +58,16 @@ export function CompanySearch({
 
   const formResult = state?.ok ? state.result : null;
   const activeResult: SearchResult | null = hermes?.result ?? formResult;
-  const previewProfiles = hermes?.profiles ?? (state?.ok ? state.profiles ?? [] : []);
   const hermesSummary = hermes?.summary ?? (state?.ok ? state.hermesSummary : null);
   const matchCount = activeResult?.matchCount ?? 0;
   const showUnlocked = unlocked || Boolean(activeResult?.unlocked);
 
   const profilesBySlot = useMemo(() => {
+    const previewProfiles = hermes?.profiles ?? (state?.ok ? state.profiles ?? [] : []);
     const map = new Map<number, RevealCard>();
     previewProfiles.forEach((profile, index) => map.set(index + 1, profile));
     return map;
-  }, [previewProfiles]);
+  }, [hermes?.profiles, state]);
 
   function requestUnlock() {
     setUnlockOpen(true);
