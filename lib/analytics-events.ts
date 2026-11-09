@@ -1,6 +1,10 @@
 /** Vercel Web Analytics custom event names (no PII in properties). */
 export const AnalyticsEvent = {
   DiverSignup: "diver_signup",
+  CompanySignup: "company_signup",
+  CompanyLandingView: "company_landing_view",
+  CompanyLandingCta: "company_landing_cta",
+  CompanySearchView: "company_search_view",
   CvUploaded: "cv_uploaded",
   ProfilePublished: "profile_published",
   CompanyProfileRequest: "company_profile_request",

@@ -18,8 +18,13 @@ export type SearchCriteria = z.infer<typeof searchCriteriaSchema>;
 
 export const MAX_TEASERS = 10;
 
-/** Anonymous teaser – deliberately contains no name, id, contact or exact dates. */
+/**
+ * Pre-payment teaser — initials + industry are intentional; no name, id, contact,
+ * or exact dates. Extra keys from older RPC rows are stripped by Zod.
+ */
 export const teaserSchema = z.object({
+  initials: z.string().min(1).max(4).default("??"),
+  industry: z.string().min(1).max(80).default("Commercial diving"),
   certs_valid: z.number(),
   dive_hours_band: z.string(),
   sat_hours_band: z.string(),
@@ -30,7 +35,14 @@ export const teaserSchema = z.object({
 });
 export type Teaser = z.infer<typeof teaserSchema>;
 export type TeaserRow = { slot: number; teaser: Teaser };
-export type SearchResult = { searchId: string | null; teasers: TeaserRow[] };
+export type SearchResult = {
+  searchId: string | null;
+  matchCount: number;
+  teasers: TeaserRow[];
+  /** true when this search's full profiles are already paid/unlocked. */
+  unlocked: boolean;
+  source: "rpc" | "preview";
+};
 
 export const revealCardSchema = z.object({
   full_name: z.string().nullable(),
@@ -75,26 +87,58 @@ export function criteriaFromForm(form: FormData) {
   });
 }
 
-/** Parse RPC rows defensively; drops anything that does not match the anonymous teaser shape. */
-export function parseSearchRows(rows: unknown): SearchResult {
-  if (!Array.isArray(rows) || rows.length === 0) return { searchId: null, teasers: [] };
+/** Parse RPC rows defensively; drops anything that does not match the teaser shape. */
+export function parseSearchRows(
+  rows: unknown,
+  options?: { unlocked?: boolean; source?: "rpc" | "preview" },
+): SearchResult {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return {
+      searchId: null,
+      matchCount: 0,
+      teasers: [],
+      unlocked: Boolean(options?.unlocked),
+      source: options?.source ?? "rpc",
+    };
+  }
   const teasers: TeaserRow[] = [];
   let searchId: string | null = null;
   for (const row of rows.slice(0, MAX_TEASERS)) {
     const r = row as { search_id?: unknown; slot?: unknown; teaser?: unknown };
-    const teaser = teaserSchema.safeParse(r.teaser);
+    const teaser = teaserSchema.safeParse(normalizeLegacyTeaser(r.teaser));
     if (typeof r.search_id === "string") searchId = r.search_id;
     if (typeof r.slot === "number" && teaser.success) teasers.push({ slot: r.slot, teaser: teaser.data });
   }
-  return { searchId, teasers };
+  return {
+    searchId,
+    matchCount: teasers.length,
+    teasers,
+    unlocked: Boolean(options?.unlocked),
+    source: options?.source ?? "rpc",
+  };
+}
+
+/** Older RPC teasers lacked initials/industry — fill safe defaults so parse still works. */
+function normalizeLegacyTeaser(teaser: unknown): unknown {
+  if (!teaser || typeof teaser !== "object") return teaser;
+  const t = teaser as Record<string, unknown>;
+  return {
+    initials: typeof t.initials === "string" && t.initials.trim() ? t.initials : "??",
+    industry:
+      typeof t.industry === "string" && t.industry.trim() ? t.industry : "Commercial diving",
+    ...t,
+  };
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_authenticated: "Sign in with your company account to search.",
-  company_subscription_required: "Search & Match needs an active company subscription.",
+  company_subscription_required:
+    "Full unlock needs payment — unlock this search once, or start a monthly plan.",
+  company_account_required: "Sign in with a company account to search candidates.",
   rate_limited: "Search limit reached (20 per hour, 100 per day). Try again later.",
   search_not_found: "That search was not found. Run a new search.",
   search_expired: "This search expired after 30 minutes. Run a new search.",
+  search_locked: "Unlock this search to open full candidate profiles.",
   already_revealed: "You already revealed a diver from this search. Run a new search for the next match.",
   invalid_slot: "Pick one of the listed matches.",
 };

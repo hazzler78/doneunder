@@ -82,6 +82,10 @@ export default async function Home() {
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
             Free for divers. Companies:{" "}
+            <Link href="/company" className="text-heading-muted/80 hover:text-heading">
+              we've already started looking
+            </Link>
+            {" · "}
             <a href={CONTACT_MAILTO} className="text-heading-muted/80 hover:text-heading">
               {CONTACT_EMAIL}
             </a>

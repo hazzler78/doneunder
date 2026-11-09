@@ -109,9 +109,9 @@ const diverStarterPrompts = [
 ];
 
 const companyStarterPrompts = [
-  "Find top 3 candidates for IMCA + NDT.",
-  "Draft a job request for offshore wind inspection.",
-  "Screen candidates available in 7 days.",
+  "Find IMCA + NDT divers available in 7 days for North Sea wind.",
+  "I need sat welders with CSWIP near Aberdeen — show locked matches.",
+  "Paste-ready: screen commercial divers for an inshore construction scope.",
 ];
 
 export function AgentWorkspace({
