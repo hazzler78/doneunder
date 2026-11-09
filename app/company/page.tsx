@@ -45,17 +45,17 @@ export default async function CompanyLandingPage({
           </p>
           <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
             <CompanyLandingCta variant={variant} href={registerHref}>
-              Skapa företagskonto
+              Create company account
             </CompanyLandingCta>
             <Link href="/company/search">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Redan kund — sök kandidater
+                Already a customer — search candidates
               </Button>
             </Link>
           </div>
           <p className="mt-6 text-sm text-muted-foreground">
-            Inte en vanlig jobbannons-sida. Du ser hur många som matchar innan du betalar — initialer
-            och bransch syns, resten låses upp.
+            Not a regular job-ad site. You see how many candidates match before you pay — initials
+            and industry stay visible, the rest unlocks after payment.
           </p>
         </div>
       </section>
@@ -64,16 +64,16 @@ export default async function CompanyLandingPage({
         <div className="mx-auto grid w-full max-w-6xl gap-10 section-pad py-14 md:grid-cols-3 md:py-20">
           {[
             {
-              title: "Verifierade ambassadörer",
-              body: "Publicerade commercial divers med Hermes-CV och synliga ticket-signaler — inte anonyma jobbansökningar.",
+              title: "Verified ambassadors",
+              body: "Published commercial divers with Hermes CVs and visible ticket signals — not anonymous job applications.",
             },
             {
-              title: "Träffar före betalning",
-              body: "Prata eller klistra in till Hermes. Se antalet matchningar och låsta kort (initialer + bransch) medan sökningen kör i bakgrunden. Betala bara när sökningen är värd att öppna.",
+              title: "Matches before payment",
+              body: "Speak or paste a brief to Hermes. See the match count and locked cards (initials + industry) while search runs in the background. Pay only when the search is worth opening.",
             },
             {
-              title: "Engångs eller månad",
-              body: "Lås upp just den här sökningen en gång, eller ta månadsaccess för löpande Search & Match.",
+              title: "One-time or monthly",
+              body: "Unlock this search once, or take monthly access for ongoing Search & Match.",
             },
           ].map((item) => (
             <div key={item.title}>
@@ -87,7 +87,7 @@ export default async function CompanyLandingPage({
       <section className="mx-auto w-full max-w-6xl section-pad py-12 md:py-16">
         <div className="mx-auto max-w-xl text-center">
           <p className="text-sm text-muted-foreground">
-            Frågor om onboarding eller fakturering:{" "}
+            Questions about onboarding or billing:{" "}
             <a href={CONTACT_MAILTO} className="text-primary hover:underline">
               {CONTACT_EMAIL}
             </a>

@@ -9,6 +9,7 @@ Match **Cursor live voice call** UX cues on `/company/search`:
 
 ## Phase 1 (shipped in this PR)
 - Browser **Web Speech API** (`SpeechRecognition` / `webkitSpeechRecognition`), continuous + interim transcripts.
+- Recognition language defaults to **`en-US`** (all company UI copy is English).
 - `HermesVoiceBadge` for listening / searching / error.
 - Debounced `runHermesCompanySearch` while speaking (background search).
 - Paste path always available.
@@ -16,9 +17,9 @@ Match **Cursor live voice call** UX cues on `/company/search`:
 ## Not yet (open / phased)
 - Native duplex **voice room** (Cursor-call grade audio transport, barge-in, server STT, TTS replies).
 - Shared call object across tabs / mobile Safari reliability.
-- Language auto-detect (phase 1 defaults `sv-SE` for Nordic desks; EN briefs still parse via heuristics/AI).
+- Language auto-detect / locale toggle for non-English briefs spoken into the mic.
 
 ## Open questions
 - Do we invest in a real-time voice stack (LiveKit / OpenAI Realtime / similar) or keep Web Speech + badge as the long-term lightweight path?
 - Should Hermes **speak** match-count summaries back (TTS), or stay badge + text only?
-- Default recognition language: always `sv-SE`, user toggle, or browser locale?
+- Offer an STT language toggle later for Nordic desks that still brief in Swedish aloud?

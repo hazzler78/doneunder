@@ -125,10 +125,13 @@ describe("company billing product decision", () => {
 });
 
 describe("company landing A/B copy", () => {
-  it("defaults to Swedish A variant without exclamation marks", () => {
+  it("defaults to English A variant without exclamation marks", () => {
     assert.equal(COMPANY_LANDING_DEFAULT_VARIANT, "a");
-    assert.equal(COMPANY_LANDING_VARIANTS.a.headline, "vi har redan börjat leta");
-    assert.equal(COMPANY_LANDING_VARIANTS.a.support, "registrera dig och se dina träffar");
+    assert.equal(COMPANY_LANDING_VARIANTS.a.locale, "en");
+    assert.equal(COMPANY_LANDING_VARIANTS.a.headline, "we've already started looking");
+    assert.equal(COMPANY_LANDING_VARIANTS.a.support, "register and see your matches");
+    assert.equal(COMPANY_LANDING_VARIANTS.b.headline, "the matches are already here");
+    assert.equal(COMPANY_LANDING_VARIANTS.b.support, "register and see who matches");
     assert.equal(COMPANY_LANDING_VARIANTS.a.headline.includes("!"), false);
     assert.equal(COMPANY_LANDING_VARIANTS.b.headline.includes("!"), false);
   });

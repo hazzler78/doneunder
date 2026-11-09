@@ -3,13 +3,13 @@
 ## Goal
 Measure whether first-impression headline copy on `/company` (and `/company/register`) changes company signup start rate, without sounding like a job-ad board.
 
-## Variants (Swedish)
+## Variants (English)
 | Variant | Headline | Support |
 | --- | --- | --- |
-| **A (default)** | vi har redan börjat leta | registrera dig och se dina träffar |
-| **B** | träffarna finns redan här | registrera dig och se vilka som matchar |
+| **A (default)** | we've already started looking | register and see your matches |
+| **B** | the matches are already here | register and see who matches |
 
-Rules for both: no exclamation marks; calm; company has the upper hand; not “post a job / browse CVs” energy.
+Rules for both: English only; no exclamation marks; calm; company has the upper hand; not “post a job / browse CVs” energy.
 
 ## Primary metric
 **Company register start rate** = unique visitors on `/company` who submit `/company/register` (or click through to the register form and complete account creation) within the same session.
@@ -35,9 +35,7 @@ Secondary:
 
 ## Decision rule
 - Ship the winner as the new default in `COMPANY_LANDING_DEFAULT_VARIANT` only after Mikael reviews absolute counts (not just relative %).
-- If inconclusive, keep **A** (“vi har redan börjat leta”).
+- If inconclusive, keep **A** (“we've already started looking”).
 
 ## Open questions
-- Is Swedish-only correct for all company traffic, or do we need an EN twin test for non-Nordic desks?
-- Should the support line stay Swedish after register (form labels are currently English to match site chrome)?
 - Voice on company search: see [company-hermes-voice.md](./company-hermes-voice.md) (badge + background search shipped; native call parity phased).

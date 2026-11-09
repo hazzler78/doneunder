@@ -129,7 +129,7 @@ export function HermesCompanyBrief({ onResult }: Props) {
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "sv-SE";
+    recognition.lang = "en-US";
     recognitionRef.current = recognition;
     listeningRef.current = true;
     setPhase("listening");

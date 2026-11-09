@@ -1,26 +1,27 @@
 /**
  * Company registration landing — first-impression copy.
  * Tone: not a job-ad board; the company has the upper hand. No exclamation marks.
+ * All user-facing strings are English.
  */
 
 export type CompanyLandingVariant = "a" | "b";
 
 export const COMPANY_LANDING_VARIANTS: Record<
   CompanyLandingVariant,
-  { id: CompanyLandingVariant; headline: string; support: string; locale: "sv" }
+  { id: CompanyLandingVariant; headline: string; support: string; locale: "en" }
 > = {
   a: {
     id: "a",
-    locale: "sv",
-    headline: "vi har redan börjat leta",
-    support: "registrera dig och se dina träffar",
+    locale: "en",
+    headline: "we've already started looking",
+    support: "register and see your matches",
   },
   /** Alternate calm framing for A/B — same posture, different lead. */
   b: {
     id: "b",
-    locale: "sv",
-    headline: "träffarna finns redan här",
-    support: "registrera dig och se vilka som matchar",
+    locale: "en",
+    headline: "the matches are already here",
+    support: "register and see who matches",
   },
 };
 
