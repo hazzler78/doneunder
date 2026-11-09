@@ -67,7 +67,7 @@ export default function HowItWorksPage() {
         <Link href="/register">
           <Button size="lg">Get started free</Button>
         </Link>
-        <Link href="/pricing">
+        <Link href="/company">
           <Button size="lg" variant="outline">
             For companies
           </Button>

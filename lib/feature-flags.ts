@@ -8,6 +8,11 @@ export function isStripeConfigured() {
   );
 }
 
+/** True when the one-time company search price id is present (monthly may still work alone). */
+export function isCompanyOneTimeCheckoutConfigured() {
+  return Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_SEARCH_ONCE);
+}
+
 export function isAiConfigured() {
   return Boolean(process.env.XAI_API_KEY && !isPlaceholderSecret(process.env.XAI_API_KEY));
 }

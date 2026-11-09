@@ -112,8 +112,24 @@ export async function POST(req: Request) {
     }
 
     if (role === "company") {
-      const reply =
-        "Company workspace is live. Next, I can wire candidate screening and job drafting tools to this chat. For now, ask me for screening criteria and I will keep it scoped to your company session.";
+      const { hermesCompanyPreviewSearch } = await import("@/lib/hermes-company-search");
+      const outcome = await hermesCompanyPreviewSearch(message);
+      const lockedLines = outcome.result.teasers
+        .slice(0, 5)
+        .map(
+          (row) =>
+            `• Match #${row.slot}: ${row.teaser.initials} · ${row.teaser.industry} (locked)`,
+        )
+        .join("\n");
+      const reply = [
+        outcome.summary,
+        "",
+        `${outcome.result.matchCount} candidate${outcome.result.matchCount === 1 ? "" : "s"} match — profiles stay partial until you unlock this search (one-time) or use monthly access.`,
+        lockedLines || "No locked teasers in this preview set.",
+        "",
+        "Open /company/search to unlock full profiles. No blurred tease — initials and industry only until payment.",
+      ].join("\n");
+
       if (thread) {
         try {
           await appendAgentTurn(service, {
@@ -129,10 +145,25 @@ export async function POST(req: Request) {
         actorId: user.id,
         feature: "web_chat_company_message",
         input: { message, threadId: thread?.id ?? null },
-        output: { reply },
+        output: {
+          reply,
+          matchCount: outcome.result.matchCount,
+          hermesSource: outcome.source,
+        },
       });
       await trackAnalyticsEventServer(AnalyticsEvent.ChatMessage, { sender_type: "company" });
-      return NextResponse.json({ ok: true, role, reply });
+      return NextResponse.json({
+        ok: true,
+        role,
+        reply,
+        companySearch: {
+          matchCount: outcome.result.matchCount,
+          unlocked: false,
+          teasers: outcome.result.teasers,
+          summary: outcome.summary,
+          searchPath: "/company/search",
+        },
+      });
     }
 
     const pendingInbound = readPendingInbound(thread?.metadata ?? null);

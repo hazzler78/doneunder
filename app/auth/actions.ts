@@ -108,7 +108,13 @@ export async function loginAction(formData: FormData) {
 
   const { data: userRow } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
   const role = userRow?.role ?? "diver";
-  const next = safeInternalPath(String(formData.get("next") ?? "/workspace"));
+  const requestedNext = String(formData.get("next") ?? "/workspace");
+  const next = safeInternalPath(
+    role === "company" && (requestedNext === "/workspace" || !requestedNext)
+      ? "/company/search"
+      : requestedNext,
+    role === "company" ? "/company/search" : "/workspace",
+  );
 
   if (role === "admin") {
     redirect("/dashboard/admin");

@@ -48,11 +48,11 @@ export default async function LoginPage({
             <p className="mt-1 text-sm text-heading">Create free account</p>
           </Link>
           <Link
-            href="/pricing"
+            href="/company"
             className="rounded-xl border border-border/60 bg-muted/20 px-3 py-3 transition hover:border-primary/30"
           >
             <p className="text-xs font-medium text-primary">New — Company</p>
-            <p className="mt-1 text-sm text-heading">Contact us</p>
+            <p className="mt-1 text-sm text-heading">vi har redan börjat leta</p>
           </Link>
         </div>
 
