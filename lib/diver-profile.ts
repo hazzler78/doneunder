@@ -49,6 +49,10 @@ export const experienceInputSchema = z.object({
   date_start: optionalText,
   date_end: optionalText,
   summary: optionalText,
+  client_name: optionalText,
+  rig_vessel_name: optionalText,
+  work_scope: optionalText,
+  scope_system: optionalText,
   source: optionalSource,
   source_ref: optionalText,
 });
@@ -329,7 +333,7 @@ export const DIVER_PROFILE_SCALAR_COLUMNS =
   "headline,bio,location,phone,mobilization_notice,availability_status,sat_hours,dive_hours,polished_cv_markdown,polished_cv_json,ambassador_public_headline,ambassador_short_bio,ambassador_key_highlights,headline_source,headline_source_ref,bio_source,bio_source_ref,import_batch_id,profile_status,published_at,cv_last_processed_at,last_verified_at,verified,updated_at" as const;
 
 export const DIVER_EXPERIENCE_COLUMNS =
-  "id,company,project_name,location,role_title,date_start,date_end,summary,source,source_ref" as const;
+  "id,company,project_name,location,role_title,date_start,date_end,summary,client_name,rig_vessel_name,work_scope,scope_system,source,source_ref" as const;
 
 export const DIVER_CERTIFICATION_COLUMNS =
   "id,name,issue_date,expiry_date,expiry_confirmed,cert_number,issuing_body,source,source_ref" as const;
