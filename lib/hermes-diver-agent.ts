@@ -688,7 +688,7 @@ async function sendDiverFollowUpEmail(input: {
     }
     attachments.push({
       filename: clientForm.filename,
-      content: clientForm.content,
+      content: Buffer.from(clientForm.content),
       contentType: clientForm.contentType,
     });
   }
