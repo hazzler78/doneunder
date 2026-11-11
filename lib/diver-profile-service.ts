@@ -1,3 +1,4 @@
+import { certificateNeedsExpiryDate, checkCertificateDates } from "@/lib/cert-lifetime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   DIVER_CERTIFICATION_COLUMNS,
@@ -416,7 +417,11 @@ export function validateDiverProfile(payload: DiverProfilePayload): ProfileValid
   if (payload.experiences.length === 0) warnings.push("No professional experience listed.");
 
   payload.certifications.forEach((cert, index) => {
-    if (!cert.expiry_date) warnings.push(`Certification #${index + 1} (${cert.name}) has no expiry date.`);
+    if (certificateNeedsExpiryDate(cert)) {
+      warnings.push(`Certification #${index + 1} (${cert.name}) has no expiry date.`);
+    }
+    const dateCheck = checkCertificateDates(cert);
+    if (dateCheck.warning) warnings.push(`Certification #${index + 1}: ${dateCheck.warning}`);
   });
 
   payload.references.forEach((ref, index) => {
@@ -541,8 +546,9 @@ async function replaceChildRows(
         diver_id: diverId,
         name: item.name,
         issue_date: normalizeDate(item.issue_date),
-        expiry_date: normalizeDate(item.expiry_date),
+        expiry_date: storableExpiryDate(item.issue_date, item.expiry_date),
         expiry_confirmed: item.expiry_confirmed ?? true,
+        ...(typeof item.no_expiry === "boolean" ? { no_expiry: item.no_expiry } : {}),
         cert_number: item.cert_number || null,
         issuing_body: item.issuing_body || null,
         sort_order: index,
@@ -574,6 +580,33 @@ async function replaceChildRows(
   }
 }
 
+/** Never store an expiry that is before the issue date (a misread); keep the row, drop that date. */
+function storableExpiryDate(issueDate: string | null | undefined, expiryDate: string | null | undefined) {
+  const issue = normalizeDate(issueDate);
+  const expiry = normalizeDate(expiryDate);
+  return checkCertificateDates({ issue_date: issue, expiry_date: expiry }).warning ? null : expiry;
+}
+
+const LEGACY_CERTIFICATION_COLUMNS = DIVER_CERTIFICATION_COLUMNS.replace(",no_expiry", "");
+
+/** Reads certifications; falls back to the pre-024 columns if the no_expiry migration is not applied yet. */
+async function selectDiverCertifications(supabase: DbClient, diverId: string) {
+  const result = await supabase
+    .from("diver_certifications")
+    .select(DIVER_CERTIFICATION_COLUMNS)
+    .eq("diver_id", diverId)
+    .order("sort_order", { ascending: true });
+  if (result.error?.code === "42703" || /no_expiry/.test(result.error?.message ?? "")) {
+    console.error("diver_certifications.no_expiry missing; apply migration 024_cert_no_expiry_flag.sql");
+    return supabase
+      .from("diver_certifications")
+      .select(LEGACY_CERTIFICATION_COLUMNS)
+      .eq("diver_id", diverId)
+      .order("sort_order", { ascending: true });
+  }
+  return result;
+}
+
 export async function getDiverProfile(supabase: DbClient, diverId: string): Promise<DiverProfileFull> {
   const [profileResult, experienceResult, certificationResult, referenceResult] = await Promise.all([
     supabase.from("diver_profiles").select(DIVER_PROFILE_SCALAR_COLUMNS).eq("user_id", diverId).maybeSingle(),
@@ -582,11 +615,7 @@ export async function getDiverProfile(supabase: DbClient, diverId: string): Prom
       .select(DIVER_EXPERIENCE_COLUMNS)
       .eq("diver_id", diverId)
       .order("sort_order", { ascending: true }),
-    supabase
-      .from("diver_certifications")
-      .select(DIVER_CERTIFICATION_COLUMNS)
-      .eq("diver_id", diverId)
-      .order("sort_order", { ascending: true }),
+    selectDiverCertifications(supabase, diverId),
     supabase
       .from("diver_references")
       .select(DIVER_REFERENCE_COLUMNS)
@@ -657,7 +686,7 @@ export async function persistMissingChildRowsFromJson(supabase: DbClient, diverI
         diver_id: diverId,
         name: item.name,
         issue_date: normalizeDate(item.issue_date),
-        expiry_date: normalizeDate(item.expiry_date),
+        expiry_date: storableExpiryDate(item.issue_date, item.expiry_date),
         cert_number: item.cert_number || null,
         issuing_body: item.issuing_body || null,
         sort_order: index,

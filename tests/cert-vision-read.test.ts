@@ -45,7 +45,7 @@ describe("buildCertificateUploadAssistantReply", () => {
     assert.equal(reply.ticketsRead, 0);
     assert.deepEqual(reply.zeroReadFilenames, ["1000243531.jpg"]);
     assert.match(reply.content, /couldn't read a ticket from 1000243531\.jpg/i);
-    assert.doesNotMatch(reply.content, /If an expiry is missing/i);
+    assert.doesNotMatch(reply.content, /expiring ticket has no expiry, type the date/i);
   });
 
   it("still lists tickets when vision succeeded", () => {
@@ -60,6 +60,6 @@ describe("buildCertificateUploadAssistantReply", () => {
     assert.equal(reply.ticketsRead, 1);
     assert.equal(certificateUploadFilesWithZeroReads([{ name: "medical.jpg", ticketCount: 1 }]).length, 0);
     assert.match(reply.content, /Read 1 ticket\(s\)/);
-    assert.match(reply.content, /If an expiry is missing/i);
+    assert.match(reply.content, /expiring ticket has no expiry, type the date/i);
   });
 });

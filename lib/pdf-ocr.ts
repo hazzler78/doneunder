@@ -20,12 +20,14 @@ function imageMediaType(bytes: Buffer): "image/jpeg" | "image/png" {
 
 export async function renderPdfPagesAsImages(
   buffer: Buffer,
-  options?: { maxPages?: number; scale?: number },
+  options?: { maxPages?: number; scale?: number; pages?: number[] },
 ) {
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
-  const maxPages = Math.min(pdf.numPages, options?.maxPages ?? MAX_OCR_PAGES);
+  const pageNumbers = options?.pages?.length
+    ? options.pages.filter((page) => Number.isInteger(page) && page >= 1 && page <= pdf.numPages)
+    : Array.from({ length: Math.min(pdf.numPages, options?.maxPages ?? MAX_OCR_PAGES) }, (_, index) => index + 1);
   const pages: Buffer[] = [];
-  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+  for (const pageNumber of pageNumbers) {
     const image = await renderPageAsImage(pdf, pageNumber, {
       canvasImport: () => import("@napi-rs/canvas"),
       scale: options?.scale ?? OCR_SCALE,
@@ -33,6 +35,16 @@ export async function renderPdfPagesAsImages(
     pages.push(Buffer.from(image));
   }
   return pages;
+}
+
+/** Page count without rendering. Returns 0 when the file cannot be opened. */
+export async function countPdfPages(buffer: Buffer) {
+  try {
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    return pdf.numPages;
+  } catch {
+    return 0;
+  }
 }
 
 /** @deprecated Prefer renderPdfPagesAsImages — unpdf returns PNG by default. */

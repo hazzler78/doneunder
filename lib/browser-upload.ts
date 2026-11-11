@@ -24,6 +24,15 @@ export type CertificateUploadItem = {
     expiry_date?: string | null;
     source?: string | null;
   }>;
+  readReport?: {
+    totalPages: number | null;
+    pagesRead: number[];
+    pagesSkipped: number[];
+    pagesFailed: number[];
+    errors: string[];
+    complete: boolean;
+  } | null;
+  readWarnings?: string[];
 };
 
 type ApiJson = Record<string, unknown>;
