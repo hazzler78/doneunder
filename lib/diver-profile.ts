@@ -68,6 +68,11 @@ export const certificationInputSchema = z.object({
   source_ref: optionalText,
   expiry_confirmed: z.preprocess((value) => (typeof value === "boolean" ? value : undefined), z.boolean().optional())
     .describe("True when the diver confirmed this expiry. False when a file read has not been confirmed."),
+  no_expiry: z
+    .preprocess((value) => (typeof value === "boolean" || value === null ? value : undefined), z.boolean().nullable().optional())
+    .describe(
+      "True when the ticket never expires (lifetime: HSE/IMCA/ADAS/IDSA diving tickets, bell, ALST, supervisor, Norwegian/Danish/Dutch/Swedish/French CAH approvals, welding, licences). False when it expires. Omit to decide from the ticket name.",
+    ),
 });
 
 export const referenceInputSchema = z.object({
@@ -227,7 +232,7 @@ export const conversationalCvUpdateSchema = z
       .max(20)
       .optional()
       .describe(
-        "Change an existing ticket. Use this to set expiry_date / issue_date. Dates: YYYY-MM-DD or DD/MM/YYYY. Set expiry_confirmed true when the diver confirms or corrects a date.",
+        "Change an existing ticket. Use this to set expiry_date / issue_date. Dates: YYYY-MM-DD or DD/MM/YYYY. Set expiry_confirmed true when the diver confirms or corrects a date. Set no_expiry true when the diver says a ticket has no expiry (lifetime).",
       ),
     remove_certifications: z.array(certificationMatchSchema).max(20).optional(),
     replace_certifications: z.array(certificationBodySchema).max(50).optional(),
@@ -336,7 +341,7 @@ export const DIVER_EXPERIENCE_COLUMNS =
   "id,company,project_name,location,role_title,date_start,date_end,summary,client_name,rig_vessel_name,work_scope,scope_system,source,source_ref" as const;
 
 export const DIVER_CERTIFICATION_COLUMNS =
-  "id,name,issue_date,expiry_date,expiry_confirmed,cert_number,issuing_body,source,source_ref" as const;
+  "id,name,issue_date,expiry_date,expiry_confirmed,no_expiry,cert_number,issuing_body,source,source_ref" as const;
 
 export const DIVER_REFERENCE_COLUMNS = "id,name,company,phone,email,source,source_ref" as const;
 

@@ -2,6 +2,11 @@ import { generateText, stepCountIs, tool, type ModelMessage } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { aiModel } from "@/lib/ai";
+import { certificateNeedsExpiryDate, isLifetimeCertificate } from "@/lib/cert-lifetime";
+import { describePackReport } from "@/lib/cert-pack-read";
+
+/** inspect_certificates reads every page of every stored file within this budget, then reports the rest. */
+const INSPECT_READ_BUDGET_MS = 45_000;
 import {
   applyConversationalCvUpdate,
   getDiverProfile,
@@ -23,7 +28,7 @@ import {
 } from "@/lib/cv-share-links";
 import {
   applyCertificateReads,
-  readAllCertificatesFromBytes,
+  readCertificatePack,
   repairCertificationDatesFromProfileText,
   repairMisnamedCertifications,
 } from "@/lib/cert-text";
@@ -149,6 +154,8 @@ function ticketsFromProfile(profile: DiverProfileFull) {
       name: cert.name,
       expiryDate: dates.expiry_date,
       issuingBody: cert.issuing_body ?? null,
+      issueDate: dates.issue_date ?? cert.issue_date ?? null,
+      noExpiry: cert.no_expiry ?? null,
     };
   });
   const known = new Set(fromRows.map((ticket) => ticket.name.trim().toLowerCase()));
@@ -168,6 +175,8 @@ function ticketsFromProfile(profile: DiverProfileFull) {
       name,
       expiryDate: span.expiry_date,
       issuingBody: null,
+      issueDate: span.issue_date ?? null,
+      noExpiry: null,
     });
   }
   return fromRows;
@@ -339,6 +348,8 @@ function buildProfileContext(
       issue_date: cert.issue_date,
       expiry_date: cert.expiry_date,
       expiry_confirmed: cert.expiry_confirmed !== false,
+      no_expiry: isLifetimeCertificate(cert),
+      needs_expiry_date: certificateNeedsExpiryDate(cert),
     })),
     references: profile.references.map((ref) => ({
       id: ref.id,
@@ -422,7 +433,7 @@ Updating the CV from chat (this is the main way to edit):
 - Write every stored field in English. Translate if needed; keep official certificate titles and proper names.
 - After a successful update_cv (ok=true), briefly confirm what you saved and invite them to preview /preview/cv.
 - If update_cv returns ok=false, tell them it was NOT saved and quote the error. Do not link /preview/cv as if the change is there.
-- validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
+- validation.warnings (for example a missing expiry on a medical or BOSIET/FOET) do NOT block adding a job. Only a failed update_cv call blocks a save.
 - If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos or a multi-ticket PDF (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - CV uploads: ${SUPPORTED_CV_FORMATS_MESSAGE} Certificates: PDF, Word (.doc/.docx), JPG, or PNG.
 
@@ -458,7 +469,9 @@ Other tools:
 - If they ask to send their CV, set attach_cv=true. The tool attaches a PDF of the current profile. Never write that a CV is attached unless send_email returns attached filenames.
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
-- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). It also lifts dates that were stuck in issuing_body notes into expiry_date/issue_date. Do not say "not provided" if a stored scan or note has a date. If apply_errors is non-empty, quote the real error — do not invent a generic "data error". If unreadable is true, ask the diver to type the date. Do not tell them to split a multi-cert PDF unless extraction returned nothing.
+- If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). It also lifts dates that were stuck in issuing_body notes into expiry_date/issue_date. Do not say "not provided" if a stored scan or note has a date. If apply_errors is non-empty, quote the real error — do not invent a generic "data error". If unreadable is true, ask the diver to type the date. If incomplete_reads is non-empty, tell the diver exactly which pages or files were not read (quote the note) — never say all tickets were read when they were not. If date_warnings is non-empty, tell the diver that expiry was before the issue date, was not saved, and ask for the right date. Do not tell them to split a multi-cert PDF unless extraction returned nothing or pages could not be read.
+- Lifetime tickets: certifications[].no_expiry true means the ticket never expires (HSE, IMCA, ADAS, IDSA diving tickets, closed/wet bell, scuba, ALST, supervisor, Norwegian, Danish, Dutch, Swedish and French CAH approvals, welding, chamber operator, licences). Never ask for, or nag about, an expiry date on those, and never say their expiry is missing. Only tickets with needs_expiry_date true (medicals, BOSIET/FOET, HUET/EBS, DMT, GWO, H2S, CSWIP, STCW, first aid and similar) need a date. If the diver says a ticket has no expiry, call update_cv with update_certifications setting no_expiry true. If they say it does expire, set no_expiry false and ask for the date.
+- An expiry before the issue date is a misread. Do not call that ticket expired. Ask the diver for the right expiry.
 - A date read from a file is not confirmed. certifications[].expiry_confirmed false means you must list the ticket name and expiry and ask the diver to confirm or correct it, in their language. When they confirm, call update_cv with update_certifications setting expiry_confirmed true. When they give a different date, set expiry_date and expiry_confirmed true. A date they type themselves is confirmed.
 - If they ask to send certificates, set attach_certificates=true. The tool bakes every stored certificate PDF and photo (JPG/PNG) into one Certificates PDF. Never write that certificates are attached unless send_email returns attached filenames.
 - If pending_inbound.status is sent, do not send again unless they explicitly ask to resend.
@@ -1008,7 +1021,16 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
         );
         const fromFiles = [];
         const applyErrors: string[] = [];
+        const applyWarnings: string[] = [];
+        const pageReports: Array<{ file: string; note: string }> = [];
+        // One time budget for all files so the chat turn cannot time out silently.
+        const inspectDeadline = Date.now() + INSPECT_READ_BUDGET_MS;
         for (const file of files) {
+          const remainingMs = inspectDeadline - Date.now();
+          if (remainingMs < 5_000) {
+            pageReports.push({ file: file.name, note: `Not read this time (out of time). Ask again to read ${file.name}.` });
+            continue;
+          }
           const { data, error } = await input.supabase.storage
             .from(DIVER_DOCUMENTS_BUCKET)
             .download(file.path);
@@ -1017,7 +1039,15 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             continue;
           }
           const bytes = Buffer.from(await data.arrayBuffer());
-          const reads = await readAllCertificatesFromBytes(bytes, file.name);
+          const { reads, report } = await readCertificatePack(
+            bytes,
+            file.name,
+            undefined,
+            { actorId: input.diverId, filename: file.name },
+            { deadlineMs: remainingMs },
+          );
+          const pageNote = describePackReport(file.name, report);
+          if (pageNote && !report.complete) pageReports.push({ file: file.name, note: pageNote });
           if (reads.length === 0) {
             fromFiles.push({
               file: file.name,
@@ -1039,6 +1069,8 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
               source: read.source,
               unreadable: read.unreadable,
               excerpt: read.excerpt,
+              page: read.page ?? null,
+              date_warning: read.date_warning ?? null,
             });
           }
           if (apply) {
@@ -1049,6 +1081,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
               if (!state.updatedParts.includes("certifications")) state.updatedParts.push("certifications");
             }
             applyErrors.push(...result.errors);
+            applyWarnings.push(...result.warnings);
           }
         }
 
@@ -1089,12 +1122,16 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             issue_date: cert.issue_date ?? null,
             expiry_date: cert.expiry_date ?? null,
             issuing_body: cert.issuing_body ?? null,
+            no_expiry: isLifetimeCertificate(cert),
+            needs_expiry_date: certificateNeedsExpiryDate(cert),
           })),
           from_files: fromFiles,
           tickets_found: fromFiles.filter((item) => item.name || item.expiry_date || item.issue_date).length,
           repaired_from_profile_text: repairedFromText,
           repaired_titles: repairedTitles,
           apply_errors: applyErrors.slice(0, 8),
+          date_warnings: [...new Set(applyWarnings)].slice(0, 8),
+          incomplete_reads: pageReports,
           note: noteParts.length ? noteParts.join(" ") : undefined,
           confirm_expiry: fromFiles.some((item) => Boolean(item.expiry_date)),
         };

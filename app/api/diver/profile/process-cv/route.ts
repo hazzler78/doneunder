@@ -32,7 +32,9 @@ import {
 } from "@/lib/diver-storage-upload";
 import { classifyDocumentFile, LEGACY_DOC_NO_TEXT_MESSAGE } from "@/lib/document-bytes";
 import { extractTextFromWordBytes } from "@/lib/word-text";
-import { processCertificateFromStagingPath } from "@/lib/process-certificate-upload";
+import { processCertificateFromBytes, processCertificateFromStagingPath } from "@/lib/process-certificate-upload";
+import { cvLooksLikeCertificatePack, describePackReport } from "@/lib/cert-pack-read";
+import { extractPdfPageTexts } from "@/lib/pdf-text";
 import { logDiverUploadFailure } from "@/lib/upload-failure-log";
 import { repairMisnamedCertifications } from "@/lib/cert-text";
 import { SUPPORTED_CERTIFICATE_FORMATS_MESSAGE } from "@/lib/document-bytes";
@@ -128,12 +130,18 @@ async function extractMainCvText(buffer: Buffer, fileName: string) {
     const word = await extractTextFromWordBytes(buffer, fileName);
     return {
       text: truncateText(word.text),
+      truncated: word.text.length > MAX_SOURCE_TEXT_CHARS,
       legacyDocNoText: word.legacyDocNoText,
       warning: word.warning,
     };
   }
   const pdf = await extractPdfTextOrOcr(buffer);
-  return { text: truncateText(pdf.text), legacyDocNoText: false, warning: undefined };
+  return {
+    text: truncateText(pdf.text),
+    truncated: pdf.text.length > MAX_SOURCE_TEXT_CHARS,
+    legacyDocNoText: false,
+    warning: undefined,
+  };
 }
 
 async function extractImageText(buffer: Buffer) {
@@ -171,7 +179,13 @@ function validateFile(file: File, maxMb: number) {
 
 type StagedCertificateRef = { path: string; name: string; contentType?: string; fileSize?: number };
 
+/** Stop reading certificate pages early enough to finish the request inside maxDuration. */
+const ROUTE_BUDGET_MS = 110_000;
+
 export async function POST(req: Request) {
+  const routeStartedAt = Date.now();
+  const readBudgetMs = (reserveMs: number) =>
+    Math.max(10_000, ROUTE_BUDGET_MS - (Date.now() - routeStartedAt) - reserveMs);
   try {
     ensureEnv();
     const authResult = await getAuthenticatedDiverContext();
@@ -314,6 +328,8 @@ export async function POST(req: Request) {
     const certUploadResults: { path: string; mimeType: string; name: string; action: string }[] = [];
     const certExtractedTextParts: string[] = [];
     const extractionWarnings: string[] = [];
+    /** Honest notes about certificate files that were only partly read. */
+    const packReadNotes: string[] = [];
 
     async function ingestCertificateBytes(certFileName: string, certBuffer: Buffer, contentType: string) {
       const kind = classifyCertificateFile(certFileName, contentType) ?? "jpg";
@@ -370,11 +386,27 @@ export async function POST(req: Request) {
 
     for (const staged of stagedCertificates) {
       try {
-        const processed = await processCertificateFromStagingPath(serviceSupabase, diverId, {
-          storagePath: staged.path,
-          name: staged.name,
-          contentType: staged.contentType,
-        });
+        const processed = await processCertificateFromStagingPath(
+          serviceSupabase,
+          diverId,
+          {
+            storagePath: staged.path,
+            name: staged.name,
+            contentType: staged.contentType,
+          },
+          {
+            read: {
+              deadlineMs: Math.floor(
+                readBudgetMs(cvBuffer ? 60_000 : 10_000) / Math.max(1, stagedCertificates.length),
+              ),
+            },
+          },
+        );
+        const packNote = describePackReport(processed.name, processed.readReport);
+        if (packNote && !processed.readReport.complete) packReadNotes.push(packNote);
+        for (const warning of processed.readWarnings) {
+          if (/before issue/i.test(warning)) packReadNotes.push(warning);
+        }
         certUploadResults.push({
           path: processed.path,
           mimeType: "application/octet-stream",
@@ -441,7 +473,8 @@ export async function POST(req: Request) {
       const certReply =
         `${parts.join(" ") || `Stored ${certUploadResults.length} certificate file(s).`} ` +
         "Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. " +
-        "If an expiry is missing, type the date. Then say match me to open campaigns. " +
+        (packReadNotes.length ? `${packReadNotes.join(" ")} ` : "") +
+        "If a medical, BOSIET/FOET or other expiring ticket has no expiry, type the date. Lifetime tickets need none. Then say match me to open campaigns. " +
         (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")}` : "");
       await appendAgentTurn(serviceSupabase, {
         threadId: thread.id,
@@ -466,6 +499,11 @@ export async function POST(req: Request) {
 
     const cvExtracted = await extractMainCvText(cvBuffer, mainCvName);
     const cvText = cvExtracted.text;
+    if (cvExtracted.truncated) {
+      extractionWarnings.push(
+        `The CV file is long; job history was built from the first ${Math.round(MAX_SOURCE_TEXT_CHARS / 1000)}k characters.`,
+      );
+    }
     if (cvExtracted.warning) {
       extractionWarnings.push(cvExtracted.warning);
     }
@@ -541,6 +579,48 @@ export async function POST(req: Request) {
     });
 
     await repairMisnamedCertifications(serviceSupabase, diverId);
+
+    // A CV that is really a pack (CV + tickets): also read it page by page as a certificate file,
+    // so every ticket page is read and dated, and tell the diver if any pages were not reached.
+    if (classifyCertificateFile(mainCvName) === "pdf") {
+      try {
+        const pages = await extractPdfPageTexts(cvBuffer);
+        if (cvLooksLikeCertificatePack(pages.pages)) {
+          const processedPack = await processCertificateFromBytes(
+            serviceSupabase,
+            diverId,
+            { name: mainCvName, bytes: cvBuffer, contentType: "application/pdf" },
+            existingFiles,
+            {
+              read: { deadlineMs: readBudgetMs(12_000) },
+              // Update the ticket rows the CV import just created instead of duplicating them.
+              apply: { extraSourceRefs: [cvPath] },
+            },
+          );
+          certUploadResults.push({
+            path: processedPack.path,
+            mimeType: "application/pdf",
+            name: processedPack.name,
+            action: processedPack.action,
+          });
+          const note = describePackReport(mainCvName, processedPack.readReport);
+          packReadNotes.push(
+            `Your CV file also holds certificates: I read ${processedPack.ticketCount} ticket(s) from it page by page.`,
+          );
+          if (note) packReadNotes.push(note);
+          for (const warning of processedPack.readWarnings) {
+            if (/before issue/i.test(warning)) packReadNotes.push(warning);
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("CV certificate pack read failed:", message.slice(0, 160));
+        packReadNotes.push(
+          `I could not read the certificate pages inside ${mainCvName}. Upload the tickets as certificate files, or ask me to read your certificates.`,
+        );
+      }
+    }
+
     await applyDerivedHeadlineIfMissing(serviceSupabase, diverId, cvPath);
 
     const extractedName = parsed.full_name?.trim();
@@ -600,8 +680,9 @@ export async function POST(req: Request) {
     const roleLabel = experienceCount === 1 ? "1 role" : `${experienceCount} roles`;
     const certLabel = certCount === 1 ? "1 cert" : `${certCount} certs`;
     const cvReply =
-      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${roleLabel}, ${certLabel}). Confirm the certificate expiry dates in your workspace. ` +
+      `CV processed in English (non-English source documents are translated). Preview at /preview/cv (${roleLabel}, ${certLabel}). Confirm expiry dates on tickets that expire (medicals, BOSIET/FOET and similar) in your workspace; lifetime tickets such as HSE, IMCA, Norwegian and Danish diving tickets need no expiry. ` +
       visibilityLine +
+      (packReadNotes.length ? `${packReadNotes.join(" ")} ` : "") +
       (extractionWarnings.length ? `Notes: ${extractionWarnings.join(" ")} ` : "") +
       "Attach ticket photos (IMCA, BOSIET, medical) if they are not in the file list yet. Then say match me to open campaigns.";
 

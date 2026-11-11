@@ -135,7 +135,8 @@ describe("job expiry", () => {
       now,
     );
     assert.equal(match.expired.includes("IMCA"), false);
-    assert.ok(match.unknownExpiry.includes("IMCA"));
+    // Surface Supplied (Top Up) is a lifetime ticket: no "No expiry on file" nag.
+    assert.equal(match.unknownExpiry.includes("IMCA"), false);
     assert.ok(match.have.includes("IMCA"));
   });
 

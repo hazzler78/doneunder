@@ -6,7 +6,8 @@ import { assertCertificateStagingPath } from "@/lib/diver-storage-upload";
 import { logDiverUploadFailure } from "@/lib/upload-failure-log";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Large certificate packs are read page by page; the reader stops at ~75 s and reports unread pages.
+export const maxDuration = 120;
 
 export async function POST(req: Request) {
   try {

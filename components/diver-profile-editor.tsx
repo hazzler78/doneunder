@@ -10,6 +10,7 @@ import {
   uploadMainCvDirect,
 } from "@/lib/browser-upload";
 import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
+import { certificateNeedsExpiryDate, isLifetimeCertificate } from "@/lib/cert-lifetime";
 import { cn } from "@/lib/utils";
 import type {
   DiverCertificationInput,
@@ -129,7 +130,8 @@ function buildPresentationCvMarkdown(form: EditorData, ambassadorShortBio: strin
   } else {
     form.certifications.forEach((cert) => {
       const issue = formatCvDate(cert.issue_date) || "Not provided";
-      const expiry = formatCvDate(cert.expiry_date) || "Not provided";
+      const expiry =
+        formatCvDate(cert.expiry_date) || (isLifetimeCertificate(cert) ? "No expiry (lifetime)" : "Not provided");
       const certId = cert.cert_number ? ` (#${cert.cert_number})` : "";
       lines.push(`- **${cert.name}${certId}** — Issued: ${issue}, Expires: ${expiry}`);
     });
@@ -209,7 +211,7 @@ export function DiverProfileEditor({
   const processingStartRef = useRef<number>(0);
 
   const actionRequiredCerts = useMemo(
-    () => form.certifications.filter((cert) => !cert.expiry_date),
+    () => form.certifications.filter((cert) => certificateNeedsExpiryDate(cert)),
     [form.certifications],
   );
   const cvChecklist = useMemo(() => {
@@ -227,12 +229,12 @@ export function DiverProfileEditor({
         ok: form.certifications.some((cert) => !isMissingValue(cert.name)),
       },
       {
-        label: "All certifications have expiry dates",
+        label: "Tickets that expire have expiry dates (lifetime tickets need none)",
         ok:
           form.certifications.some((cert) => !isMissingValue(cert.name)) &&
           form.certifications
             .filter((cert) => !isMissingValue(cert.name))
-            .every((cert) => Boolean(cert.expiry_date?.trim()) && !isMissingValue(cert.expiry_date)),
+            .every((cert) => !certificateNeedsExpiryDate(cert)),
       },
       {
         label: "At least 1 reference with contact added",
@@ -276,7 +278,7 @@ export function DiverProfileEditor({
       form.experiences.some((exp) => isMissingValue(exp.company) || isMissingValue(exp.role_title))
         ? "Experience entries"
         : null,
-      form.certifications.some((cert) => isMissingValue(cert.name) || isMissingValue(cert.expiry_date))
+      form.certifications.some((cert) => isMissingValue(cert.name) || certificateNeedsExpiryDate(cert))
         ? "Certification details"
         : null,
       form.references.some((ref) => isMissingValue(ref.name) || isMissingValue(ref.phone))
@@ -417,7 +419,8 @@ export function DiverProfileEditor({
       } else {
         next.certifications = next.certifications.map((cert) => ({
           ...cert,
-          expiry_date: cert.expiry_date?.trim() ? cert.expiry_date : "2030-12-31",
+          // Lifetime tickets (HSE, IMCA, Norwegian, Danish, ...) never get a made-up expiry.
+          expiry_date: cert.expiry_date?.trim() || isLifetimeCertificate(cert) ? cert.expiry_date : "2030-12-31",
         }));
       }
       if (next.references.length === 0) {
@@ -1133,7 +1136,8 @@ export function DiverProfileEditor({
               />
               <input
                 type="date"
-                className={fieldClass(isMissingValue(certification.expiry_date))}
+                className={fieldClass(certificateNeedsExpiryDate(certification))}
+                title={isLifetimeCertificate(certification) ? "Lifetime ticket: no expiry date needed" : "Expiry date"}
                 value={certification.expiry_date ?? ""}
                 onChange={(event) =>
                   setForm((prev) => {
@@ -1161,7 +1165,7 @@ export function DiverProfileEditor({
         {actionRequiredCerts.length > 0 ? (
           <p className="text-xs text-amber-800 dark:text-amber-300">
             Action required: {actionRequiredCerts.map((cert) => cert.name || "Unnamed certification").join(", ")} missing
-            expiry date.
+            expiry date. Lifetime tickets such as HSE, IMCA, Norwegian and Danish diving tickets need no expiry.
           </p>
         ) : null}
       </section>

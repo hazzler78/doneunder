@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { certExpiryLabel, certExpiryStatus, daysUntilExpiry, DEFAULT_LEAD_DAYS } from "@/lib/cert-expiry";
+import { isLifetimeCertificate, isLifetimeTicketType } from "@/lib/cert-lifetime";
 import { Button } from "@/components/ui/button";
 
 type CertRow = {
   id: string;
   name: string;
+  issuing_body?: string | null;
+  issue_date?: string | null;
   expiry_date: string | null;
   expiry_confirmed?: boolean | null;
+  no_expiry?: boolean | null;
 };
 
 type Props = {
@@ -61,7 +65,7 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
     };
   }, [reloadKey]);
 
-  async function saveCert(cert: CertRow, confirmOnly = false) {
+  async function saveCert(cert: CertRow, confirmOnly = false, noExpiry?: boolean) {
     setSavingId(cert.id);
     setMessage(null);
     const expiry = (drafts[cert.id] ?? "").trim();
@@ -69,10 +73,15 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
       const response = await fetch(`/api/diver/certifications/${cert.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          expiry_date: expiry || null,
-          ...(confirmOnly ? { confirm: true } : {}),
-        }),
+        body: JSON.stringify(
+          noExpiry === true
+            ? { no_expiry: true }
+            : {
+                expiry_date: expiry || null,
+                ...(noExpiry === false ? { no_expiry: false } : {}),
+                ...(confirmOnly ? { confirm: true } : {}),
+              },
+        ),
       });
       const data = (await response.json()) as { certification?: CertRow; error?: string };
       if (!response.ok || !data.certification) {
@@ -120,7 +129,8 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
       <div>
         <p className="text-sm font-medium text-heading">Certificates</p>
         <p className="text-[11px] text-muted-foreground">
-          Set an expiry date for each ticket. Hermes fills dates from a CV or scan, and you confirm them.
+          Medicals, BOSIET/FOET and other tickets that expire need a date. Lifetime tickets (HSE, IMCA, Norwegian,
+          Danish and other diving qualifications) need none. Hermes fills dates from a CV or scan, and you confirm them.
         </p>
       </div>
 
@@ -136,11 +146,22 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
           const status = certExpiryStatus(daysUntilExpiry(draft || null), Number(leadDays) || DEFAULT_LEAD_DAYS);
           const label = certExpiryLabel(status);
           const unconfirmed = cert.expiry_confirmed === false && Boolean(draft);
+          const lifetime = isLifetimeCertificate(cert);
+          const lifetimeByName = isLifetimeTicketType(cert);
+          const needsDate = !lifetime && !draft;
           return (
             <li key={cert.id} className="space-y-1.5 rounded-lg border border-border/50 px-2.5 py-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs font-medium text-heading">{cert.name}</p>
-                {label ? (
+                {lifetime && !draft ? (
+                  <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900 dark:text-emerald-200">
+                    No expiry
+                  </span>
+                ) : needsDate ? (
+                  <span className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:text-amber-200">
+                    Needs expiry date
+                  </span>
+                ) : label ? (
                   <span
                     className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
                       status === "expired"
@@ -153,7 +174,7 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
                 ) : null}
               </div>
               <label className="block text-[11px] text-muted-foreground">
-                Expiry date
+                {lifetime ? "Expiry date (optional, lifetime ticket)" : "Expiry date"}
                 <input
                   type="date"
                   value={draft}
@@ -180,6 +201,28 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
                     onClick={() => void saveCert(cert, true)}
                   >
                     Confirm
+                  </Button>
+                ) : null}
+                {cert.no_expiry !== true && !(lifetimeByName && !draft) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={savingId === cert.id}
+                    onClick={() => void saveCert(cert, false, true)}
+                  >
+                    No expiry
+                  </Button>
+                ) : null}
+                {lifetime && cert.no_expiry !== false && !draft ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={savingId === cert.id}
+                    onClick={() => void saveCert(cert, false, false)}
+                  >
+                    This ticket expires
                   </Button>
                 ) : null}
               </div>

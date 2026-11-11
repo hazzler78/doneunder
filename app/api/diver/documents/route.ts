@@ -9,10 +9,14 @@ import {
 } from "@/lib/diver-documents";
 import { processCertificateFromBytes } from "@/lib/process-certificate-upload";
 import { displayCertificateName } from "@/lib/document-names";
-import { buildCertificateUploadAssistantReply } from "@/lib/certificate-upload-reply";
+import {
+  buildCertificateUploadAssistantReply,
+  type CertificateUploadSummaryFile,
+} from "@/lib/certificate-upload-reply";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
+const PER_REQUEST_READ_BUDGET_MS = 90_000;
 
 export async function GET() {
   try {
@@ -78,6 +82,8 @@ export async function POST(req: Request) {
             name?: string | null;
             expiry_date?: string | null;
           }>;
+          readReport?: CertificateUploadSummaryFile["readReport"];
+          readWarnings?: string[];
         }>;
       };
       if (!body.complete) {
@@ -102,6 +108,7 @@ export async function POST(req: Request) {
           count: files.length,
           ticketsRead: reply.ticketsRead,
           zeroReadFiles: reply.zeroReadFilenames,
+          incompleteReads: reply.incompleteReads,
         },
       });
       return NextResponse.json({ ok: true });
@@ -130,6 +137,8 @@ export async function POST(req: Request) {
         authResult.diverId,
         { name: file.name, bytes, contentType: file.type || "" },
         existing,
+        // Up to 3 files per request: share the function time budget instead of timing out silently.
+        { read: { deadlineMs: Math.floor(PER_REQUEST_READ_BUDGET_MS / certificateFiles.length) } },
       );
       existing.push({
         name: processed.path.split("/").pop() ?? processed.name,

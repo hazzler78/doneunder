@@ -1,3 +1,4 @@
+import { checkCertificateDates, isLifetimeCertificate } from "@/lib/cert-lifetime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isYearPlaceholderExpiry } from "@/lib/dates";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
@@ -108,6 +109,9 @@ export type DiverTicket = {
   name: string;
   expiryDate?: string | null;
   issuingBody?: string | null;
+  issueDate?: string | null;
+  /** Explicit lifetime flag from diver_certifications.no_expiry (null = decide from name). */
+  noExpiry?: boolean | null;
 };
 
 export type JobMatch = {
@@ -183,13 +187,24 @@ export function scoreDiverAgainstJob(
       continue;
     }
     matched[cert] = hit.name;
-    const yearOnly = isYearPlaceholderExpiry(hit.expiryDate);
-    if (!yearOnly && isTicketExpired(hit.expiryDate, now)) {
+    // An expiry before the issue date is a misread, not proof the ticket lapsed.
+    const impossibleExpiry = Boolean(
+      hit.issueDate && hit.expiryDate && checkCertificateDates({ issue_date: hit.issueDate, expiry_date: hit.expiryDate }).warning,
+    );
+    const yearOnly = isYearPlaceholderExpiry(hit.expiryDate) || impossibleExpiry;
+    const lifetime = isLifetimeCertificate({
+      name: hit.name,
+      issuing_body: hit.issuingBody,
+      no_expiry: hit.noExpiry,
+    });
+    // A ticket the diver marked as never expiring is never expired, whatever date is stored.
+    if (hit.noExpiry !== true && !yearOnly && isTicketExpired(hit.expiryDate, now)) {
       expired.push(cert);
       continue;
     }
     have.push(cert);
-    if (yearOnly || !hit.expiryDate?.trim()) unknownExpiry.push(cert);
+    // Lifetime tickets (HSE/IMCA diver, bell, Norwegian, Danish, ...) need no expiry on file.
+    if (impossibleExpiry || (!lifetime && (yearOnly || !hit.expiryDate?.trim()))) unknownExpiry.push(cert);
   }
 
   const loc = (input.location ?? "").toLowerCase();
