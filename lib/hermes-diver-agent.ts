@@ -76,6 +76,21 @@ import {
   type DivingCompanyScope,
 } from "@/lib/diving-companies";
 import { importDivingCompaniesFromUrl } from "@/lib/diving-company-import";
+import {
+  diverEducationUpdateSchema,
+  diverPrivateDetailsPatchSchema,
+  getDiverOnboardingBundle,
+  patchDiverPrivateDetails,
+  replaceDiverEducation,
+} from "@/lib/diver-private-details";
+import {
+  approveClientForm,
+  downloadClientFormBytes,
+  fillClientFormFromTemplate,
+  getApprovedClientFormAttachment,
+  storeClientFormOutput,
+} from "@/lib/client-forms/service";
+import { BEACON_PDPA_CONSENT_TEXT } from "@/lib/client-forms/beacon-pdpa-pdf";
 
 export type JobSuggestion = {
   id: string;
@@ -220,6 +235,22 @@ function matchProfileToCompany(
   });
 }
 
+function buildOnboardingContext(bundle: Awaited<ReturnType<typeof getDiverOnboardingBundle>>) {
+  const priv = bundle.privateDetails;
+  return {
+    has_nationality: Boolean(priv?.nationality?.trim()),
+    has_date_of_birth: Boolean(priv?.date_of_birth),
+    has_home_address: Boolean(priv?.home_address?.trim()),
+    has_mobilization_airport: Boolean(priv?.mobilization_airport?.trim()),
+    has_passport: Boolean(priv?.passports?.length),
+    has_seaman_book: Boolean(priv?.seaman_book?.number),
+    has_height_weight_blood: Boolean(priv?.height_cm && priv?.weight_kg && priv?.blood_group),
+    has_signature: Boolean(priv?.signature_storage_path),
+    education_count: bundle.education.length,
+    sensitive_data_consent: Boolean(priv?.sensitive_data_consent_at),
+  };
+}
+
 function buildProfileContext(
   profile: DiverProfileFull,
   username: string | null,
@@ -228,6 +259,7 @@ function buildProfileContext(
   pendingInbound?: PendingInbound | null,
   openJobs: PublicJob[] = [],
   hasPhoto = false,
+  onboarding?: ReturnType<typeof buildOnboardingContext>,
 ) {
   const p = profile.profile;
   const validation = validateDiverProfile({
@@ -325,6 +357,7 @@ function buildProfileContext(
       location: job.location,
       requiredCerts: job.requiredCerts,
     })),
+    client_form_onboarding: onboarding ?? null,
   };
 }
 
@@ -392,6 +425,15 @@ Updating the CV from chat (this is the main way to edit):
 - validation.warnings (for example missing cert expiry dates) do NOT block adding a job. Only a failed update_cv call blocks a save.
 - If the profile is empty (no headline, no experiences, no certifications), this is first-run. Invite them to attach a CV PDF and ticket photos or a multi-ticket PDF (IMCA, BOSIET/FOET, medical) in this chat — any language is fine; you translate into English for the living CV. Do not send them to a form. Do not claim they fit a campaign until match_job has run against real tickets.
 - CV uploads: ${SUPPORTED_CV_FORMATS_MESSAGE} Certificates: PDF, Word (.doc/.docx), JPG, or PNG.
+
+Client-supplied forms (contractor CV templates, PDPA, etc.):
+- When a client sends their own Word/PDF template, use fill_client_form — output must stay in the client's format. Never substitute the living CV PDF.
+- Before filling, check client_form_onboarding for gaps. Ask for missing nationality, DOB, passport, seaman book, height/weight/blood group, mobilization airport, home address, education, or work-scope fields. Save sensitive answers with save_private_details (confirmed=true only after explicit diver consent) or save_education_history.
+- Never invent consent for PDPA. Read the consent text, ask for Consent/Decline on all three items, printed name, date, and signature image. Pass those choices into fill_client_form.
+- fill_client_form stores a pending preview. Show missing_fields and ask the diver to approve with approve_client_form before any send.
+- send_email can attach an approved client form via attach_client_form_id (not attach_cv). Still require confirmed=true.
+
+${BEACON_PDPA_CONSENT_TEXT}
 - When validation.errors block publish or auto-publish failed, quote validation.errors and validation.warnings and give concrete next steps (headline, references, upload readable PDF, etc.). Never leave them guessing why they are still draft.
 - If the profile already has a headline, experiences, or a stored CV, do NOT ask them to upload a CV again. Certificates can be added on their own; the existing CV stays.
 - If counts.experiences is 0, the public CV currently shows "No project history has been added yet." That is the most important gap. Extract jobs from the diver's message, pasted CV text, or profile.polished markdown/json and call update_cv with add_experiences or replace_experiences. Do not say the CV is complete until at least one job is saved.
@@ -602,6 +644,7 @@ async function sendDiverFollowUpEmail(input: {
   body: string;
   attachCv?: boolean;
   attachCertificates?: boolean;
+  attachClientFormId?: string;
   pendingInbound?: PendingInbound | null;
   shareContext?: { jobId?: string | null; companyId?: string | null };
 }) {
@@ -636,6 +679,18 @@ async function sendDiverFollowUpEmail(input: {
       return { ok: false as const, error: "Could not build a CV PDF to attach.", attachCv, attachCertificates };
     }
     attachments.push({ filename, content, contentType: "application/pdf" });
+  }
+
+  if (input.attachClientFormId) {
+    const clientForm = await getApprovedClientFormAttachment(input.supabase, input.diverId, input.attachClientFormId);
+    if (!clientForm.ok) {
+      return { ok: false as const, error: clientForm.error, attachCv, attachCertificates };
+    }
+    attachments.push({
+      filename: clientForm.filename,
+      content: clientForm.content,
+      contentType: clientForm.contentType,
+    });
   }
 
   if (attachCertificates) {
@@ -806,6 +861,8 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     ? await summarizeSchoolOutreach(input.supabase)
     : null;
 
+  const onboardingBundle = await getDiverOnboardingBundle(input.supabase, input.diverId);
+  const onboardingContext = buildOnboardingContext(onboardingBundle);
   const context = buildProfileContext(
     profile,
     input.username,
@@ -814,6 +871,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     input.pendingInbound,
     openJobs,
     hasPhoto,
+    onboardingContext,
   );
   const system = buildSystemPrompt(
     context,
@@ -822,6 +880,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
 
   const state = {
     profile,
+    onboardingBundle,
     suggestions,
     cvUpdated: false,
     updatedParts: [] as string[],
@@ -829,6 +888,8 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     emailSent: false,
     emailAttached: [] as string[],
     pendingInboundStatus: undefined as PendingInboundStatus | undefined,
+    clientFormId: null as string | null,
+    clientFormFilename: null as string | null,
   };
 
   const tools = {
@@ -1442,6 +1503,157 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           }),
         }
       : {}),
+    save_private_details: tool({
+      description:
+        "Store sensitive diver fields (passport, DOB, home address, biometrics) for client forms. Never call without confirmed=true after explicit diver consent.",
+      inputSchema: diverPrivateDetailsPatchSchema,
+      execute: async (patch) => {
+        try {
+          const result = await patchDiverPrivateDetails(input.supabase, input.diverId, patch);
+          if (result.ok) state.onboardingBundle = result.bundle;
+          return result;
+        } catch (error) {
+          return { ok: false, error: describeToolFailure(error) };
+        }
+      },
+    }),
+    save_education_history: tool({
+      description: "Replace education rows used in client CV templates (degree, institute, year). Requires confirmed=true.",
+      inputSchema: diverEducationUpdateSchema,
+      execute: async ({ replace_education, confirmed }) => {
+        try {
+          return await replaceDiverEducation(input.supabase, input.diverId, replace_education ?? [], confirmed);
+        } catch (error) {
+          return { ok: false, error: describeToolFailure(error) };
+        }
+      },
+    }),
+    fill_client_form: tool({
+      description:
+        "Fill a client-supplied DOCX/PDF template from the diver profile + private details. Pass template_base64 or template_storage_path. PDPA requires pdpa_* fields from the diver — never default to Consent.",
+      inputSchema: z.object({
+        template_base64: z.string().optional().describe("Base64-encoded template bytes from chat upload."),
+        template_storage_path: z
+          .string()
+          .optional()
+          .describe("Path in diver-documents bucket, e.g. after upload finalize."),
+        template_label: z.string().max(120).optional(),
+        position_title: z.string().max(120).optional().describe("Target role on client CV, if different from headline."),
+        pdpa_general: z.enum(["consent", "decline"]).optional(),
+        pdpa_sensitive: z.enum(["consent", "decline"]).optional(),
+        pdpa_transfer: z.enum(["consent", "decline"]).optional(),
+        pdpa_signer_name: z.string().max(120).optional(),
+        pdpa_signed_date: z.string().max(40).optional(),
+        signature_base64: z.string().optional().describe("PNG signature image from diver upload or drawing."),
+      }),
+      execute: async ({
+        template_base64: templateBase64,
+        template_storage_path: templateStoragePath,
+        template_label: templateLabel,
+        position_title: positionTitle,
+        pdpa_general: pdpaGeneral,
+        pdpa_sensitive: pdpaSensitive,
+        pdpa_transfer: pdpaTransfer,
+        pdpa_signer_name: pdpaSignerName,
+        pdpa_signed_date: pdpaSignedDate,
+        signature_base64: signatureBase64,
+      }) => {
+        try {
+          let templateBytes: Uint8Array | null = null;
+          if (templateBase64?.trim()) {
+            templateBytes = Uint8Array.from(Buffer.from(templateBase64.trim(), "base64"));
+          } else if (templateStoragePath?.trim()) {
+            const dl = await downloadClientFormBytes(input.supabase, templateStoragePath.trim());
+            if (!dl.ok) return dl;
+            templateBytes = dl.bytes;
+          } else {
+            return { ok: false, error: "Provide template_base64 or template_storage_path." };
+          }
+
+          let signaturePng: Uint8Array | undefined;
+          if (signatureBase64?.trim()) {
+            signaturePng = Uint8Array.from(Buffer.from(signatureBase64.trim(), "base64"));
+          } else if (state.onboardingBundle.privateDetails?.signature_storage_path) {
+            const sigPath = state.onboardingBundle.privateDetails.signature_storage_path;
+            const sigDl = await downloadClientFormBytes(input.supabase, sigPath);
+            if (sigDl.ok) signaturePng = sigDl.bytes;
+          }
+
+          const pdpa =
+            pdpaGeneral && pdpaSensitive && pdpaTransfer && pdpaSignerName && pdpaSignedDate
+              ? {
+                  general_personal_data: pdpaGeneral,
+                  sensitive_personal_data: pdpaSensitive,
+                  transfer_abroad: pdpaTransfer,
+                  signer_name: pdpaSignerName,
+                  signed_date: pdpaSignedDate,
+                  signature_png: signaturePng,
+                }
+              : undefined;
+
+          const fill = await fillClientFormFromTemplate(templateBytes, {
+            displayName: input.displayName,
+            email: input.userEmail,
+            positionTitle: positionTitle ?? state.profile.profile.headline,
+            profile: state.profile,
+            bundle: state.onboardingBundle,
+          }, {
+            pdpa,
+            filename: templateLabel,
+          });
+
+          if (!fill.ok) return fill;
+
+          const stored = await storeClientFormOutput(input.supabase, input.diverId, fill, {
+            templateLabel,
+            templateStoragePath: templateStoragePath?.trim(),
+          });
+          if (!stored.ok) return stored;
+
+          state.clientFormId = stored.record.id;
+          state.clientFormFilename = stored.record.output_filename;
+
+          await logAgentInteraction({
+            actorId: input.diverId,
+            feature: "hermes_fill_client_form",
+            input: { form_kind: fill.kind, template_label: templateLabel ?? null, missing: fill.missingFields },
+            output: { form_id: stored.record.id, filename: stored.record.output_filename },
+          });
+
+          return {
+            ok: true,
+            form_id: stored.record.id,
+            form_kind: fill.kind,
+            filename: stored.record.output_filename,
+            status: stored.record.status,
+            missing_fields: fill.missingFields,
+            preview_storage_path: stored.record.output_storage_path,
+            message:
+              "Filled form is pending approval. Summarize missing_fields, show what was filled, and call approve_client_form only after the diver confirms.",
+          };
+        } catch (error) {
+          return { ok: false, error: describeToolFailure(error) };
+        }
+      },
+    }),
+    approve_client_form: tool({
+      description: "Approve a filled client form so it can be emailed. Requires explicit diver confirmation.",
+      inputSchema: z.object({
+        form_id: z.string().uuid(),
+        confirmed: z.boolean(),
+      }),
+      execute: async ({ form_id: formId, confirmed }) => {
+        if (!confirmed) {
+          return { ok: false, message: "Not approved. Wait for explicit diver confirmation." };
+        }
+        const result = await approveClientForm(input.supabase, input.diverId, formId);
+        if (result.ok) {
+          state.clientFormId = result.record.id;
+          state.clientFormFilename = result.record.output_filename;
+        }
+        return result;
+      },
+    }),
     list_cv_share_links: tool({
       description:
         "List private CV share links the diver has sent to employers (recipient, expiry, active/revoked). Use when they ask who can see their CV or want to audit links.",
@@ -1484,11 +1696,24 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
           .boolean()
           .optional()
           .describe("True when the diver wants certificates attached as one combined PDF pack."),
+        attach_client_form_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe("Approved client-filled form id from fill_client_form / approve_client_form (not the living CV)."),
         confirmed: z
           .boolean()
           .describe("True only after the diver explicitly approved sending this exact email."),
       }),
-      execute: async ({ to, subject, body, attach_cv: attachCv, attach_certificates: attachCertificates, confirmed }) => {
+      execute: async ({
+        to,
+        subject,
+        body,
+        attach_cv: attachCv,
+        attach_certificates: attachCertificates,
+        attach_client_form_id: attachClientFormId,
+        confirmed,
+      }) => {
         if (!confirmed) {
           return {
             ok: false,
@@ -1526,6 +1751,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             body,
             attachCv,
             attachCertificates,
+            attachClientFormId,
             pendingInbound: input.pendingInbound ?? null,
           });
 
