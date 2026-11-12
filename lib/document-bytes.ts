@@ -89,14 +89,31 @@ export function isPdfBytes(bytes: ByteInput) {
   );
 }
 
-export function looksLikeDocxPackage(bytes: ByteInput) {
+export type DetectKindFromBytesOptions = {
+  /**
+   * Browser pre-upload checks only read the start of the file. DOCX local headers
+   * often list [Content_Types].xml before word/document.xml, so allow that OOXML
+   * fingerprint when the caller is sniffing a partial buffer (not full-file validation).
+   */
+  sniffDocxFromZipHead?: boolean;
+};
+
+export function looksLikeDocxPackage(bytes: ByteInput, sniffFromZipHead = false) {
   if (!isZipArchive(bytes)) return false;
-  return includesAscii(bytes, "word/document.xml");
+  if (includesAscii(bytes, "word/document.xml")) return true;
+  if (!sniffFromZipHead) return false;
+  if (!includesAscii(bytes, "[Content_Types].xml")) return false;
+  if (includesAscii(bytes, "xl/") || includesAscii(bytes, "ppt/")) return false;
+  return true;
 }
 
-export function detectKindFromBytes(bytes: ByteInput): DocumentFileKind | null {
+export function detectKindFromBytes(
+  bytes: ByteInput,
+  options?: DetectKindFromBytesOptions,
+): DocumentFileKind | null {
+  const sniffDocxFromZipHead = options?.sniffDocxFromZipHead ?? false;
   if (isPdfBytes(bytes)) return "pdf";
-  if (looksLikeDocxPackage(bytes)) return "docx";
+  if (looksLikeDocxPackage(bytes, sniffDocxFromZipHead)) return "docx";
   if (isOleCompoundFile(bytes)) return "doc";
   return null;
 }

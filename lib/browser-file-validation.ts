@@ -17,7 +17,7 @@ export async function validateCvFileOnClient(file: File): Promise<string | null>
     return unsupportedDocumentMessage(file.name, "cv");
   }
   const head = await readFileHead(file);
-  const detected = detectKindFromBytes(head);
+  const detected = detectKindFromBytes(head, { sniffDocxFromZipHead: true });
   const declared = classifyDocumentFile(file.name, file.type);
   if (!detected || (declared && declared !== detected)) {
     return unsupportedDocumentMessage(file.name, "cv");
@@ -32,7 +32,7 @@ export async function validateCertificateFileOnClient(file: File): Promise<strin
   }
   if (kind === "pdf" || kind === "doc" || kind === "docx") {
     const head = await readFileHead(file);
-    const detected = detectKindFromBytes(head);
+    const detected = detectKindFromBytes(head, { sniffDocxFromZipHead: true });
     const declared = classifyDocumentFile(file.name, file.type);
     if (!detected || (declared && declared !== detected)) {
       return unsupportedDocumentMessage(file.name, "certificate");
