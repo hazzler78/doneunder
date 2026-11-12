@@ -37,6 +37,30 @@ export type CertificateUploadItem = {
 
 type ApiJson = Record<string, unknown>;
 
+/** Gateway timeout on finalize after direct storage PUT — file is often already stored. */
+export const FINALIZE_GATEWAY_TIMEOUT_MESSAGE =
+  "Your certificate file was uploaded, but reading ticket details timed out. It is saved; refresh your workspace in a minute or ask Hermes to read your certificates again.";
+
+export function isFinalizeGatewayTimeout(status: number): boolean {
+  return status === 504 || status === 502 || status === 503;
+}
+
+export function certificateItemAfterFinalizeGatewayTimeout(fileName: string): CertificateUploadItem {
+  return {
+    name: fileName,
+    action: "added",
+    readReport: {
+      totalPages: null,
+      pagesRead: [],
+      pagesSkipped: [],
+      pagesFailed: [],
+      errors: [],
+      complete: false,
+    },
+    readWarnings: [FINALIZE_GATEWAY_TIMEOUT_MESSAGE],
+  };
+}
+
 export async function readApiJson(response: Response): Promise<ApiJson> {
   const text = await response.text();
   if (!text.trim()) return {};
@@ -45,6 +69,11 @@ export async function readApiJson(response: Response): Promise<ApiJson> {
   } catch {
     if (response.status === 413) {
       return { error: "File is too large for the server gateway. Use direct upload or a smaller file." };
+    }
+    if (isFinalizeGatewayTimeout(response.status)) {
+      return {
+        error: `Upload failed (${response.status}): The server took too long to respond. Your file may already be stored.`,
+      };
     }
     const snippet = text.slice(0, 120).replace(/\s+/g, " ");
     return {
@@ -197,6 +226,9 @@ async function finalizeCertificateUpload(staged: StagedCertificateUpload, origin
   });
   const data = await readApiJson(response);
   if (!response.ok) {
+    if (isFinalizeGatewayTimeout(response.status)) {
+      return certificateItemAfterFinalizeGatewayTimeout(staged.fileName);
+    }
     throw new Error(apiErrorMessage(data, response, staged.fileName, 10));
   }
   const uploaded = Array.isArray(data.uploaded) ? data.uploaded : [];
