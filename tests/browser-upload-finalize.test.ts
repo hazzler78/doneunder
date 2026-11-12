@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildDeferredFinalizeUploadItem,
   certificateItemAfterFinalizeGatewayTimeout,
+  DEFERRED_CERTIFICATE_READ_NOTE,
   FINALIZE_GATEWAY_TIMEOUT_MESSAGE,
   isFinalizeGatewayTimeout,
+  pendingCertificatePackReport,
   readApiJson,
 } from "../lib/browser-upload";
-import {
-  buildDeferredFinalizeUploadItem,
-  DEFERRED_CERTIFICATE_READ_NOTE,
-  pendingCertificatePackReport,
-} from "../app/api/diver/documents/finalize/route";
 
 describe("certificate finalize upload resilience", () => {
   it("treats gateway timeouts on finalize as stored-but-still-reading", () => {

@@ -2,11 +2,11 @@ import { after, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { getAuthenticatedDiverContext } from "@/lib/diver-auth";
+import { buildDeferredFinalizeUploadItem } from "@/lib/browser-upload";
 import {
   applyCertificateReads,
   pdfCopyFromImage,
   readCertificatePack,
-  type CertificatePackReport,
 } from "@/lib/cert-text";
 import {
   listCertificateDocumentFiles,
@@ -33,46 +33,6 @@ const BACKGROUND_READ_DEADLINE_MS = Math.min(
   240_000,
   Math.max(DEFAULT_PACK_DEADLINE_MS, 120_000),
 );
-
-export const DEFERRED_CERTIFICATE_READ_NOTE =
-  "Certificate saved. Ticket details are still being read; refresh your workspace shortly if dates are missing.";
-
-export function pendingCertificatePackReport(): CertificatePackReport {
-  return {
-    totalPages: null,
-    pagesRead: [],
-    pagesSkipped: [],
-    pagesFailed: [],
-    errors: [],
-    complete: false,
-  };
-}
-
-type StoredCertificate = Awaited<ReturnType<typeof upsertDiverCertificateFile>>;
-
-export function buildDeferredFinalizeUploadItem(input: {
-  fileName: string;
-  stored: StoredCertificate;
-}) {
-  return {
-    name: input.fileName,
-    action: input.stored.action,
-    path: input.stored.path,
-    issue_date: null,
-    expiry_date: null,
-    ticket: null,
-    tickets: [] as Array<{
-      name?: string | null;
-      issue_date?: string | null;
-      expiry_date?: string | null;
-      source?: string | null;
-    }>,
-    ticketCount: 0,
-    source: "none",
-    readReport: pendingCertificatePackReport(),
-    readWarnings: [DEFERRED_CERTIFICATE_READ_NOTE],
-  };
-}
 
 async function storeCertificateFromStaging(
   supabase: SupabaseClient,

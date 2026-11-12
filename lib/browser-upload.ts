@@ -45,6 +45,41 @@ export function isFinalizeGatewayTimeout(status: number): boolean {
   return status === 504 || status === 502 || status === 503;
 }
 
+export const DEFERRED_CERTIFICATE_READ_NOTE =
+  "Certificate saved. Ticket details are still being read; refresh your workspace shortly if dates are missing.";
+
+export function pendingCertificatePackReport(): NonNullable<CertificateUploadItem["readReport"]> {
+  return {
+    totalPages: null,
+    pagesRead: [],
+    pagesSkipped: [],
+    pagesFailed: [],
+    errors: [],
+    complete: false,
+  };
+}
+
+export type StoredCertificateUpload = {
+  path: string;
+  name: string;
+  mimeType: string;
+  action: CertificateUploadAction;
+};
+
+export function buildDeferredFinalizeUploadItem(input: {
+  fileName: string;
+  stored: StoredCertificateUpload;
+}): CertificateUploadItem {
+  return {
+    name: input.fileName,
+    action: input.stored.action,
+    readReport: pendingCertificatePackReport(),
+    readWarnings: [DEFERRED_CERTIFICATE_READ_NOTE],
+    ticketCount: 0,
+    tickets: [],
+  };
+}
+
 export function certificateItemAfterFinalizeGatewayTimeout(fileName: string): CertificateUploadItem {
   return {
     name: fileName,
