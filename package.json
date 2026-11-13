@@ -9,6 +9,7 @@
     "lint": "next lint",
     "seed:gareth": "node --env-file=.env.local scripts/seed-gareth-from-zip.mjs",
     "bootstrap:gareth-auth": "node --env-file=.env.local scripts/bootstrap-gareth-auth.mjs",
+    "bootstrap:hermes-demo-auth": "node --env-file=.env.local scripts/bootstrap-hermes-demo-auth.mjs",
     "bootstrap:auth": "node --env-file=.env.local scripts/bootstrap-auth-user.mjs",
     "test": "tsx --test tests/**/*.test.ts",
     "probe:join": "node scripts/probe-join-flow.mjs"
