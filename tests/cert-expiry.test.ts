@@ -112,7 +112,7 @@ describe("certificate expiry dates", () => {
   });
 
   it("skips demo and test accounts", () => {
-    assert.equal(isSkippedReminderAccount({ email: "elin@demo.doneunder.ai", username: "elin" }), true);
+    assert.equal(isSkippedReminderAccount({ email: "hermes@demo.doneunder.ai", username: "hermes-demo" }), true);
     assert.equal(isSkippedReminderAccount({ email: "real@doneunder.ai", username: "gareth-demo" }), true);
     assert.equal(isSkippedReminderAccount({ email: "real@doneunder.ai", username: "alex-test" }), true);
     assert.equal(isSkippedReminderAccount({ email: "gareth@doneunder.ai", username: "gareth" }), false);
@@ -186,7 +186,7 @@ describe("certificate expiry dates", () => {
           certs: [{ id: "cert-1", name: "OPITO BOSIET", expiryDate: daysAhead(10), confirmed: false }],
         }),
         candidate({ diverId: "diver-2", enabled: false }),
-        candidate({ diverId: "diver-3", email: "elin@demo.doneunder.ai", username: "elin" }),
+        candidate({ diverId: "diver-3", email: "hermes@demo.doneunder.ai", username: "hermes-demo" }),
         candidate({
           diverId: "diver-4",
           certs: [{ id: "cert-4", name: "Not provided", expiryDate: daysAhead(10), confirmed: true }],
