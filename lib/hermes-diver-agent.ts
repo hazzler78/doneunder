@@ -3,10 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { aiModel } from "@/lib/ai";
 import {
+  clearLifetimeExpiryFromChatMessage,
+  replyClaimsLifetimeNoExpiryAlreadySaved,
+} from "@/lib/cert-lifetime-chat";
+import {
   certificateNeedsExpiryDate,
   isLifetimeCertificate,
+  isLifetimeTicketType,
   lifetimeStoredExpiryShouldClear,
-  showsCertificateAsLifetime,
 } from "@/lib/cert-lifetime";
 import { describePackReport } from "@/lib/cert-pack-read";
 
@@ -353,7 +357,9 @@ function buildProfileContext(
       issue_date: cert.issue_date,
       expiry_date: cert.expiry_date,
       expiry_confirmed: cert.expiry_confirmed !== false,
-      no_expiry: showsCertificateAsLifetime(cert),
+      no_expiry_in_db: cert.no_expiry ?? null,
+      lifetime_ticket_type: isLifetimeTicketType(cert),
+      stored_expiry_date: cert.expiry_date ?? null,
       stored_expiry_needs_clearing: lifetimeStoredExpiryShouldClear(cert),
       needs_expiry_date: certificateNeedsExpiryDate(cert),
     })),
@@ -476,7 +482,7 @@ Other tools:
 - If pending_inbound.status is pending, an employer emailed the diver (often a reply to an application). Summarize it. That is how Hermes sees that a company is interested.
 - If pending_inbound.intent is certificates and they confirm (yes, send them, go ahead), you MUST call send_email to pending_inbound.from with attach_certificates=true and confirmed=true. Do not ask them to retype the recipient. Write a short professional body in the diver's voice.
 - If they ask when a ticket expires, or say expiry is missing, call inspect_certificates with apply=true. That reads PDFs and JPEG/PNG photos — including multi-ticket PDFs (one file with many certs). It also lifts dates that were stuck in issuing_body notes into expiry_date/issue_date. Do not say "not provided" if a stored scan or note has a date. If apply_errors is non-empty, quote the real error — do not invent a generic "data error". If unreadable is true, ask the diver to type the date. If incomplete_reads is non-empty, tell the diver exactly which pages or files were not read (quote the note) — never say all tickets were read when they were not. If date_warnings is non-empty, tell the diver that expiry was before the issue date, was not saved, and ask for the right date. Do not tell them to split a multi-cert PDF unless extraction returned nothing or pages could not be read.
-- Lifetime tickets: certifications[].no_expiry true means the ticket never expires (HSE, IMCA, ADAS, IDSA diving tickets, closed/wet bell, scuba, ALST, supervisor, Norwegian, Danish, Dutch, Swedish and French CAH approvals, welding, chamber operator, licences). Never ask for, or nag about, an expiry date on those, and never say their expiry is missing. Only tickets with needs_expiry_date true (medicals, BOSIET/FOET, HUET/EBS, DMT, GWO, H2S, CSWIP, STCW, first aid and similar) need a date. If stored_expiry_needs_clearing is true, the DB still has a stale expiry on a lifetime ticket — you MUST call update_cv with update_certifications setting no_expiry true (and expiry_confirmed true) even if no_expiry already looks true in context; do not say it is already saved. If the diver says a ticket has no expiry, call update_cv with update_certifications setting no_expiry true. If they say it does expire, set no_expiry false and ask for the date.
+- Lifetime tickets (lifetime_ticket_type true): HSE, IMCA, ADAS, IDSA diving tickets, closed/wet bell, scuba, ALST, supervisor, Norwegian, Danish, Dutch, Swedish and French CAH approvals, welding, chamber operator, licences. never expires unless no_expiry_in_db is false. stored_expiry_needs_clearing true means stored_expiry_date is still set wrongly — never say the ticket is already lifetime/no-expiry until that field is null and no_expiry_in_db is true. Only tickets with needs_expiry_date true (medicals, BOSIET/FOET, HUET/EBS, DMT, GWO, H2S, CSWIP, STCW, first aid and similar) need a date. If the diver says a ticket has no expiry, call update_cv with update_certifications setting no_expiry true (or acknowledge if the server already cleared it this turn). If they say it does expire, set no_expiry false and ask for the date.
 - One-time certificate date review: if the diver replies to the cert_date_review_prompt (listed expiries in chat) saying a date is wrong or a ticket is lifetime, call update_cv with update_certifications — set expiry_date, no_expiry, and expiry_confirmed true. Do not skip the tool call.
 - An expiry before the issue date is a misread. Do not call that ticket expired. Ask the diver for the right expiry.
 - A date read from a file is not confirmed. certifications[].expiry_confirmed false means you must list the ticket name and expiry and ask the diver to confirm or correct it, in their language. When they confirm, call update_cv with update_certifications setting expiry_confirmed true. When they give a different date, set expiry_date and expiry_confirmed true. A date they type themselves is confirmed.
@@ -855,6 +861,23 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   }
 
   if (!isAiConfigured()) {
+    const clearedWithoutAi = await clearLifetimeExpiryFromChatMessage(
+      input.supabase,
+      input.diverId,
+      input.message,
+      profile,
+    );
+    if (clearedWithoutAi.cvUpdated) {
+      profile = clearedWithoutAi.profile;
+      const names = clearedWithoutAi.clearedNames.join(", ");
+      return {
+        reply: `Cleared the stale expiry on ${names} and marked ${names} as lifetime (no expiry) on your profile.`,
+        suggestions,
+        profile,
+        cvUpdated: true,
+        updatedParts: ["certifications"],
+      };
+    }
     return {
       reply:
         "Hermes AI is not configured yet (missing XAI_API_KEY). You can still attach a CV PDF in this chat, but I cannot update your profile by talking until the AI key is enabled.",
@@ -863,6 +886,16 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
       cvUpdated: false,
       updatedParts: [],
     };
+  }
+
+  const lifetimeClear = await clearLifetimeExpiryFromChatMessage(
+    input.supabase,
+    input.diverId,
+    input.message,
+    profile,
+  );
+  if (lifetimeClear.cvUpdated) {
+    profile = lifetimeClear.profile;
   }
 
   const openJobs = await loadOpenJobs(input.supabase);
@@ -902,8 +935,9 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     profile,
     onboardingBundle,
     suggestions,
-    cvUpdated: false,
-    updatedParts: [] as string[],
+    cvUpdated: lifetimeClear.cvUpdated,
+    updatedParts: lifetimeClear.cvUpdated ? (["certifications"] as string[]) : ([] as string[]),
+    lifetimeClearedNames: lifetimeClear.clearedNames,
     needsPhoto: false,
     emailSent: false,
     emailAttached: [] as string[],
@@ -1129,7 +1163,9 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             issue_date: cert.issue_date ?? null,
             expiry_date: cert.expiry_date ?? null,
             issuing_body: cert.issuing_body ?? null,
-            no_expiry: showsCertificateAsLifetime(cert),
+            no_expiry_in_db: cert.no_expiry ?? null,
+            lifetime_ticket_type: isLifetimeTicketType(cert),
+            stored_expiry_date: cert.expiry_date ?? null,
             stored_expiry_needs_clearing: lifetimeStoredExpiryShouldClear(cert),
             needs_expiry_date: certificateNeedsExpiryDate(cert),
           })),
@@ -1940,7 +1976,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
   });
 
   const toolFailures = collectToolFailures(result);
-  const reply = buildHermesReply({
+  let reply = buildHermesReply({
     text: result.text,
     cvUpdated: state.cvUpdated,
     updatedParts: state.updatedParts,
@@ -1948,6 +1984,11 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
     emailSent: state.emailSent,
     emailAttached: state.emailAttached,
   });
+
+  if (state.lifetimeClearedNames.length > 0 && replyClaimsLifetimeNoExpiryAlreadySaved(reply)) {
+    const names = state.lifetimeClearedNames.join(", ");
+    reply = `Cleared the stale expiry date on ${names} and saved ${names} as lifetime (no expiry) on your profile.`;
+  }
 
   return {
     reply,
