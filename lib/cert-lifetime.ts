@@ -1,3 +1,5 @@
+import { extractCertificateDates, isYearPlaceholderExpiry } from "@/lib/dates";
+
 /**
  * Lifetime (no-expiry) certificate rules.
  *
@@ -215,4 +217,40 @@ export function certificateExpiryRequirement(
   if (isLifetimeCertificate(input) && !hasDate(input.expiry_date)) return "lifetime";
   if (hasDate(input.expiry_date)) return "dated";
   return certificateNeedsExpiryDate(input) ? "needs_expiry" : "lifetime";
+}
+
+const EXPLICIT_EXPIRY_LABEL =
+  /\b(valid until|valid to|valid thru|expires?(?:\s+on|\s+date)?|expiry date|date of expiry|utgår|giltig\s+till|utløpsdato|udløbsdato)\b/i;
+
+function excerptForExpiryCheck(excerpt?: string | null, issuing_body?: string | null) {
+  return [excerpt, issuing_body].filter((part): part is string => Boolean(part?.trim())).join("\n");
+}
+
+/** Whether the ticket text explicitly labels an expiry (not just a lone year or issue date). */
+export function lifetimeExpiryExplicitlyPrinted(excerpt?: string | null, issuing_body?: string | null) {
+  const blob = excerptForExpiryCheck(excerpt, issuing_body);
+  if (!blob.trim()) return false;
+  if (!EXPLICIT_EXPIRY_LABEL.test(blob)) return false;
+  const lifted = extractCertificateDates(blob);
+  return Boolean(lifted.expiry_date);
+}
+
+/**
+ * Lifetime competence tickets keep an expiry only when the document clearly prints one.
+ * Drops year-only placeholders and dates with no labelled expiry on the page.
+ */
+export function sanitizeLifetimeCertificateExpiry(input: {
+  name?: string | null;
+  issuing_body?: string | null;
+  expiry_date?: string | null;
+  excerpt?: string | null;
+}): string | null {
+  if (!isLifetimeTicketType(input)) return input.expiry_date?.trim() ? input.expiry_date.slice(0, 10) : null;
+  const expiry = input.expiry_date?.trim() ? input.expiry_date.slice(0, 10) : null;
+  if (!expiry) return null;
+  if (isYearPlaceholderExpiry(expiry)) return null;
+  if (!lifetimeExpiryExplicitlyPrinted(input.excerpt, input.issuing_body)) return null;
+  const lifted = extractCertificateDates(excerptForExpiryCheck(input.excerpt, input.issuing_body));
+  if (lifted.expiry_date?.slice(0, 10) === expiry) return expiry;
+  return null;
 }
