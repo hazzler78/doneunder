@@ -10,7 +10,12 @@ import { certificationDocumentSourceRef } from "@/lib/certification-profile-util
 import { applyConversationalCvUpdate, getDiverProfile } from "@/lib/diver-profile-service";
 import { isAiConfigured } from "@/lib/feature-flags";
 import { extractPdfPageTexts } from "@/lib/pdf-text";
-import { checkCertificateDates } from "@/lib/cert-lifetime";
+import {
+  checkCertificateDates,
+  isLifetimeTicketType,
+  lifetimeExpiryExplicitlyPrinted,
+  sanitizeLifetimeCertificateExpiry,
+} from "@/lib/cert-lifetime";
 import {
   emptyPackReport,
   planPackBatches,
@@ -126,10 +131,18 @@ function emptyRead(): CertificateRead {
 
 export function normalizeRead(partial: Partial<CertificateRead> & { excerpt?: string }): CertificateRead {
   const name = partial.name?.trim() || null;
+  const issuing_body = partial.issuing_body?.trim() || null;
+  const parsedExpiry = parseFlexibleDate(partial.expiry_date) ?? null;
+  const lifetimeExpiry = sanitizeLifetimeCertificateExpiry({
+    name,
+    issuing_body,
+    expiry_date: parsedExpiry,
+    excerpt: partial.excerpt ?? "",
+  });
   const dates = checkCertificateDates({
     name,
     issue_date: parseFlexibleDate(partial.issue_date) ?? null,
-    expiry_date: parseFlexibleDate(partial.expiry_date) ?? null,
+    expiry_date: lifetimeExpiry,
   });
   return {
     name,
@@ -152,7 +165,9 @@ export function dedupeReads(reads: CertificateRead[]): CertificateRead[] {
     if (!read.name && !read.expiry_date && !read.issue_date) continue;
     const key = [
       (read.name || "").toLowerCase(),
+      (read.issuing_body || "").toLowerCase(),
       read.cert_number || "",
+      typeof read.page === "number" && read.page > 0 ? String(read.page) : "",
       read.expiry_date || "",
       read.issue_date || "",
     ].join("|");
@@ -170,7 +185,8 @@ const MULTI_CERT_INSTRUCTIONS =
   "It may also contain CV pages, which are not certificates. " +
   "Extract EVERY distinct certificate. One array entry per ticket. " +
   "Do not merge different tickets into one entry. Do not copy a name, issuer, number or date from one ticket to another. " +
-  "Do not invent missing fields. Many diving tickets (HSE, IMCA, Norwegian, Danish) have no expiry: leave expiry_date null for those. " +
+  "Do not invent missing fields. Many diving tickets (HSE, IMCA, Norwegian, Danish) have no expiry: leave expiry_date null for those unless Valid until / expiry is clearly printed on that ticket. " +
+  "Each certificate on its own page must be a separate array entry even when titles look similar (for example Norwegian vs Danish competence). " +
   "Dates are usually day/month/year (European). Return issue_date and expiry_date as YYYY-MM-DD. " +
   "Keep official certificate titles; translate other wording into English when helpful.";
 
@@ -763,9 +779,17 @@ export async function repairCertificationDatesFromProfileText(
 
   for (const cert of profile.certifications) {
     if (cert.expiry_date && cert.issue_date) continue;
+    if (cert.no_expiry === true) continue;
     const blob = [cert.issuing_body, cert.cert_number, cert.name].filter(Boolean).join(" ");
     const dates = extractCertificateDates(blob);
     if (!dates.expiry_date && !dates.issue_date) continue;
+    if (
+      isLifetimeTicketType({ name: cert.name, issuing_body: cert.issuing_body }) &&
+      dates.expiry_date &&
+      !lifetimeExpiryExplicitlyPrinted(cert.issuing_body, cert.name)
+    ) {
+      continue;
+    }
     const patch: Record<string, string | null | undefined> = {};
     if (!cert.expiry_date && dates.expiry_date) patch.expiry_date = dates.expiry_date;
     if (!cert.issue_date && dates.issue_date) patch.issue_date = dates.issue_date;
@@ -816,17 +840,30 @@ export async function applyCertificateRead(
   const fromText = read.date_warning
     ? { issue_date: null, expiry_date: null }
     : extractCertificateDates([read.issuing_body, read.excerpt, read.name].filter(Boolean).join(" "));
+  const prelimName = (read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "")).trim();
+  const lifetimeAtRead = isLifetimeTicketType({
+    name: prelimName,
+    issuing_body: read.issuing_body,
+  });
+  const liftedExpiry = lifetimeAtRead
+    ? null
+    : fromText.expiry_date;
   const checkedDates = checkCertificateDates({
     name: read.name,
     issue_date: read.issue_date || fromText.issue_date,
-    expiry_date: read.expiry_date || fromText.expiry_date,
+    expiry_date: read.expiry_date || liftedExpiry,
   });
   const issue_date = checkedDates.issue_date;
-  const expiry_date = checkedDates.expiry_date;
+  const expiry_date = sanitizeLifetimeCertificateExpiry({
+    name: prelimName,
+    issuing_body: read.issuing_body,
+    expiry_date: checkedDates.expiry_date,
+    excerpt: read.excerpt,
+  });
   const dateWarning = read.date_warning ?? checkedDates.warning;
   const issuing_body = cleanIssuingBody(read.issuing_body) ?? read.issuing_body ?? undefined;
 
-  const rawName = (read.name || fallbackName.replace(/\.[a-z0-9]+$/i, "")).trim();
+  const rawName = prelimName;
   const inferredName = inferCertificateTitle({
     name: rawName,
     issuingBody: issuing_body,
@@ -875,15 +912,20 @@ export async function applyCertificateRead(
     issue_date: string;
     expiry_date: string;
     expiry_confirmed: boolean;
+    no_expiry: boolean;
     source_ref: string;
   }> = {};
 
   if (issuing_body) patchFields.issuing_body = issuing_body;
   if (read.cert_number?.trim()) patchFields.cert_number = read.cert_number.trim();
   if (issue_date) patchFields.issue_date = issue_date;
+  const lifetimeTicket = isLifetimeTicketType({ name: candidateName, issuing_body: issuing_body ?? null });
   if (expiry_date) {
     patchFields.expiry_date = expiry_date;
     patchFields.expiry_confirmed = false;
+    patchFields.no_expiry = false;
+  } else if (lifetimeTicket) {
+    patchFields.no_expiry = true;
   }
   if (fileSourceRef) patchFields.source_ref = fileSourceRef;
 
@@ -927,7 +969,8 @@ export async function applyCertificateRead(
           cert_number: read.cert_number?.trim() || undefined,
           issue_date: issue_date ?? undefined,
           expiry_date: expiry_date ?? undefined,
-          ...(expiry_date ? { expiry_confirmed: false as const } : {}),
+          ...(expiry_date ? { expiry_confirmed: false as const, no_expiry: false as const } : {}),
+          ...(lifetimeTicket && !expiry_date ? { no_expiry: true as const } : {}),
           ...(fileSourceRef ? { source_ref: fileSourceRef } : {}),
         },
       ],

@@ -114,6 +114,26 @@ describe("runPackRead", () => {
     }
   });
 
+  it("keeps separate tickets on different pages even when titles match", async () => {
+    const plan = planPackBatches(["a ".repeat(50), "b ".repeat(50)], 2);
+    const result = await runPackRead(plan, {
+      readText: async (_text, pages) =>
+        pages.map((page) =>
+          normalizeRead({
+            name: "Commercial Diver Certificate",
+            issuing_body: page === 1 ? "Petroleum Safety Authority Norway" : "Arbejdstilsynet",
+            page,
+            excerpt: `Page ${page}`,
+            source: "pdf-text",
+          }),
+        ),
+      readImages: async () => [],
+    });
+    assert.equal(result.reads.length, 2);
+    const bodies = result.reads.map((read) => read.issuing_body).sort();
+    assert.deepEqual(bodies, ["Arbejdstilsynet", "Petroleum Safety Authority Norway"]);
+  });
+
   it("stops at the deadline and lists the unread pages", async () => {
     let clock = 0;
     const plan = planPackBatches(["", "", "", "", "", ""], 6, { visionPagesPerBatch: 2 });

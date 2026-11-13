@@ -168,7 +168,9 @@ export { pageRange as formatPageRanges };
 function dedupeKey(read: CertificateRead) {
   return [
     (read.name || "").toLowerCase().replace(/\s+/g, " ").trim(),
+    (read.issuing_body || "").toLowerCase().replace(/\s+/g, " ").trim(),
     (read.cert_number || "").toLowerCase(),
+    typeof read.page === "number" && read.page > 0 ? String(read.page) : "",
     read.expiry_date || "",
     read.issue_date || "",
   ].join("|");

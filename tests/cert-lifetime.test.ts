@@ -5,7 +5,10 @@ import {
   checkCertificateDates,
   isLifetimeCertificate,
   isLifetimeTicketType,
+  lifetimeExpiryExplicitlyPrinted,
+  sanitizeLifetimeCertificateExpiry,
 } from "../lib/cert-lifetime";
+import { normalizeRead } from "../lib/cert-text";
 import { mergeDefinedCertificationPatch } from "../lib/certification-profile-utils";
 import { validateDiverProfile } from "../lib/diver-profile-service";
 import { JOB_CATALOG } from "../lib/job-catalog";
@@ -78,6 +81,56 @@ describe("lifetime ticket types (aligned with du_match/match.py + Danish)", () =
     assert.equal(certificateNeedsExpiryDate({ name: "Company induction", no_expiry: true }), false);
     assert.equal(isLifetimeCertificate({ name: "IMCA Diver", no_expiry: false }), false);
     assert.equal(certificateNeedsExpiryDate({ name: "IMCA Diver", no_expiry: false }), true);
+  });
+});
+
+describe("lifetime expiry must be printed on the document", () => {
+  it("drops an invented expiry on IMCA without a valid-until label", () => {
+    assert.equal(
+      sanitizeLifetimeCertificateExpiry({
+        name: "IMCA Surface Supplied Diver",
+        issuing_body: "IMCA",
+        expiry_date: "2030-01-01",
+        excerpt: "Certificate number DU-123. Date of issue 01/02/2020.",
+      }),
+      null,
+    );
+  });
+
+  it("keeps a labelled expiry on a lifetime ticket when the date matches the text", () => {
+    const excerpt = "IMCA Diver. Date of issue 01/02/2020. Valid until 01/02/2030.";
+    assert.equal(lifetimeExpiryExplicitlyPrinted(excerpt, null), true);
+    assert.equal(
+      sanitizeLifetimeCertificateExpiry({
+        name: "IMCA Diver",
+        expiry_date: "2030-02-01",
+        excerpt,
+      }),
+      "2030-02-01",
+    );
+  });
+
+  it("normalizeRead clears a hallucinated lifetime expiry", () => {
+    const read = normalizeRead({
+      name: "HSE Part 1 Surface Supplied Diver",
+      issue_date: "2020-02-01",
+      expiry_date: "2030-01-01",
+      excerpt: "HSE Part 1. Date of issue 01/02/2020.",
+      source: "pdf-text",
+    });
+    assert.equal(read.expiry_date, null);
+    assert.equal(read.issue_date, "2020-02-01");
+  });
+
+  it("still keeps expiry on medicals without lifetime rules", () => {
+    const read = normalizeRead({
+      name: "HSE Diver Medical",
+      issue_date: "2026-05-31",
+      expiry_date: "2027-05-30",
+      excerpt: "Fitness to dive. Expiry 30/05/2027.",
+      source: "vision",
+    });
+    assert.equal(read.expiry_date, "2027-05-30");
   });
 });
 
