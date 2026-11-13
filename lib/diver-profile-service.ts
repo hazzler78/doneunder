@@ -76,7 +76,7 @@ function normalizeExperienceInput(exp: DiverExperienceInput): DiverExperienceInp
 }
 
 function normalizeCertificationInput(cert: DiverCertificationInput): DiverCertificationInput {
-  return {
+  const normalized = {
     ...cert,
     name: (cert.name ?? "").trim() || "Certification",
     issue_date: cert.issue_date ?? undefined,
@@ -85,6 +85,10 @@ function normalizeCertificationInput(cert: DiverCertificationInput): DiverCertif
     issuing_body: cert.issuing_body?.trim() || undefined,
     source_ref: cert.source_ref ?? undefined,
   };
+  if (cert.no_expiry === true) {
+    return { ...normalized, expiry_date: undefined, expiry_confirmed: cert.expiry_confirmed ?? true };
+  }
+  return normalized;
 }
 
 function normalizeReferenceInput(ref: DiverReferenceInput): DiverReferenceInput {

@@ -26,11 +26,6 @@ export function mergeDefinedCertificationPatch(
   const merged = { ...existing };
   if (patch.name !== undefined && patch.name.trim() !== "") merged.name = patch.name.trim();
   if (patch.issue_date !== undefined && patch.issue_date.trim() !== "") merged.issue_date = patch.issue_date;
-  if (patch.expiry_date !== undefined && patch.expiry_date.trim() !== "") {
-    // Never store an expiry that comes before the issue date (a misread, e.g. 2022 for 2027).
-    const check = checkCertificateDates({ issue_date: merged.issue_date, expiry_date: patch.expiry_date });
-    if (!check.warning) merged.expiry_date = patch.expiry_date;
-  }
   if (patch.cert_number !== undefined && patch.cert_number.trim() !== "") {
     merged.cert_number = patch.cert_number.trim();
   }
@@ -39,7 +34,24 @@ export function mergeDefinedCertificationPatch(
   }
   if (patch.source_ref !== undefined && patch.source_ref.trim() !== "") merged.source_ref = patch.source_ref;
   if (patch.expiry_confirmed !== undefined) merged.expiry_confirmed = patch.expiry_confirmed;
-  if (patch.no_expiry !== undefined) merged.no_expiry = patch.no_expiry;
+  if (patch.no_expiry === true) {
+    merged.no_expiry = true;
+    merged.expiry_date = undefined;
+    if (patch.expiry_confirmed === undefined) merged.expiry_confirmed = true;
+  } else if (patch.no_expiry === false) {
+    merged.no_expiry = false;
+  } else if (patch.no_expiry === null) {
+    merged.no_expiry = null;
+  }
+  if (patch.expiry_date !== undefined) {
+    const trimmed = typeof patch.expiry_date === "string" ? patch.expiry_date.trim() : "";
+    if (!trimmed) {
+      merged.expiry_date = undefined;
+    } else {
+      const check = checkCertificateDates({ issue_date: merged.issue_date, expiry_date: trimmed });
+      if (!check.warning) merged.expiry_date = trimmed;
+    }
+  }
   if (patch.source !== undefined) merged.source = patch.source;
   if (patch.id !== undefined) merged.id = patch.id;
   return merged;
