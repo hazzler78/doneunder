@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import {
+  DOCX_MIME,
   detectKindFromBytes,
   mainCvStorageBasename,
   validateDocumentBytes,
@@ -18,12 +19,32 @@ const mammothFixture = join(
   "../node_modules/mammoth/test/test-data/single-paragraph.docx",
 );
 
+function includesWordDocumentXml(bytes: Buffer) {
+  return bytes.includes(Buffer.from("word/document.xml"));
+}
+
 describe("word document bytes", () => {
   it("detects docx zip magic and rejects fake zip", () => {
     const docx = readFileSync(mammothFixture);
     assert.equal(detectKindFromBytes(docx), "docx");
     const fakeZip = Buffer.from("PK\x03\x04not-a-docx");
     assert.equal(detectKindFromBytes(fakeZip), null);
+    assert.equal(detectKindFromBytes(fakeZip, { sniffDocxFromZipHead: true }), null);
+  });
+
+  it("detects docx from a 512-byte browser head read (PR #54 client validation regression)", () => {
+    const docx = readFileSync(mammothFixture);
+    const head = docx.subarray(0, 512);
+    assert.equal(includesWordDocumentXml(head), false);
+    assert.equal(detectKindFromBytes(head), null);
+    assert.equal(detectKindFromBytes(head, { sniffDocxFromZipHead: true }), "docx");
+  });
+
+  it("keeps full-file validation strict when word/document.xml is missing", () => {
+    const zipHeadOnly = Buffer.from("PK\x03\x04[Content_Types].xml");
+    assert.equal(detectKindFromBytes(zipHeadOnly, { sniffDocxFromZipHead: true }), "docx");
+    const validated = validateDocumentBytes(zipHeadOnly, "cv.docx", DOCX_MIME, "cv");
+    assert.equal(validated.ok, false);
   });
 
   it("validates docx bytes for CV upload meta", () => {
