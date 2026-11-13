@@ -6,6 +6,7 @@ import { getAgentThread } from "@/lib/agent-threads";
 import { readPendingInbound } from "@/lib/inbound-email";
 import { maybePollReceivedEmails } from "@/lib/inbound-email-process";
 import { loadAppliedJobIds } from "@/lib/jobs";
+import { maybeNudgeCertDateReview } from "@/lib/cert-date-review-nudge";
 import type { UserRole } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -40,7 +41,15 @@ export async function GET() {
     const service = createServiceSupabaseClient();
     await maybePollReceivedEmails();
     const appliedJobIds = [...(await loadAppliedJobIds(service, user.id))];
-    const thread = await getAgentThread(service, "web", user.id);
+    let thread = await getAgentThread(service, "web", user.id);
+    if (role === "diver") {
+      try {
+        await maybeNudgeCertDateReview(service, { diverId: user.id, role: "diver" });
+        thread = await getAgentThread(service, "web", user.id);
+      } catch (nudgeError) {
+        console.error("Cert date review nudge failed:", nudgeError);
+      }
+    }
     const pending = readPendingInbound(thread?.metadata ?? null);
     const pendingInbound =
       pending?.status === "pending"
