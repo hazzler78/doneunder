@@ -6,7 +6,10 @@ import {
   isLifetimeCertificate,
   isLifetimeTicketType,
   lifetimeExpiryExplicitlyPrinted,
+  lifetimeStoredExpiryShouldClear,
+  profileCertificateExpiryForDisplay,
   sanitizeLifetimeCertificateExpiry,
+  showsCertificateAsLifetime,
 } from "../lib/cert-lifetime";
 import { normalizeRead } from "../lib/cert-text";
 import { mergeDefinedCertificationPatch } from "../lib/certification-profile-utils";
@@ -160,6 +163,16 @@ describe("expiry before issue date", () => {
     assert.equal(merged.expiry_date, undefined);
   });
 
+  it("clears expiry when Hermes sets no_expiry true", () => {
+    const merged = mergeDefinedCertificationPatch(
+      { name: "HSE Part 2", issue_date: "2020-01-01", expiry_date: "2030-12-31", expiry_confirmed: false },
+      { no_expiry: true },
+    );
+    assert.equal(merged.no_expiry, true);
+    assert.equal(merged.expiry_date, undefined);
+    assert.equal(merged.expiry_confirmed, true);
+  });
+
   it("does not call a ticket expired when its expiry is before its issue date", () => {
     const job = JOB_CATALOG.find((item) => item.requiredCerts.some((cert) => /medical/i.test(cert)));
     assert.ok(job);
@@ -178,6 +191,21 @@ describe("expiry before issue date", () => {
     const medicalLabel = job.requiredCerts.find((cert) => /medical/i.test(cert))!;
     assert.equal(match.expired.includes(medicalLabel), false);
     assert.ok(match.unknownExpiry.includes(medicalLabel));
+  });
+});
+
+describe("profile lifetime display vs stored dates", () => {
+  it("shows HSE as lifetime even when a stale expiry is stored", () => {
+    const cert = { name: "HSE Part 2", expiry_date: "2030-12-31", no_expiry: null };
+    assert.equal(showsCertificateAsLifetime(cert), true);
+    assert.equal(lifetimeStoredExpiryShouldClear(cert), true);
+    assert.equal(profileCertificateExpiryForDisplay(cert), "");
+  });
+
+  it("still shows medical expiry dates", () => {
+    const cert = { name: "HSE Diver Medical", expiry_date: "2027-03-31" };
+    assert.equal(showsCertificateAsLifetime(cert), false);
+    assert.equal(profileCertificateExpiryForDisplay(cert), "2027-03-31");
   });
 });
 

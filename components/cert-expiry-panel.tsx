@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { certExpiryLabel, certExpiryStatus, daysUntilExpiry, DEFAULT_LEAD_DAYS } from "@/lib/cert-expiry";
-import { isLifetimeCertificate, isLifetimeTicketType } from "@/lib/cert-lifetime";
+import {
+  isLifetimeCertificate,
+  isLifetimeTicketType,
+  lifetimeStoredExpiryShouldClear,
+  profileCertificateExpiryForDisplay,
+  showsCertificateAsLifetime,
+} from "@/lib/cert-lifetime";
 import { Button } from "@/components/ui/button";
 
 type CertRow = {
@@ -47,7 +53,11 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
         }
         const rows = profile.certifications ?? [];
         setCerts(rows);
-        setDrafts(Object.fromEntries(rows.map((cert) => [cert.id, cert.expiry_date ?? ""])));
+        setDrafts(
+          Object.fromEntries(
+            rows.map((cert) => [cert.id, profileCertificateExpiryForDisplay(cert)]),
+          ),
+        );
         if (settingsRes.ok) {
           setEnabled(settings.enabled !== false);
           setLeadDays(String(settings.leadDays ?? DEFAULT_LEAD_DAYS));
@@ -142,18 +152,20 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
 
       <ul className="space-y-2">
         {certs.map((cert) => {
-          const draft = drafts[cert.id] ?? "";
+          const lifetimeDisplay = showsCertificateAsLifetime(cert);
+          const draft = lifetimeDisplay ? profileCertificateExpiryForDisplay(cert) : (drafts[cert.id] ?? "");
           const status = certExpiryStatus(daysUntilExpiry(draft || null), Number(leadDays) || DEFAULT_LEAD_DAYS);
           const label = certExpiryLabel(status);
           const unconfirmed = cert.expiry_confirmed === false && Boolean(draft);
           const lifetime = isLifetimeCertificate(cert);
           const lifetimeByName = isLifetimeTicketType(cert);
-          const needsDate = !lifetime && !draft;
+          const staleLifetimeDate = lifetimeStoredExpiryShouldClear(cert);
+          const needsDate = !lifetimeDisplay && !draft;
           return (
             <li key={cert.id} className="space-y-1.5 rounded-lg border border-border/50 px-2.5 py-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs font-medium text-heading">{cert.name}</p>
-                {lifetime && !draft ? (
+                {lifetimeDisplay && !draft ? (
                   <span className="shrink-0 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-900 dark:text-emerald-200">
                     No expiry
                   </span>
@@ -226,6 +238,11 @@ export function CertExpiryPanel({ reloadKey = 0 }: Props) {
                   </Button>
                 ) : null}
               </div>
+              {staleLifetimeDate ? (
+                <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                  An old import left a date on this lifetime ticket. Tap No expiry or tell Hermes to clear it.
+                </p>
+              ) : null}
               {unconfirmed ? (
                 <p className="text-[11px] text-amber-800 dark:text-amber-300">Read from a file. Confirm or correct it.</p>
               ) : null}

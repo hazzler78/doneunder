@@ -157,9 +157,34 @@ export function isLifetimeCertificate(input: LifetimeCertInput) {
   return isLifetimeTicketType(input);
 }
 
-function hasDate(value?: string | null) {
+export function hasStoredExpiryDate(value?: string | null) {
   const trimmed = value?.trim() ?? "";
   return Boolean(trimmed) && trimmed.toLowerCase() !== "not provided";
+}
+
+function hasDate(value?: string | null) {
+  return hasStoredExpiryDate(value);
+}
+
+/** Whether the workspace UI should show this ticket as lifetime (no expiry date field). */
+export function showsCertificateAsLifetime(input: LifetimeCertInput) {
+  if (input.no_expiry === false) return false;
+  if (input.no_expiry === true) return true;
+  return isLifetimeTicketType(input);
+}
+
+/** Stale placeholder expiry on a lifetime ticket (vision/import) that should be cleared in the DB. */
+export function lifetimeStoredExpiryShouldClear(input: LifetimeCertInput & { expiry_date?: string | null }) {
+  if (input.no_expiry === false) return false;
+  if (!isLifetimeTicketType(input)) return false;
+  return hasDate(input.expiry_date);
+}
+
+/** Expiry date string for sidebar / checklist display (empty when shown as lifetime). */
+export function profileCertificateExpiryForDisplay(input: LifetimeCertInput & { expiry_date?: string | null }) {
+  if (showsCertificateAsLifetime(input)) return "";
+  const trimmed = input.expiry_date?.trim() ?? "";
+  return hasDate(trimmed) ? trimmed.slice(0, 10) : "";
 }
 
 /** True when the ticket expires and no expiry date is on file. Lifetime tickets never need one. */
