@@ -47,8 +47,46 @@ function ticketsReadFromFile(file: CertificateUploadSummaryFile) {
   return 0;
 }
 
+/** Same bytes already stored — we do not re-read tickets for this upload. */
+export function certificateUploadDuplicateFiles(files: CertificateUploadSummaryFile[]) {
+  return files.filter((file) => file.action === "duplicate");
+}
+
+/**
+ * Pack read still running or not finished before the client got a response
+ * (deferred finalize, gateway timeout, etc.).
+ */
+export function certificateUploadPendingReadFiles(files: CertificateUploadSummaryFile[]) {
+  return files.filter((file) => {
+    if (file.action === "duplicate") return false;
+    if (ticketsReadFromFile(file) > 0) return false;
+    const report = sanitizeReport(file.readReport);
+    if (report && !report.complete) return true;
+    const warnings = Array.isArray(file.readWarnings) ? file.readWarnings : [];
+    return warnings.some((note) => /still being read|timed out reading ticket/i.test(note));
+  });
+}
+
+/** Finished read with zero tickets (not duplicate, not still pending). */
 export function certificateUploadFilesWithZeroReads(files: CertificateUploadSummaryFile[]) {
-  return files.filter((file) => ticketsReadFromFile(file) === 0);
+  const duplicates = new Set(certificateUploadDuplicateFiles(files).map((f) => f.name));
+  const pending = new Set(certificateUploadPendingReadFiles(files).map((f) => f.name));
+  return files.filter(
+    (file) => ticketsReadFromFile(file) === 0 && !duplicates.has(file.name) && !pending.has(file.name),
+  );
+}
+
+function pendingReadNotes(files: CertificateUploadSummaryFile[]) {
+  return certificateUploadPendingReadFiles(files).map((file) => {
+    const warnings = Array.isArray(file.readWarnings) ? file.readWarnings : [];
+    const custom = warnings.find(
+      (note) => typeof note === "string" && !/before issue/i.test(note) && note.trim().length > 0,
+    );
+    return (
+      custom ??
+      `Reading ticket details from ${file.name}; they will appear on your profile shortly.`
+    );
+  });
 }
 
 export function buildCertificateUploadAssistantReply(files: CertificateUploadSummaryFile[]) {
@@ -75,6 +113,7 @@ export function buildCertificateUploadAssistantReply(files: CertificateUploadSum
     (file) =>
       `I couldn't read a ticket from ${file.name} — please send a sharper photo or the PDF, or type the ticket name and expiry.`,
   );
+  const deferredNotes = pendingReadNotes(files);
 
   const pageNotes = incompleteReadNotes(files);
   const dateNotes = files
@@ -88,6 +127,7 @@ export function buildCertificateUploadAssistantReply(files: CertificateUploadSum
     renewed.length ? `Renewed: ${renewed.join(", ")}.` : "",
     duplicates.length ? `Already on file: ${duplicates.join(", ")}.` : "",
     dated.length ? `Read ${dated.length} ticket(s) from the upload: ${dated.join("; ")}.` : "",
+    ...deferredNotes,
     ...unreadNotes,
     ...pageNotes,
     ...dateNotes,
@@ -97,12 +137,25 @@ export function buildCertificateUploadAssistantReply(files: CertificateUploadSum
     parts.join(" ") ||
     (files.length ? `Stored ${files.length} certificate file(s).` : "Stored certificate file(s).");
 
+  const onlyDuplicates =
+    duplicates.length > 0 &&
+    added.length === 0 &&
+    renewed.length === 0 &&
+    dated.length === 0 &&
+    zeroReadFiles.length === 0 &&
+    deferredNotes.length === 0 &&
+    pageNotes.length === 0;
+
   const tail =
     dated.length > 0
       ? "One PDF can contain many tickets — Hermes reads each one. Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. If a medical, BOSIET/FOET or other expiring ticket has no expiry, type the date. Lifetime tickets such as HSE, IMCA, Norwegian and Danish diving tickets need none. Then say match me to open campaigns."
-      : zeroReadFiles.length > 0
-        ? "Your file is stored. Send a sharper photo or the PDF, or type the ticket name and expiry. Then say match me to open campaigns."
-        : "One PDF can contain many tickets — Hermes reads each one. Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. Then say match me to open campaigns.";
+      : onlyDuplicates
+        ? "Nothing changed — your stored file and any tickets already read from it stay on your profile. Then say match me to open campaigns."
+        : zeroReadFiles.length > 0
+          ? "Your file is stored. Then say match me to open campaigns."
+          : deferredNotes.length > 0
+            ? "Then say match me to open campaigns."
+            : "One PDF can contain many tickets — Hermes reads each one. Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. Then say match me to open campaigns.";
 
   return {
     content: `${intro} ${tail}`.replace(/\s+/g, " ").trim(),
