@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appendAgentMessage } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
-import { isLifetimeCertificate } from "@/lib/cert-lifetime";
+import { daysUntilExpiry } from "@/lib/cert-expiry";
+import { hasStoredExpiryDate, isLifetimeCertificate } from "@/lib/cert-lifetime";
 import { formatCertificateDate } from "@/lib/dates";
 import { getDiverProfile } from "@/lib/diver-profile-service";
 
@@ -15,7 +16,17 @@ export type CertDateReviewRow = {
   no_expiry?: boolean | null;
 };
 
-export function formatCertExpiryForReview(cert: CertDateReviewRow): string {
+export function formatCertExpiryForReview(cert: CertDateReviewRow, now = new Date()): string {
+  if (cert.no_expiry === true) return "no expiry";
+
+  if (cert.no_expiry !== true && hasStoredExpiryDate(cert.expiry_date)) {
+    const formatted = formatCertificateDate(cert.expiry_date);
+    const label = formatted ?? cert.expiry_date!.trim().slice(0, 10);
+    const days = daysUntilExpiry(cert.expiry_date, now);
+    if (days !== null && days < 0) return `expired on ${label}`;
+    return label;
+  }
+
   if (isLifetimeCertificate(cert)) return "no expiry";
   const formatted = formatCertificateDate(cert.expiry_date);
   return formatted ?? "not on file";
