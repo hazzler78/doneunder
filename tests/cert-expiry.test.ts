@@ -11,6 +11,7 @@ import {
   isSkippedReminderAccount,
   planCertExpiryReminders,
   reminderEmailCopy,
+  reminderLogContent,
   reminderSentKey,
   type ReminderCandidate,
 } from "../lib/cert-expiry";
@@ -195,6 +196,28 @@ describe("certificate expiry dates", () => {
       NOW,
     );
     assert.equal(planned.length, 0);
+  });
+
+  it("says expired on for step 0 when the date is already past", () => {
+    const log = reminderLogContent({
+      certName: "OEUK Medical",
+      expiryDate: "2026-10-24",
+      step: "0",
+      daysUntil: -21,
+    });
+    assert.match(log, /expired on 2026-10-24/);
+    assert.doesNotMatch(log, /expires today/);
+
+    const copy = reminderEmailCopy({
+      certName: "OEUK Medical",
+      expiryDate: "2026-10-24",
+      step: "0",
+      daysUntil: -21,
+      fullName: "Gareth",
+    });
+    assert.match(copy.body, /expired on 2026-10-24/);
+    assert.match(copy.subject, /expired on 2026-10-24/);
+    assert.doesNotMatch(copy.body, /expires today/);
   });
 
   it("keeps email copy free of addresses", () => {

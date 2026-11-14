@@ -197,17 +197,25 @@ export function reminderEmailCopy(input: {
   fullName?: string | null;
 }) {
   const who = reminderGreetingName(input.fullName);
-  const when =
-    input.step === "0"
+  const pastExpiry = input.step === "0" && input.daysUntil < 0;
+  const when = pastExpiry
+    ? `expired on ${input.expiryDate}`
+    : input.step === "0"
       ? `expires today (${input.expiryDate})`
       : `expires on ${input.expiryDate} (${input.daysUntil} day${input.daysUntil === 1 ? "" : "s"} from today)`;
-  const subject = input.step === "0" ? `${input.certName} expires today` : `${input.certName} expires in ${input.daysUntil} days`;
+  const subject = pastExpiry
+    ? `${input.certName} expired on ${input.expiryDate}`
+    : input.step === "0"
+      ? `${input.certName} expires today`
+      : `${input.certName} expires in ${input.daysUntil} days`;
   const body = [
     `Hi ${who},`,
     "",
     `Your ${input.certName} ${when}.`,
     input.step === "0"
-      ? "It is still current today. Update the date in your DoneUnder workspace after you renew it."
+      ? pastExpiry
+        ? "Renew it when you can, then update the date in your DoneUnder workspace."
+        : "It is still current today. Update the date in your DoneUnder workspace after you renew it."
       : "Renew it before it lapses, then update the date in your DoneUnder workspace.",
     "",
     "— Hermes",
@@ -222,6 +230,9 @@ export function reminderLogContent(input: {
   daysUntil: number;
 }) {
   if (input.step === "0") {
+    if (input.daysUntil < 0) {
+      return `Reminder logged: ${input.certName} expired on ${input.expiryDate}.`;
+    }
     return `Reminder logged: ${input.certName} expires today (${input.expiryDate}).`;
   }
   return `Reminder logged: ${input.certName} expires on ${input.expiryDate} (${input.daysUntil} days, step ${input.step}).`;
