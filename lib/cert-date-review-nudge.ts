@@ -19,7 +19,7 @@ export type CertDateReviewRow = {
 export function formatCertExpiryForReview(cert: CertDateReviewRow, now = new Date()): string {
   if (cert.no_expiry === true) return "no expiry";
 
-  if (cert.no_expiry !== true && hasStoredExpiryDate(cert.expiry_date)) {
+  if (hasStoredExpiryDate(cert.expiry_date)) {
     const formatted = formatCertificateDate(cert.expiry_date);
     const label = formatted ?? cert.expiry_date!.trim().slice(0, 10);
     const days = daysUntilExpiry(cert.expiry_date, now);
