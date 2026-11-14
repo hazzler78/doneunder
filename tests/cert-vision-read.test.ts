@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   buildCertificateUploadAssistantReply,
   certificateUploadFilesWithZeroReads,
+  certificateUploadPendingReadFiles,
 } from "../lib/certificate-upload-reply";
+import { DEFERRED_CERTIFICATE_READ_NOTE } from "../lib/browser-upload";
 import { certificateReadsFromVisionResult } from "../lib/cert-text";
 
 describe("certificateReadsFromVisionResult", () => {
@@ -46,6 +48,47 @@ describe("buildCertificateUploadAssistantReply", () => {
     assert.deepEqual(reply.zeroReadFilenames, ["1000243531.jpg"]);
     assert.match(reply.content, /couldn't read a ticket from 1000243531\.jpg/i);
     assert.doesNotMatch(reply.content, /expiring ticket has no expiry, type the date/i);
+    const sharperMatches = reply.content.match(/sharper photo/gi) ?? [];
+    assert.equal(
+      sharperMatches.length,
+      1,
+      "sharper-photo guidance should appear once, not in both body and tail",
+    );
+  });
+
+  it("does not claim a duplicate re-upload could not be read", () => {
+    const reply = buildCertificateUploadAssistantReply([
+      { name: "pack.pdf", action: "duplicate", ticketCount: 0, tickets: [] },
+    ]);
+    assert.deepEqual(reply.zeroReadFilenames, []);
+    assert.match(reply.content, /Already on file: pack\.pdf/i);
+    assert.doesNotMatch(reply.content, /couldn't read/i);
+    assert.match(reply.content, /Nothing changed/i);
+  });
+
+  it("says deferred pack read is in progress instead of couldn't read", () => {
+    const file = {
+      name: "pack.pdf",
+      action: "added" as const,
+      ticketCount: 0,
+      tickets: [] as Array<{ name?: string | null; expiry_date?: string | null }>,
+      readReport: {
+        totalPages: null as number | null,
+        pagesRead: [] as number[],
+        pagesSkipped: [] as number[],
+        pagesFailed: [] as number[],
+        errors: [] as string[],
+        complete: false,
+      },
+      readWarnings: [DEFERRED_CERTIFICATE_READ_NOTE],
+    };
+    assert.equal(certificateUploadPendingReadFiles([file]).length, 1);
+    assert.equal(certificateUploadFilesWithZeroReads([file]).length, 0);
+    const reply = buildCertificateUploadAssistantReply([file]);
+    assert.deepEqual(reply.zeroReadFilenames, []);
+    assert.match(reply.content, /still being read/i);
+    assert.doesNotMatch(reply.content, /couldn't read a ticket/i);
+    assert.doesNotMatch(reply.content, /sharper photo/i);
   });
 
   it("still lists tickets when vision succeeded", () => {
