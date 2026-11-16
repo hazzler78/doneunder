@@ -4,6 +4,10 @@ import { appendAgentMessage } from "@/lib/agent-messages";
 import { upsertWorkspaceThread } from "@/lib/agent-threads";
 import { parseEmailAddress, stripQuotes } from "@/lib/email";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import {
+  assertCanSendHelloEmail,
+  recordHelloEmailSent,
+} from "@/lib/hello-email-guard";
 import { isPublishNudgeSkipped } from "@/lib/publish-nudge-skip";
 import { SITE_URL } from "@/lib/site";
 
@@ -220,6 +224,21 @@ export async function sendPublishNudges(
     }
 
     try {
+      const gate = await assertCanSendHelloEmail({
+        to: candidate.email,
+        from,
+        subject,
+        feature: "publish_nudge",
+      });
+      if (!gate.ok) {
+        errors.push({
+          email: candidate.email,
+          username: candidate.username,
+          error: gate.error,
+        });
+        continue;
+      }
+
       const { data, error } = await resend!.emails.send({
         from,
         to: [candidate.email],
@@ -236,6 +255,15 @@ export async function sendPublishNudges(
         continue;
       }
 
+      const emailId = data?.id ?? "sent";
+      await recordHelloEmailSent({
+        to: candidate.email,
+        from,
+        subject,
+        feature: "publish_nudge",
+        resendId: emailId,
+      });
+
       const thread = await upsertWorkspaceThread(supabase, {
         userId: candidate.userId,
         role: "diver",
@@ -250,7 +278,7 @@ export async function sendPublishNudges(
           "I emailed you a short reminder: your CV is still a draft. Open workspace and use Publish page when you want contractors to see it.",
         metadata: {
           source: PUBLISH_NUDGE_META,
-          emailId: data?.id ?? null,
+          emailId: emailId === "sent" ? null : emailId,
           to: candidate.email,
         },
       });
@@ -258,7 +286,7 @@ export async function sendPublishNudges(
       sent.push({
         email: candidate.email,
         username: candidate.username,
-        id: data?.id ?? "sent",
+        id: emailId,
       });
     } catch (error) {
       errors.push({

@@ -1,6 +1,10 @@
 import { Resend } from "resend";
 import { prepareOutboundEmailBody } from "@/lib/email-body";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import {
+  assertCanSendHelloEmail,
+  recordHelloEmailSent,
+} from "@/lib/hello-email-guard";
 import { CONTACT_EMAIL } from "@/lib/site";
 
 export type EmailAttachment = {
@@ -166,6 +170,17 @@ export async function sendEmailAsLoggedInUser(
   const replyTo = stripQuotes(input.replyTo || "").includes("@")
     ? stripQuotes(input.replyTo || "").toLowerCase()
     : identity.replyTo;
+
+  const gate = await assertCanSendHelloEmail({
+    to,
+    from: identity.from,
+    subject,
+    feature: "send_email_as_logged_in_user",
+  });
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
   const attached = (input.attachments ?? [])
     .filter((item) => item.filename && item.content.length > 0)
@@ -190,9 +205,18 @@ export async function sendEmailAsLoggedInUser(
     return { ok: false, error: error.message };
   }
 
+  const id = data?.id ?? "sent";
+  await recordHelloEmailSent({
+    to,
+    from: identity.from,
+    subject,
+    feature: "send_email_as_logged_in_user",
+    resendId: id,
+  });
+
   return {
     ok: true,
-    id: data?.id ?? "sent",
+    id,
     from: identity.from,
     replyTo,
     attached: attached.map((item) => item.filename),
@@ -218,6 +242,16 @@ export async function sendPlatformEmail(input: {
     return { ok: false, error: "email_not_configured" };
   }
 
+  const gate = await assertCanSendHelloEmail({
+    to,
+    from,
+    subject,
+    feature: "send_platform_email",
+  });
+  if (!gate.ok) {
+    return { ok: false, error: gate.error };
+  }
+
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
   const { data, error } = await resend.emails.send({
     from,
@@ -228,5 +262,13 @@ export async function sendPlatformEmail(input: {
   });
 
   if (error) return { ok: false, error: "send_failed" };
-  return { ok: true, id: data?.id ?? "sent" };
+  const id = data?.id ?? "sent";
+  await recordHelloEmailSent({
+    to,
+    from,
+    subject,
+    feature: "send_platform_email",
+    resendId: id,
+  });
+  return { ok: true, id };
 }

@@ -3,6 +3,10 @@ import { createServiceSupabaseClient } from "@/lib/supabase/admin";
 import { isEmailConfigured } from "@/lib/feature-flags";
 import { parseEmailAddress, stripQuotes } from "@/lib/email";
 import {
+  assertCanSendHelloEmail,
+  recordHelloEmailSent,
+} from "@/lib/hello-email-guard";
+import {
   isValidPublicUsername,
   repairInvalidPublicUsername,
 } from "@/lib/usernames";
@@ -298,6 +302,16 @@ export async function maybeSendStuckDiverAlert(
       ? `DoneUnder: ${report.actionCount} diver(s) need attention`
       : `DoneUnder: ${report.findingCount} diver update(s)`;
 
+  const gate = await assertCanSendHelloEmail({
+    to,
+    from,
+    subject,
+    feature: "stuck_divers_alert",
+  });
+  if (!gate.ok) {
+    return { sent: false as const, reason: gate.error };
+  }
+
   const resend = new Resend(stripQuotes(process.env.RESEND_API_KEY!));
   const { data, error } = await resend.emails.send({
     from,
@@ -310,5 +324,13 @@ export async function maybeSendStuckDiverAlert(
   if (error) {
     return { sent: false as const, reason: error.message };
   }
-  return { sent: true as const, id: data?.id ?? "sent", to, subject };
+  const id = data?.id ?? "sent";
+  await recordHelloEmailSent({
+    to,
+    from,
+    subject,
+    feature: "stuck_divers_alert",
+    resendId: id,
+  });
+  return { sent: true as const, id, to, subject };
 }
