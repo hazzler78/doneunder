@@ -4,6 +4,10 @@ import { appendAgentMessage } from "@/lib/agent-messages";
 import { upsertWorkspaceThread } from "@/lib/agent-threads";
 import { parseEmailAddress, stripQuotes } from "@/lib/email";
 import { isEmailConfigured } from "@/lib/feature-flags";
+import {
+  assertCanSendHelloEmail,
+  recordHelloEmailSent,
+} from "@/lib/hello-email-guard";
 import { isJobOpen, loadAppliedJobIds, loadOpenJobs, workspaceMatchHref, type PublicJob } from "@/lib/jobs";
 import { isPublishNudgeSkipped } from "@/lib/publish-nudge-skip";
 import { SITE_URL } from "@/lib/site";
@@ -278,6 +282,22 @@ export async function sendJobAlerts(
       }
 
       try {
+        const gate = await assertCanSendHelloEmail({
+          to: diver.email,
+          from,
+          subject,
+          feature: "job_alert",
+        });
+        if (!gate.ok) {
+          skipped.push({
+            email: diver.email,
+            username: diver.username,
+            jobId: job.id,
+            reason: gate.error,
+          });
+          continue;
+        }
+
         const { data, error } = await resend!.emails.send({
           from,
           to: [diver.email],
@@ -295,6 +315,15 @@ export async function sendJobAlerts(
           continue;
         }
 
+        const emailId = data?.id ?? "sent";
+        await recordHelloEmailSent({
+          to: diver.email,
+          from,
+          subject,
+          feature: "job_alert",
+          resendId: emailId,
+        });
+
         await appendAgentMessage(supabase, {
           threadId: thread.id,
           role: "assistant",
@@ -302,7 +331,7 @@ export async function sendJobAlerts(
           metadata: {
             source: JOB_ALERT_META,
             jobId: job.id,
-            emailId: data?.id ?? null,
+            emailId: emailId === "sent" ? null : emailId,
             to: diver.email,
           },
         });
@@ -312,7 +341,7 @@ export async function sendJobAlerts(
           email: diver.email,
           username: diver.username,
           jobId: job.id,
-          id: data?.id ?? "sent",
+          id: emailId,
         });
       } catch (error) {
         errors.push({
