@@ -89,6 +89,7 @@ describe("buildCertificateUploadAssistantReply", () => {
     assert.match(reply.content, /still being read/i);
     assert.doesNotMatch(reply.content, /couldn't read a ticket/i);
     assert.doesNotMatch(reply.content, /sharper photo/i);
+    assert.match(reply.content, /do not match jobs from the filename alone/i);
   });
 
   it("still lists tickets when vision succeeded", () => {

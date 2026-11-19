@@ -21,6 +21,8 @@ import {
 } from "@/lib/diver-storage-upload";
 import { DEFAULT_PACK_DEADLINE_MS } from "@/lib/cert-pack-read";
 import { logDiverUploadFailure } from "@/lib/upload-failure-log";
+import { notifyDeferredCertZeroRead } from "@/lib/deferred-cert-read-followup";
+import { logAgentInteraction } from "@/lib/audit";
 
 export const runtime = "nodejs";
 /** Store + background pack read; keep under Vercel Pro serverless max (300 s). */
@@ -82,6 +84,22 @@ async function readCertificatePackInBackground(
   );
   if (reads.length > 0) {
     await applyCertificateReads(supabase, diverId, reads, input.fileName, input.storagePath);
+  } else {
+    await logAgentInteraction({
+      actorId: diverId,
+      feature: "cert_vision_zero_read",
+      input: { filename: input.fileName, bytes: input.bytes.length, source: "deferred_pdf_pack" },
+      output: { ticketCount: 0, source: "deferred_finalize" },
+    });
+    try {
+      await notifyDeferredCertZeroRead(supabase, diverId, input.fileName);
+    } catch (notifyError) {
+      console.error("deferred cert zero-read follow-up failed", {
+        diverId,
+        fileName: input.fileName,
+        notifyError,
+      });
+    }
   }
   const pdfCopy = await pdfCopyFromImage(input.bytes, input.fileName, input.contentType);
   if (pdfCopy) {

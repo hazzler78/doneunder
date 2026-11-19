@@ -146,15 +146,21 @@ export function buildCertificateUploadAssistantReply(files: CertificateUploadSum
     deferredNotes.length === 0 &&
     pageNotes.length === 0;
 
+  const hasPendingCerts = deferredNotes.length > 0;
+  const noTicketsOnProfile = dated.length === 0 && zeroReadFiles.length > 0;
+  const matchWhenReady =
+    hasPendingCerts || noTicketsOnProfile
+      ? "I will follow up when ticket details are on your profile — do not match jobs from the filename alone."
+      : "Then say match me to open campaigns.";
   const tail =
     dated.length > 0
       ? "One PDF can contain many tickets — Hermes reads each one. Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. If a medical, BOSIET/FOET or other expiring ticket has no expiry, type the date. Lifetime tickets such as HSE, IMCA, Norwegian and Danish diving tickets need none. Then say match me to open campaigns."
       : onlyDuplicates
         ? "Nothing changed — your stored file and any tickets already read from it stay on your profile. Then say match me to open campaigns."
         : zeroReadFiles.length > 0
-          ? "Your file is stored. Then say match me to open campaigns."
+          ? `Your file is stored. ${matchWhenReady}`
           : deferredNotes.length > 0
-            ? "Then say match me to open campaigns."
+            ? matchWhenReady
             : "One PDF can contain many tickets — Hermes reads each one. Job history on the living CV only changes when you upload a CV PDF or tell me a job to add. Then say match me to open campaigns.";
 
   return {
