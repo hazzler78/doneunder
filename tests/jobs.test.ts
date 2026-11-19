@@ -76,8 +76,8 @@ describe("job expiry", () => {
       location: "Malmo, Sweden",
     });
     assert.equal(match.verdict, "possible");
-    assert.ok(match.have.includes("IMCA"));
-    assert.ok(match.missing.includes("HSE Diver Medical"));
+    assert.ok(match.have.includes("IHK Geprüfter Taucher"));
+    assert.ok(match.missing.includes("Tauchtauglichkeit"));
     assert.equal(match.canApply, false);
     assert.ok(matchPromptForJob(job).includes(job.id));
     assert.ok(matchPromptForJob(job).includes("match_job"));
@@ -103,20 +103,20 @@ describe("job expiry", () => {
       job,
       {
         certs: [
-          { name: "IMCA Air Diver", expiryDate: "2028-01-01" },
-          { name: "HSE Diver Medical", expiryDate: "2025-01-10" },
+          { name: "Geprüfter Taucher (IHK)", expiryDate: "2028-01-01" },
+          { name: "G31 Tauchtauglichkeit", expiryDate: "2025-01-10" },
         ],
         location: "Bremerhaven",
       },
       now,
     );
-    assert.ok(match.have.includes("IMCA"));
-    assert.ok(match.expired.includes("HSE Diver Medical"));
-    assert.ok(!match.have.includes("HSE Diver Medical"));
+    assert.ok(match.have.includes("IHK Geprüfter Taucher (or equivalent)"));
+    assert.ok(match.expired.includes("G31 Tauchtauglichkeit"));
+    assert.ok(!match.have.includes("G31 Tauchtauglichkeit"));
     assert.equal(match.verdict, "possible");
     assert.equal(match.canApply, false);
-    assert.match(applyBlockReason(match, job) ?? "", /HSE Diver Medical/);
-    assert.match(formatMatchReason(match), /Expired: HSE Diver Medical/);
+    assert.match(applyBlockReason(match, job) ?? "", /G31 Tauchtauglichkeit/);
+    assert.match(formatMatchReason(match), /Expired: G31 Tauchtauglichkeit/);
   });
 
   it("does not treat a year stored as 1 January as an expired IMCA ticket", () => {
@@ -129,15 +129,15 @@ describe("job expiry", () => {
       {
         certs: [
           { name: "Surface Supplied (Top Up)", expiryDate: "2026-01-01", issuingBody: "HSE" },
-          { name: "HSE Diver Medical", expiryDate: "2027-04-29" },
+          { name: "G31 Tauchtauglichkeit", expiryDate: "2027-04-29" },
         ],
       },
       now,
     );
-    assert.equal(match.expired.includes("IMCA"), false);
+    assert.equal(match.expired.includes("IHK Geprüfter Taucher"), false);
     // Surface Supplied (Top Up) is a lifetime ticket: no "No expiry on file" nag.
-    assert.equal(match.unknownExpiry.includes("IMCA"), false);
-    assert.ok(match.have.includes("IMCA"));
+    assert.equal(match.unknownExpiry.includes("IHK Geprüfter Taucher"), false);
+    assert.ok(match.have.includes("IHK Geprüfter Taucher"));
   });
 
   it("does not call a bare IMCA row with a January year expired", () => {
@@ -150,11 +150,11 @@ describe("job expiry", () => {
       },
       new Date("2026-10-19T08:00:00.000Z"),
     );
-    assert.equal(match.expired.includes("IMCA"), false);
-    assert.ok(match.missing.includes("IMCA"));
+    assert.equal(match.expired.includes("IHK Geprüfter Taucher (or equivalent)"), false);
+    assert.ok(match.missing.includes("IHK Geprüfter Taucher (or equivalent)"));
   });
 
-  it("names the offshore medical and does not treat a blank IMCA label as current", () => {
+  it("names G31 and does not treat a blank IMCA label as IHK competence", () => {
     const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
     assert.ok(job);
     const match = scoreDiverAgainstJob(
@@ -162,14 +162,14 @@ describe("job expiry", () => {
       {
         certs: [
           { name: "IMCA" },
-          { name: "Offshore Diver Medical", expiryDate: "2027-12-31" },
+          { name: "G31", expiryDate: "2027-12-31" },
         ],
       },
       new Date("2026-10-19T08:00:00.000Z"),
     );
-    assert.ok(match.missing.includes("IMCA"));
-    assert.ok(match.have.includes("HSE Diver Medical"));
-    assert.match(formatMatchReason(match), /HSE Diver Medical \(via Offshore Diver Medical\)/);
+    assert.ok(match.missing.includes("IHK Geprüfter Taucher"));
+    assert.ok(match.have.includes("Tauchtauglichkeit"));
+    assert.match(formatMatchReason(match), /Tauchtauglichkeit \(via G31\)/);
     assert.equal(match.score, 28);
   });
 
@@ -179,7 +179,7 @@ describe("job expiry", () => {
     const match = scoreDiverAgainstJob(job, {
       certs: [{ name: "IMCA Air Diver", expiryDate: "2028-01-01" }],
     });
-    assert.ok(match.missing.includes("HSE Diver Medical"));
+    assert.ok(match.missing.includes("Tauchtauglichkeit"));
     assert.equal(match.canApply, false);
   });
 
@@ -191,7 +191,7 @@ describe("job expiry", () => {
       {
         certs: [
           { name: "IMCA Air Diver", expiryDate: "2028-01-01" },
-          { name: "HSE Diver Medical", expiryDate: "2027-02-01" },
+          { name: "G31 Tauchtauglichkeit", expiryDate: "2027-02-01" },
         ],
       },
       new Date("2026-10-13T12:00:00.000Z"),

@@ -101,6 +101,7 @@ import {
   storeClientFormOutput,
 } from "@/lib/client-forms/service";
 import { BEACON_PDPA_CONSENT_TEXT } from "@/lib/client-forms/beacon-pdpa-pdf";
+import { HERMES_UNRECOGNIZED_MEDICAL_PROMPT_RULES } from "@/lib/hermes-cert-eligibility";
 
 export type JobSuggestion = {
   id: string;
@@ -108,6 +109,7 @@ export type JobSuggestion = {
   location: string;
   reason: string;
   score: number;
+  canApply: boolean;
   applied?: boolean;
 };
 
@@ -208,6 +210,7 @@ function scoreJobsForDiver(
         location: job.location,
         reason: formatMatchReason(match),
         score: match.score,
+        canApply: match.canApply,
         applied: appliedJobIds.has(job.id),
       };
     })
@@ -428,6 +431,7 @@ One living CV:
 - There is a single living CV: the profile you maintain. Chat updates via update_cv are the source of truth. When they ask to send their CV, attach that living CV PDF — never an old uploaded file.
 - An uploaded CV PDF is only a first import (or a rare full replace). After a living CV exists, do NOT ask them to upload another CV.
 - Certificates are separate from the CV. One uploaded PDF may contain many tickets — the upload path extracts each one. They stay until renewed. If they already have that ticket, do not add a duplicate. If they upload a new scan of the same ticket, treat it as a renewal and replace the old scan.
+- ${HERMES_UNRECOGNIZED_MEDICAL_PROMPT_RULES}
 
 Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
@@ -465,8 +469,8 @@ Other tools:
 - match_job when they name one campaign, say yes to one you just offered, or the message includes a job id. Always call it before saying they fit or do not fit.
 - NEVER ask the diver to type a job ID. IDs are in open_campaigns. If they say "yes" after you offered the saturation role, call match_job with that campaign's id (title match is enough).
 - match_job accepts a job id or a title fragment from open_campaigns (company name in the title is enough).
-- match_job and find_matching_jobs return the same verdict the job cards show. Repeat that reason. Do not say the diver lacks a ticket the reason lists as Current, and do not say they hold one it lists as Missing. "via …" names the certificate on their CV that satisfied the requirement. Offshore Diver Medical counts as HSE Diver Medical. A row that is only the word IMCA, with no dates, is not a held ticket. A year with no issued or expires label is not an expiry, so do not call HSE SCUBA 2025 expired. A range such as 2025–2027 is the years printed on the certificate.
-- After match_job, if canApply is false, do not offer apply. Tell them which tickets are expired or missing. If canApply is true, show the draft (including the real company inbox) and wait for a clear yes.
+- match_job and find_matching_jobs return the same verdict the job cards show. Repeat that reason. Do not say the diver lacks a ticket the reason lists as Current, and do not say they hold one it lists as Missing. Only quote fit (strong/possible/weak), score, and ticket status from the latest match_job or apply_job tool result — never invent a fit score or "current" ticket from an upload filename. certifications[] in profile context is the only ticket list for matching; stored certificate filenames are not tickets. "via …" names the certificate on their CV that satisfied the requirement. Offshore Diver Medical counts as HSE Diver Medical. G31 / German Tauchtauglichkeit does not accept a generic foreign hospital medical (e.g. "Medical buceo"). If match.needsReview is non-empty, say those tickets need review and do not offer apply. A row that is only the word IMCA, with no dates, is not a held ticket. A year with no issued or expires label is not an expiry, so do not call HSE SCUBA 2025 expired. A range such as 2025–2027 is the years printed on the certificate.
+- After match_job, if canApply is false, do not offer apply — including when tickets are missing, expired, or in needsReview. Tell them what blocks apply. If canApply is true, show the draft (including the real company inbox) and wait for a clear yes.
 - apply_job sends CV + certificates only to the campaign's verified contractor inbox. Campaigns without an inbox are not listed. Never invent a company email. Never send to hello@ or DoneUnder as a fake listing desk. Never send without confirmed=true. If already_applied, do not send again. Each application email includes a private online CV link (about 90 days). The diver can list or revoke links with list_cv_share_links / revoke_cv_share_link or in workspace under Contact & CV sharing.
 - list_diving_companies when they ask about diving companies, who hires juniors/graduates, contractors in a country/region, or want work beyond the open campaign board. Prefer hire_graduates=true for fresh school graduates. Show soft fit % and typical tickets; still list weak fits.
 - apply_to_company only when has_apply_email / canApply is true for that company (verified careers inbox on file). Warn about missing typical tickets but do NOT hard-block — grads may still send after a clear yes. Never invent a company email. Never send without confirmed=true. If already applied to that company, do not send again.
@@ -1181,6 +1185,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             location: job.location,
             reason: formatMatchReason(match),
             score: match.score,
+            canApply: match.canApply,
             applied: appliedJobIds.has(job.id),
           },
         ];

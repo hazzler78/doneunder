@@ -17,7 +17,7 @@ import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
 import { isStoredMainCvFilename, pickMainCvFromChatAttachment } from "@/lib/document-names";
-import { applyPromptForJob, listedJobMatchPrompt } from "@/lib/jobs";
+import { applyPromptForJob, listedJobMatchPrompt, shouldShowJobApplyButton } from "@/lib/jobs";
 import { AnalyticsEvent } from "@/lib/analytics-events";
 import { FEEDBACK_TELEGRAM_URL, MULTILINGUAL_UPLOAD_HINT } from "@/lib/site";
 import { trackAnalyticsEvent } from "@/lib/track-analytics";
@@ -33,6 +33,7 @@ type ChatResponse = {
     location: string;
     reason: string;
     score: number;
+    canApply?: boolean;
     applied?: boolean;
   }>;
   appliedJobIds?: string[];
@@ -1132,6 +1133,10 @@ export function AgentWorkspace({
                   </p>
                   {suggestions.map((item) => {
                     const applied = Boolean(item.applied) || appliedJobIds.includes(item.id);
+                    const showApply = shouldShowJobApplyButton({
+                      canApply: item.canApply === true,
+                      applied,
+                    });
                     return (
                     <div
                       key={item.id}
@@ -1160,17 +1165,19 @@ export function AgentWorkspace({
                         >
                           Match
                         </Button>
-                        <Button
-                          size="sm"
-                          disabled={sending || uploading || applied}
-                          onClick={() =>
-                            void sendMessage(applyPromptForJob(item), {
-                              display: `Apply to ${item.title}`,
-                            })
-                          }
-                        >
-                          {applied ? "Applied" : "Apply"}
-                        </Button>
+                        {showApply ? (
+                          <Button
+                            size="sm"
+                            disabled={sending || uploading}
+                            onClick={() =>
+                              void sendMessage(applyPromptForJob(item), {
+                                display: `Apply to ${item.title}`,
+                              })
+                            }
+                          >
+                            Apply
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                     );

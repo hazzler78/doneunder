@@ -24,6 +24,7 @@ describe("job alert gating", () => {
           status: "open",
           closesAt: "2026-10-20T17:00:00.000Z",
           postedAt: "2026-10-11T08:00:00.000Z",
+          applyEmail: "crew@contractor.test",
         },
         now,
       ),

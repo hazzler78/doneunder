@@ -174,21 +174,21 @@ describe("expiry before issue date", () => {
   });
 
   it("does not call a ticket expired when its expiry is before its issue date", () => {
-    const job = JOB_CATALOG.find((item) => item.requiredCerts.some((cert) => /medical/i.test(cert)));
+    const job = JOB_CATALOG.find((item) => item.id === "job-nordseetaucher-2026-11");
     assert.ok(job);
     const match = scoreDiverAgainstJob(
       job,
       {
         certs: [
-          { name: "HSE Diver Medical", issueDate: "2026-05-31", expiryDate: "2022-08-12" },
-          { name: "IMCA Surface Supplied (Top Up)", issuingBody: "HSE" },
+          { name: "G31 Tauchtauglichkeit", issueDate: "2026-05-31", expiryDate: "2022-08-12" },
+          { name: "Geprüfter Taucher (IHK)" },
           { name: "OPITO BOSIET", expiryDate: "2028-01-01" },
           { name: "OPITO FOET", expiryDate: "2028-01-01" },
         ],
       },
       new Date("2026-11-11T10:00:00Z"),
     );
-    const medicalLabel = job.requiredCerts.find((cert) => /medical/i.test(cert))!;
+    const medicalLabel = "G31 Tauchtauglichkeit";
     assert.equal(match.expired.includes(medicalLabel), false);
     assert.ok(match.unknownExpiry.includes(medicalLabel));
   });
@@ -211,30 +211,35 @@ describe("profile lifetime display vs stored dates", () => {
 
 describe("job matching and profile validation with lifetime tickets", () => {
   it("does not say 'No expiry on file' for a lifetime IMCA/HSE ticket", () => {
-    const job = JOB_CATALOG.find((item) => item.requiredCerts.includes("IMCA"));
+    const job = JOB_CATALOG.find((item) => item.id === "job-baltic-taucher-2026-11");
     assert.ok(job);
     const match = scoreDiverAgainstJob(
       job,
       {
         certs: [
           { name: "HSE Part 1 Surface Supplied", issuingBody: "HSE", expiryDate: null },
-          { name: "HSE Diver Medical", expiryDate: "2027-04-29" },
+          { name: "G31 Tauchtauglichkeit", expiryDate: "2027-04-29" },
           { name: "OPITO BOSIET", expiryDate: "2028-04-29" },
           { name: "OPITO FOET", expiryDate: "2028-04-29" },
         ],
       },
       new Date("2026-11-11T10:00:00Z"),
     );
-    assert.ok(match.have.includes("IMCA"));
-    assert.equal(match.unknownExpiry.includes("IMCA"), false);
-    assert.doesNotMatch(formatMatchReason(match), /No expiry on file: .*IMCA/);
+    assert.ok(match.have.includes("IHK Geprüfter Taucher"));
+    assert.equal(match.unknownExpiry.includes("IHK Geprüfter Taucher"), false);
+    assert.doesNotMatch(formatMatchReason(match), /No expiry on file: .*IHK/);
   });
 
   it("still flags an undated medical", () => {
-    const job = JOB_CATALOG.find((item) => item.requiredCerts.some((cert) => /medical/i.test(cert)));
+    const job = JOB_CATALOG.find((item) => item.id === "job-nordseetaucher-2026-11");
     assert.ok(job);
-    const medicalLabel = job.requiredCerts.find((cert) => /medical/i.test(cert))!;
-    const match = scoreDiverAgainstJob(job, { certs: [{ name: "HSE Diver Medical", issuingBody: "Dr Smith, HSE approved doctor", expiryDate: null }] });
+    const medicalLabel = "G31 Tauchtauglichkeit";
+    const match = scoreDiverAgainstJob(job, {
+      certs: [
+        { name: "Geprüfter Taucher (IHK)" },
+        { name: "G31", issuingBody: "German diving doctor", expiryDate: null },
+      ],
+    });
     assert.ok(match.unknownExpiry.includes(medicalLabel));
   });
 

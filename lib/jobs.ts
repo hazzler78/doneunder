@@ -2,7 +2,11 @@ import { checkCertificateDates, isLifetimeCertificate } from "@/lib/cert-lifetim
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isYearPlaceholderExpiry } from "@/lib/dates";
 import { JOB_CATALOG, type PublicJob } from "@/lib/job-catalog";
-import { isPlaceholderCertificate, ticketSatisfiesRequirement } from "@/lib/ticket-match";
+import {
+  isPlaceholderCertificate,
+  ticketNeedsMedicalReview,
+  ticketSatisfiesRequirement,
+} from "@/lib/ticket-match";
 
 /** Product policy for match/apply: docs/hiring-and-apply.md */
 
@@ -96,6 +100,11 @@ export function listedJobMatchPrompt(job: Pick<PublicJob, "id" | "title">) {
   ].join("\n");
 }
 
+/** Workspace job cards show Apply only when the matcher says the diver can apply. */
+export function shouldShowJobApplyButton(input: { canApply: boolean; applied?: boolean }): boolean {
+  return input.canApply === true && !input.applied;
+}
+
 export function applyPromptForJob(job: Pick<PublicJob, "id" | "title">) {
   return [
     `Apply me to this campaign (job id ${job.id}).`,
@@ -119,6 +128,8 @@ export type JobMatch = {
   missing: string[];
   expired: string[];
   unknownExpiry: string[];
+  /** Required label where a ticket looks related but does not meet strict diving-medical rules. */
+  needsReview: string[];
   locationFit: boolean;
   score: number;
   verdict: "strong" | "possible" | "weak";
@@ -168,6 +179,7 @@ export function scoreDiverAgainstJob(
   const missing: string[] = [];
   const expired: string[] = [];
   const unknownExpiry: string[] = [];
+  const needsReview: string[] = [];
   const matched: Record<string, string> = {};
 
   for (const cert of required) {
@@ -183,7 +195,17 @@ export function scoreDiverAgainstJob(
       });
     });
     if (!hit) {
-      missing.push(cert);
+      const maybe = tickets.find(
+        (ticket) =>
+          !isPlaceholderCertificate(ticket) &&
+          ticketNeedsMedicalReview(cert, { name: ticket.name, issuingBody: ticket.issuingBody }),
+      );
+      if (maybe) {
+        needsReview.push(cert);
+        matched[cert] = maybe.name;
+      } else {
+        missing.push(cert);
+      }
       continue;
     }
     matched[cert] = hit.name;
@@ -210,7 +232,8 @@ export function scoreDiverAgainstJob(
   const loc = (input.location ?? "").toLowerCase();
   const jobLoc = job.location.toLowerCase();
   const locationFit = Boolean(loc && jobLoc && (loc.includes(jobLoc) || jobLoc.includes(loc)));
-  const complete = required.length > 0 && missing.length === 0 && expired.length === 0;
+  const complete =
+    required.length > 0 && missing.length === 0 && expired.length === 0 && needsReview.length === 0;
   const score = Math.max(
     0,
     Math.min(100, have.length * 28 + (complete ? 16 : 0) + (locationFit ? 10 : 0) - expired.length * 12),
@@ -226,11 +249,12 @@ export function scoreDiverAgainstJob(
     missing,
     expired,
     unknownExpiry,
+    needsReview,
     locationFit,
     score,
     verdict,
     open,
-    canApply: open && expired.length === 0 && missing.length === 0,
+    canApply: open && expired.length === 0 && missing.length === 0 && needsReview.length === 0,
     matched,
   };
 }
@@ -249,10 +273,16 @@ export function formatMatchReason(match: JobMatch) {
   if (match.expired.length) parts.push(`Expired: ${match.expired.join(", ")}`);
   if (match.missing.length) parts.push(`Missing: ${match.missing.join(", ")}`);
   if (match.unknownExpiry.length) parts.push(`No expiry on file: ${match.unknownExpiry.join(", ")}`);
+  if (match.needsReview.length) {
+    parts.push(
+      `Needs review: ${match.needsReview.map((label) => withTicketName(label, match.matched)).join(", ")}`,
+    );
+  }
   if (!parts.length) parts.push("No required tickets listed");
   if (!match.canApply) {
     if (!match.open) parts.push("Campaign is closed or has no contractor inbox");
     else if (match.expired.length) parts.push("Do not apply until expired tickets are renewed");
+    else if (match.needsReview.length) parts.push("Do not apply until flagged tickets are confirmed");
     else if (match.missing.length) parts.push("Do not apply until missing tickets are on file");
   }
   return `${parts.join(". ")}.`;
@@ -268,6 +298,9 @@ export function applyBlockReason(match: JobMatch, job?: Pick<PublicJob, "applyEm
   }
   if (match.missing.length) {
     return `Not sent. Required tickets missing: ${match.missing.join(", ")}. Add current scans first.`;
+  }
+  if (match.needsReview.length) {
+    return `Not sent. These tickets need review before apply: ${match.needsReview.join(", ")}.`;
   }
   return null;
 }

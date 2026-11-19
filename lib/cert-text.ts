@@ -377,7 +377,37 @@ export async function readPdfCertificatePack(
   // One-page photo-PDF where the multi reader found nothing: keep the single-ticket fallback.
   if (result.reads.length === 0 && totalPages === 1 && result.report.pagesFailed.length === 0 && !deps?.readText) {
     const single = certificateReadsFromVisionResult(await readPdfTextSingle(bytes, context));
+    if (single.length === 0 && context?.actorId) {
+      await logAgentInteraction({
+        actorId: context.actorId,
+        feature: "cert_vision_zero_read",
+        input: {
+          filename: label ?? "certificate.pdf",
+          bytes: bytes.length,
+          pdfFallbackTried: true,
+        },
+        output: {
+          ticketCount: 0,
+          source: "pdf_pack",
+        },
+      });
+    }
     return { reads: single, report: result.report };
+  }
+  if (result.reads.length === 0 && context?.actorId) {
+    await logAgentInteraction({
+      actorId: context.actorId,
+      feature: "cert_vision_zero_read",
+      input: {
+        filename: label ?? "certificate.pdf",
+        bytes: bytes.length,
+        pdfFallbackTried: false,
+      },
+      output: {
+        ticketCount: 0,
+        source: "pdf_pack",
+      },
+    });
   }
   return result;
 }
