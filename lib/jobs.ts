@@ -100,6 +100,11 @@ export function listedJobMatchPrompt(job: Pick<PublicJob, "id" | "title">) {
   ].join("\n");
 }
 
+/** Workspace job cards show Apply only when the matcher says the diver can apply. */
+export function shouldShowJobApplyButton(input: { canApply: boolean; applied?: boolean }): boolean {
+  return input.canApply === true && !input.applied;
+}
+
 export function applyPromptForJob(job: Pick<PublicJob, "id" | "title">) {
   return [
     `Apply me to this campaign (job id ${job.id}).`,

@@ -101,6 +101,7 @@ import {
   storeClientFormOutput,
 } from "@/lib/client-forms/service";
 import { BEACON_PDPA_CONSENT_TEXT } from "@/lib/client-forms/beacon-pdpa-pdf";
+import { HERMES_UNRECOGNIZED_MEDICAL_PROMPT_RULES } from "@/lib/hermes-cert-eligibility";
 
 export type JobSuggestion = {
   id: string;
@@ -108,6 +109,7 @@ export type JobSuggestion = {
   location: string;
   reason: string;
   score: number;
+  canApply: boolean;
   applied?: boolean;
 };
 
@@ -208,6 +210,7 @@ function scoreJobsForDiver(
         location: job.location,
         reason: formatMatchReason(match),
         score: match.score,
+        canApply: match.canApply,
         applied: appliedJobIds.has(job.id),
       };
     })
@@ -428,6 +431,7 @@ One living CV:
 - There is a single living CV: the profile you maintain. Chat updates via update_cv are the source of truth. When they ask to send their CV, attach that living CV PDF — never an old uploaded file.
 - An uploaded CV PDF is only a first import (or a rare full replace). After a living CV exists, do NOT ask them to upload another CV.
 - Certificates are separate from the CV. One uploaded PDF may contain many tickets — the upload path extracts each one. They stay until renewed. If they already have that ticket, do not add a duplicate. If they upload a new scan of the same ticket, treat it as a renewal and replace the old scan.
+- ${HERMES_UNRECOGNIZED_MEDICAL_PROMPT_RULES}
 
 Updating the CV from chat (this is the main way to edit):
 - When the diver wants ANY change to their CV or profile, you MUST call update_cv. Do not claim you updated anything unless the tool returns ok=true.
@@ -1181,6 +1185,7 @@ export async function runHermesDiverTurn(input: HermesDiverTurnInput): Promise<H
             location: job.location,
             reason: formatMatchReason(match),
             score: match.score,
+            canApply: match.canApply,
             applied: appliedJobIds.has(job.id),
           },
         ];
