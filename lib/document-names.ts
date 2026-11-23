@@ -4,7 +4,13 @@ const CV_NAME_HINT =
   /\b(cv|curriculum|resume|r[eé]sum[eé]|seaman|seamansbook|cdc|logbook)\b/i;
 
 function spacedFilename(name: string) {
-  return name.toLowerCase().replace(/[_-]+/g, " ");
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .toLowerCase();
 }
 
 export function looksLikeCertificateFilename(name: string) {
