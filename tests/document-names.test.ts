@@ -42,4 +42,21 @@ describe("pickMainCvFile conservative classification", () => {
       "my_resume.docx",
     );
   });
+
+  it("recognizes CamelCase CV filenames (SF-2)", () => {
+    assert.equal(looksLikeMainCvFilename("MNaidooDiveCV.pdf"), true);
+    assert.equal(looksLikeCertificateFilename("MNaidooDiveCV.pdf"), false);
+    assert.equal(pickMainCvFile([{ name: "MNaidooDiveCV.pdf" }])?.name, "MNaidooDiveCV.pdf");
+  });
+
+  it("treats CamelCase cert filenames as certificates, not the main CV", () => {
+    assert.equal(looksLikeCertificateFilename("MNaidooDiveCerts.pdf"), true);
+    assert.equal(looksLikeMainCvFilename("MNaidooDiveCerts.pdf"), false);
+    assert.equal(pickMainCvFile([{ name: "MNaidooDiveCerts.pdf" }]), null);
+  });
+
+  it("recognizes CamelCase Resume Word documents as CVs", () => {
+    assert.equal(looksLikeMainCvFilename("JohnSmithResume.docx"), true);
+    assert.equal(pickMainCvFile([{ name: "JohnSmithResume.docx" }])?.name, "JohnSmithResume.docx");
+  });
 });
