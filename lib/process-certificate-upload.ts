@@ -45,7 +45,12 @@ export async function processCertificateFromBytes(
   diverId: string,
   input: { name: string; bytes: Buffer; contentType: string },
   existing?: Awaited<ReturnType<typeof listDiverDocumentFiles>>,
-  options?: { read?: PackReadOptions; apply?: ApplyCertificateReadOptions },
+  options?: {
+    read?: PackReadOptions;
+    apply?: ApplyCertificateReadOptions;
+    /** Store only — used when a CV-shaped file lands on the certificate upload path. */
+    skipRead?: boolean;
+  },
 ): Promise<ProcessedCertificateUpload> {
   const fileList = existing ?? listCertificateDocumentFiles(await listDiverDocumentFiles(supabase, diverId));
   const result = await upsertDiverCertificateFile(
@@ -60,6 +65,28 @@ export async function processCertificateFromBytes(
     created_at: new Date().toISOString(),
     size: input.bytes.length,
   });
+  if (options?.skipRead) {
+    return {
+      name: input.name,
+      action: result.action,
+      path: result.path,
+      issue_date: null,
+      expiry_date: null,
+      ticket: null,
+      tickets: [],
+      ticketCount: 0,
+      source: "none",
+      readReport: {
+        totalPages: null,
+        pagesRead: [],
+        pagesSkipped: [],
+        pagesFailed: [],
+        errors: [],
+        complete: true,
+      },
+      readWarnings: [],
+    };
+  }
   const { reads, report } = await readCertificatePack(
     input.bytes,
     input.name,

@@ -1,7 +1,10 @@
 import { describePackReport, type CertificatePackReport } from "@/lib/cert-pack-read";
+import { certificatePanelCvMisrouteNote } from "@/lib/certificate-panel-cv-routing";
 
 export type CertificateUploadSummaryFile = {
   name: string;
+  /** Filename looks like a CV but arrived on the certificate upload path while a CV is already stored. */
+  cvMisroute?: boolean;
   action?: string;
   ticket?: string | null;
   expiry_date?: string | null;
@@ -109,9 +112,10 @@ export function buildCertificateUploadAssistantReply(files: CertificateUploadSum
   });
 
   const zeroReadFiles = certificateUploadFilesWithZeroReads(files);
-  const unreadNotes = zeroReadFiles.map(
-    (file) =>
-      `I couldn't read a ticket from ${file.name} — please send a sharper photo or the PDF, or type the ticket name and expiry.`,
+  const unreadNotes = zeroReadFiles.map((file) =>
+    file.cvMisroute
+      ? certificatePanelCvMisrouteNote(file.name)
+      : `I couldn't read a ticket from ${file.name} — please send a sharper photo or the PDF, or type the ticket name and expiry.`,
   );
   const deferredNotes = pendingReadNotes(files);
 

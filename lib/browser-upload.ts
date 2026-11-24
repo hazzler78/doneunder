@@ -13,6 +13,7 @@ export type CertificateUploadAction = "added" | "renewed" | "duplicate";
 
 export type CertificateUploadItem = {
   name: string;
+  cvMisroute?: boolean;
   action: CertificateUploadAction;
   ticket?: string | null;
   expiry_date?: string | null;
@@ -248,7 +249,17 @@ export async function stageCertificateFileDirect(file: File): Promise<StagedCert
   return { path, fileName: prepared.name, contentType };
 }
 
-async function finalizeCertificateUpload(staged: StagedCertificateUpload, original: File) {
+type FinalizeCertificateResult =
+  | { kind: "certificate"; item: CertificateUploadItem }
+  | {
+      kind: "cv";
+      mainCv: { path: string; name: string; fileSize: number };
+    };
+
+async function finalizeCertificateUpload(
+  staged: StagedCertificateUpload,
+  original: File,
+): Promise<FinalizeCertificateResult> {
   const response = await fetch("/api/diver/documents/finalize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -262,13 +273,32 @@ async function finalizeCertificateUpload(staged: StagedCertificateUpload, origin
   const data = await readApiJson(response);
   if (!response.ok) {
     if (isFinalizeGatewayTimeout(response.status)) {
-      return certificateItemAfterFinalizeGatewayTimeout(staged.fileName);
+      return {
+        kind: "certificate",
+        item: certificateItemAfterFinalizeGatewayTimeout(staged.fileName),
+      };
     }
     throw new Error(apiErrorMessage(data, response, staged.fileName, 10));
   }
+  if (data.reroutedToCv === true && data.mainCv && typeof data.mainCv === "object") {
+    const mainCv = data.mainCv as { path?: string; name?: string; fileSize?: number };
+    if (mainCv.path && mainCv.name) {
+      return {
+        kind: "cv",
+        mainCv: {
+          path: mainCv.path,
+          name: mainCv.name,
+          fileSize: typeof mainCv.fileSize === "number" ? mainCv.fileSize : original.size,
+        },
+      };
+    }
+  }
   const uploaded = Array.isArray(data.uploaded) ? data.uploaded : [];
   const first = uploaded[0] as CertificateUploadItem | undefined;
-  return first ?? { name: staged.fileName, action: "added" as const };
+  return {
+    kind: "certificate",
+    item: first ?? { name: staged.fileName, action: "added" as const },
+  };
 }
 
 export async function uploadCertificateFilesSequentially(
@@ -277,6 +307,7 @@ export async function uploadCertificateFilesSequentially(
 ) {
   const uploaded: CertificateUploadItem[] = [];
   const errors: string[] = [];
+  let reroutedMainCv: { path: string; name: string; fileSize: number } | null = null;
 
   for (const [index, original] of files.entries()) {
     onProgress?.(index + 1, files.length, original.name);
@@ -288,12 +319,41 @@ export async function uploadCertificateFilesSequentially(
     }
     try {
       const staged = await stageCertificateFileDirect(original);
-      const item = await finalizeCertificateUpload(staged, original);
-      uploaded.push(item);
+      const finalized = await finalizeCertificateUpload(staged, original);
+      if (finalized.kind === "cv") {
+        reroutedMainCv = finalized.mainCv;
+        continue;
+      }
+      uploaded.push(finalized.item);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${original.name}: ${message}`);
       void logClientUploadFailure(original, message);
+    }
+  }
+
+  if (reroutedMainCv) {
+    try {
+      const response = await fetch("/api/diver/profile/process-cv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mainCv: {
+            path: reroutedMainCv.path,
+            name: reroutedMainCv.name,
+            fileSize: reroutedMainCv.fileSize,
+          },
+        }),
+      });
+      if (!response.ok) {
+        const data = await readApiJson(response);
+        const message =
+          typeof data.error === "string" ? data.error : "Could not process CV routed from certificate upload.";
+        errors.push(`${reroutedMainCv.name}: ${message}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${reroutedMainCv.name}: ${message}`);
     }
   }
 
@@ -310,5 +370,5 @@ export async function uploadCertificateFilesSequentially(
     }
   }
 
-  return { uploaded, errors };
+  return { uploaded, errors, cvProcessed: Boolean(reroutedMainCv) };
 }

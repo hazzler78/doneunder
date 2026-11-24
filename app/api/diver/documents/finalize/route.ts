@@ -23,6 +23,12 @@ import { DEFAULT_PACK_DEADLINE_MS } from "@/lib/cert-pack-read";
 import { logDiverUploadFailure } from "@/lib/upload-failure-log";
 import { notifyDeferredCertZeroRead } from "@/lib/deferred-cert-read-followup";
 import { logAgentInteraction } from "@/lib/audit";
+import {
+  certificatePanelCvMisrouteLooksLike,
+  promoteCertificateStagingToMainCv,
+} from "@/lib/certificate-panel-cv-routing";
+import { diverHasStoredCv } from "@/lib/diver-stored-cv";
+import { looksLikeMainCvFilename } from "@/lib/document-names";
 
 export const runtime = "nodejs";
 /** Store + background pack read; keep under Vercel Pro serverless max (300 s). */
@@ -148,11 +154,33 @@ export async function POST(req: Request) {
 
     const routeStartedAt = Date.now();
     try {
+      const hasStoredCv = await diverHasStoredCv(supabase, diverId);
+      const looksLikeCv = looksLikeMainCvFilename(fileName);
+
+      if (looksLikeCv && !hasStoredCv) {
+        const mainCv = await promoteCertificateStagingToMainCv(supabase, diverId, {
+          stagingPath: storagePath,
+          fileName,
+          contentType,
+        });
+        return NextResponse.json({
+          ok: true,
+          reroutedToCv: true,
+          mainCv: {
+            path: mainCv.path,
+            name: mainCv.name,
+            fileSize: mainCv.fileSize,
+          },
+        });
+      }
+
       const { bytes, stored } = await storeCertificateFromStaging(supabase, diverId, {
         storagePath,
         name: fileName,
         contentType,
       });
+
+      const cvMisroute = certificatePanelCvMisrouteLooksLike(fileName, hasStoredCv);
 
       const elapsed = Date.now() - routeStartedAt;
       if (elapsed > STORE_RESERVE_MS) {
@@ -163,9 +191,26 @@ export async function POST(req: Request) {
         });
       }
 
-      const uploaded = buildDeferredFinalizeUploadItem({ fileName, stored });
+      const uploaded = cvMisroute
+        ? {
+            name: fileName,
+            action: stored.action,
+            ticketCount: 0,
+            tickets: [] as Array<{ name?: string | null; expiry_date?: string | null }>,
+            cvMisroute: true,
+            readReport: {
+              totalPages: null,
+              pagesRead: [] as number[],
+              pagesSkipped: [] as number[],
+              pagesFailed: [] as number[],
+              errors: [] as string[],
+              complete: true,
+            },
+          }
+        : buildDeferredFinalizeUploadItem({ fileName, stored });
 
       after(async () => {
+        if (cvMisroute) return;
         try {
           await readCertificatePackInBackground(supabase, diverId, {
             bytes,
@@ -189,7 +234,11 @@ export async function POST(req: Request) {
         }
       });
 
-      return NextResponse.json({ ok: true, deferredRead: true, uploaded: [uploaded] });
+      return NextResponse.json({
+        ok: true,
+        deferredRead: !cvMisroute,
+        uploaded: [uploaded],
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await logDiverUploadFailure(supabase, diverId, {

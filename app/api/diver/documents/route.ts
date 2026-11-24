@@ -8,11 +8,16 @@ import {
   listDiverDocumentFiles,
 } from "@/lib/diver-documents";
 import { processCertificateFromBytes } from "@/lib/process-certificate-upload";
-import { displayCertificateName } from "@/lib/document-names";
+import { displayCertificateName, pickMainCvForCertificatePanelUpload } from "@/lib/document-names";
 import {
   buildCertificateUploadAssistantReply,
   type CertificateUploadSummaryFile,
 } from "@/lib/certificate-upload-reply";
+import {
+  certificatePanelCvMisrouteLooksLike,
+  storeMainCvFromBytes,
+} from "@/lib/certificate-panel-cv-routing";
+import { diverHasStoredCv } from "@/lib/diver-stored-cv";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -115,7 +120,7 @@ export async function POST(req: Request) {
     }
 
     const formData = await req.formData();
-    const certificateFiles = formData
+    let certificateFiles = formData
       .getAll("certificates")
       .filter((entry): entry is File => entry instanceof File && entry.size > 0);
     if (certificateFiles.length === 0) {
@@ -125,20 +130,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Send at most 3 files per request. The workspace uploads them in sequence." }, { status: 400 });
     }
 
+    const hasStoredCv = await diverHasStoredCv(supabase, authResult.diverId);
+    const panelCv = pickMainCvForCertificatePanelUpload(certificateFiles, { hasStoredCv });
+    let reroutedMainCv: { path: string; name: string; fileSize: number } | null = null;
+    if (panelCv) {
+      const bytes = Buffer.from(await panelCv.arrayBuffer());
+      if (bytes.length > 12 * 1024 * 1024) {
+        return NextResponse.json({ error: `${panelCv.name} exceeds 12MB.` }, { status: 400 });
+      }
+      reroutedMainCv = await storeMainCvFromBytes(supabase, authResult.diverId, {
+        fileName: panelCv.name,
+        bytes,
+        contentType: panelCv.type || "",
+      });
+      certificateFiles = certificateFiles.filter((file) => file !== panelCv);
+    }
+
     const existing = listCertificateDocumentFiles(await listDiverDocumentFiles(supabase, authResult.diverId));
     const uploaded = [];
+    const readBudget = Math.max(
+      1,
+      Math.floor(PER_REQUEST_READ_BUDGET_MS / Math.max(certificateFiles.length, 1)),
+    );
     for (const file of certificateFiles) {
       if (file.size > 10 * 1024 * 1024) {
         return NextResponse.json({ error: `${file.name} exceeds 10MB.` }, { status: 400 });
       }
       const bytes = Buffer.from(await file.arrayBuffer());
+      const cvMisroute = certificatePanelCvMisrouteLooksLike(file.name, hasStoredCv);
       const processed = await processCertificateFromBytes(
         supabase,
         authResult.diverId,
         { name: file.name, bytes, contentType: file.type || "" },
         existing,
-        // Up to 3 files per request: share the function time budget instead of timing out silently.
-        { read: { deadlineMs: Math.floor(PER_REQUEST_READ_BUDGET_MS / certificateFiles.length) } },
+        {
+          skipRead: cvMisroute,
+          read: { deadlineMs: readBudget },
+        },
       );
       existing.push({
         name: processed.path.split("/").pop() ?? processed.name,
@@ -146,10 +174,14 @@ export async function POST(req: Request) {
         created_at: new Date().toISOString(),
         size: bytes.length,
       });
-      uploaded.push(processed);
+      uploaded.push({ ...processed, ...(cvMisroute ? { cvMisroute: true } : {}) });
     }
 
-    return NextResponse.json({ ok: true, uploaded });
+    return NextResponse.json({
+      ok: true,
+      uploaded,
+      ...(reroutedMainCv ? { reroutedMainCv } : {}),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: "Unable to store certificate.", detail: String(error) },
