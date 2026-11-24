@@ -92,6 +92,23 @@ describe("buildCertificateUploadAssistantReply", () => {
     assert.match(reply.content, /do not match jobs from the filename alone/i);
   });
 
+  it("tells divers to use the CV upload when a stored CV exists and the file name is CV-shaped", () => {
+    const reply = buildCertificateUploadAssistantReply([
+      {
+        name: "Cv Diver Percio Salles.pdf",
+        action: "added",
+        ticketCount: 0,
+        tickets: [],
+        cvMisroute: true,
+      },
+    ]);
+    assert.deepEqual(reply.zeroReadFilenames, ["Cv Diver Percio Salles.pdf"]);
+    assert.match(reply.content, /looks like a CV/i);
+    assert.match(reply.content, /Seed CV/i);
+    assert.doesNotMatch(reply.content, /certificate name/i);
+    assert.doesNotMatch(reply.content, /sharper photo/i);
+  });
+
   it("still lists tickets when vision succeeded", () => {
     const reply = buildCertificateUploadAssistantReply([
       {

@@ -4,6 +4,7 @@ import {
   looksLikeCertificateFilename,
   looksLikeMainCvFilename,
   pickMainCvFile,
+  pickMainCvForCertificatePanelUpload,
   pickMainCvFromChatAttachment,
 } from "../lib/document-names";
 
@@ -58,5 +59,14 @@ describe("pickMainCvFile conservative classification", () => {
   it("recognizes CamelCase Resume Word documents as CVs", () => {
     assert.equal(looksLikeMainCvFilename("JohnSmithResume.docx"), true);
     assert.equal(pickMainCvFile([{ name: "JohnSmithResume.docx" }])?.name, "JohnSmithResume.docx");
+  });
+
+  it("routes certificate-panel CV filenames only when no CV is stored", () => {
+    const batch = [{ name: "Cv Diver Percio Salles.pdf" }, { name: "BOSIET.pdf" }];
+    assert.equal(
+      pickMainCvForCertificatePanelUpload(batch, { hasStoredCv: false })?.name,
+      "Cv Diver Percio Salles.pdf",
+    );
+    assert.equal(pickMainCvForCertificatePanelUpload(batch, { hasStoredCv: true }), null);
   });
 });

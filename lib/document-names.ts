@@ -47,6 +47,17 @@ export function pickMainCvFromChatAttachment<T extends { name: string }>(
   return candidate;
 }
 
+/**
+ * Certificate panel / documents-upload: route a clearly named CV to the CV pipeline only when none is stored yet.
+ */
+export function pickMainCvForCertificatePanelUpload<T extends { name: string }>(
+  files: T[],
+  options: { hasStoredCv: boolean },
+): T | null {
+  if (options.hasStoredCv) return null;
+  return pickMainCvFile(files);
+}
+
 export function isStoredMainCvFilename(name: string) {
   return (
     /^main-cv-/i.test(name) ||

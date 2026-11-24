@@ -1,10 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appendAgentMessage } from "@/lib/agent-messages";
 import { getAgentThread, upsertWorkspaceThread } from "@/lib/agent-threads";
+import { buildCertificatePanelCvMisrouteMessage } from "@/lib/certificate-panel-cv-routing";
+import { diverHasStoredCv } from "@/lib/diver-stored-cv";
+import { looksLikeMainCvFilename } from "@/lib/document-names";
 
 export const DEFERRED_CERT_ZERO_READ_SOURCE = "deferred_cert_zero_read";
 
-export function buildDeferredCertZeroReadMessage(fileName: string) {
+export function buildDeferredCertZeroReadMessage(
+  fileName: string,
+  options?: { cvMisroute?: boolean },
+) {
+  if (options?.cvMisroute) {
+    return buildCertificatePanelCvMisrouteMessage(fileName);
+  }
   return (
     `I saved **${fileName}**, but I could not read any ticket from it — nothing was added to your certifications.\n\n` +
     `Please either:\n` +
@@ -58,11 +67,14 @@ export async function notifyDeferredCertZeroRead(
     return { notified: false };
   }
 
+  const hasStoredCv = await diverHasStoredCv(supabase, diverId);
+  const cvMisroute = hasStoredCv && looksLikeMainCvFilename(fileName);
+
   await appendAgentMessage(supabase, {
     threadId: thread.id,
     role: "assistant",
-    content: buildDeferredCertZeroReadMessage(fileName),
-    metadata: { source: DEFERRED_CERT_ZERO_READ_SOURCE, fileName },
+    content: buildDeferredCertZeroReadMessage(fileName, { cvMisroute }),
+    metadata: { source: DEFERRED_CERT_ZERO_READ_SOURCE, fileName, cvMisroute },
   });
 
   return { notified: true };
