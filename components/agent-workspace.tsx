@@ -8,11 +8,19 @@ import { FileText, LogOut, Paperclip, PanelLeft, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/app/auth/actions";
 import {
-  readApiJson,
+  postProcessCv,
   stageCertificateFileDirect,
   uploadCertificateFilesSequentially,
   uploadMainCvDirect,
 } from "@/lib/browser-upload";
+import { validateCertificateFileOnClient, validateCvFileOnClient } from "@/lib/browser-file-validation";
+import {
+  beginWorkspaceUpload,
+  failureMessageFromUnknown,
+  processRequestText,
+  runWorkspaceUploadSession,
+  type WorkspaceUploadWorkResult,
+} from "@/lib/workspace-upload-session";
 import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { CertExpiryPanel } from "@/components/cert-expiry-panel";
 import { DiverProfileSettingsPanel } from "@/components/diver-profile-settings-panel";
@@ -159,6 +167,7 @@ export function AgentWorkspace({
   const matchSentRef = useRef(false);
   const fixPrefillRef = useRef(false);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const uploadBusyRef = useRef(false);
 
   const firstRun = role === "diver" && !livingCv.present && documents.length === 0;
   const starters = useMemo(() => {
@@ -400,7 +409,26 @@ export function AgentWorkspace({
 
   const hasStoredCv = livingCv.present || documents.some((doc) => isStoredMainCvFilename(doc.name));
 
+  function appendAgentMessage(text: string) {
+    setMessages((prev) => {
+      if (prev.some((item) => item.from === "agent" && item.text === text)) return prev;
+      return [...prev, { id: crypto.randomUUID(), from: "agent", text }];
+    });
+  }
+
   async function processCvUpload(fileOverride?: File | File[]) {
+    if (uploadBusyRef.current) return;
+    uploadBusyRef.current = true;
+    try {
+      await runProcessCvUpload(fileOverride);
+    } finally {
+      uploadBusyRef.current = false;
+      setUploading(false);
+      setUploadPhase(null);
+    }
+  }
+
+  async function runProcessCvUpload(fileOverride?: File | File[]) {
     const dropped = fileOverride ? (Array.isArray(fileOverride) ? fileOverride : [fileOverride]) : [];
     const fromChat = dropped.length > 0;
     const cvFile = fromChat
@@ -409,158 +437,249 @@ export function AgentWorkspace({
     const certFiles = fromChat
       ? dropped.filter((file) => file !== cvFile)
       : certs;
-    const selected = fromChat ? dropped : ([mainCv, ...certs].filter(Boolean) as File[]);
     if (!cvFile && certFiles.length === 0) {
       const message =
         "Select a CV (PDF or Word) and/or certificate files (PDF, Word, JPG, PNG).";
       setUploadError(message);
+      setUploading(false);
+      setUploadPhase(null);
       setPanelOpen(true);
       return;
     }
-    setUploading(true);
-    setUploadPhase(cvFile ? "cv" : "certs");
-    setUploadError(null);
-    setUploadNotice(null);
-    setSuggestPublish(false);
-    if (dropped.length > 0 || selected.length > 0) {
-      const names = selected.map((file) => file.name).join(", ");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          from: "user",
-          text: cvFile && certFiles.length === 0 ? `Please process this CV PDF: ${cvFile.name}` : `Please process these files: ${names}`,
-        },
-      ]);
-    }
-    try {
-      let cvFailed = false;
-      if (cvFile) {
-        const stagedCerts = [];
-        for (const cert of certFiles) {
-          stagedCerts.push(await stageCertificateFileDirect(cert));
-        }
-        const mainCvStored = await uploadMainCvDirect(cvFile);
-        const response = await fetch("/api/diver/profile/process-cv", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mainCv: {
-              path: mainCvStored.path,
-              name: mainCvStored.fileName,
-              fileSize: cvFile.size,
-            },
-            certificates: stagedCerts.map((item, index) => ({
-              path: item.path,
-              name: item.fileName,
-              contentType: item.contentType,
-              fileSize: certFiles[index]?.size ?? 0,
-            })),
-          }),
-        });
-        const data = (await readApiJson(response)) as {
-          ok?: boolean;
-          error?: string;
-          detail?: string;
-          warnings?: string[];
-          unreadablePdf?: boolean;
-          suggestPublish?: boolean;
-          profileStatus?: "draft" | "published";
-          needsPhoto?: boolean;
-          autoPublished?: boolean;
-          publishBlockedMessage?: string;
-        };
-        if (data.unreadablePdf || data.ok === false) {
-          cvFailed = true;
-          const message =
-            data.error ??
-            data.warnings?.[0] ??
-            "Could not read text from that PDF. File saved — paste CV text in chat or upload a text-based PDF.";
-          setUploadError(message);
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
-        } else if (!response.ok) {
-          cvFailed = true;
-          const raw = `${data.error ?? ""} ${data.detail ?? ""}`;
-          const message = /AI_RetryError|Too Many Requests|429|rate limit/i.test(raw)
-            ? "The CV reader is busy right now. Wait a moment and press Process files again."
-            : (data.error ?? "Could not process the CV. Try again in a moment.");
-          setUploadError(message);
-          setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
-        } else {
-          if (data.profileStatus) setProfileStatus(data.profileStatus);
-          if (data.profileStatus === "published") {
-            setSuggestPublish(false);
-            setSuggestPhoto(Boolean(data.needsPhoto));
-            setPanelOpen(true);
-            setUploadNotice(
-              data.needsPhoto
-                ? "CV processed — your page is live. Add a face photo on Preview so the card looks finished."
-                : "CV processed — your page is live. Unpublish in the workspace if you want it offline.",
-            );
-          } else if (data.suggestPublish || data.profileStatus === "draft") {
-            setSuggestPublish(true);
-            setPanelOpen(true);
-            setUploadNotice(
-              data.publishBlockedMessage ??
-                "CV processed. Still a draft — fix any gaps below, then tap Publish page.",
-            );
-            if (data.publishBlockedMessage) {
-              setUploadError(data.publishBlockedMessage);
-              setMessages((prev) => [
-                ...prev,
-                { id: crypto.randomUUID(), from: "agent", text: data.publishBlockedMessage! },
-              ]);
-            }
-          }
-          if (data.warnings?.length) {
-            setUploadNotice((prev) => [prev, ...data.warnings!].filter(Boolean).join(" "));
-          }
-        }
-      }
 
-      if (certFiles.length > 0 && (!cvFile || cvFailed)) {
-        const { uploaded, errors } = await uploadCertificateFilesSequentially(
-          certFiles,
-          (current, total, fileName) => {
-            setUploadError(`Uploading ${current} of ${total}: ${fileName}`);
-          },
-        );
-        if (errors.length > 0) {
-          const message = `Stored ${uploaded.length} file(s). Failed: ${errors.join(" ")}`;
-          setUploadError(message);
-          if (fileOverride) {
-            setMessages((prev) => [...prev, { id: crypto.randomUUID(), from: "agent", text: message }]);
+    const certCandidates = certFiles.filter((file) => !(cvFile && file === cvFile));
+    const [cvClientError, certReports] = await Promise.all([
+      cvFile
+        ? validateCvFileOnClient(cvFile).catch((error: unknown) => failureMessageFromUnknown(error).message)
+        : Promise.resolve(null),
+      Promise.all(
+        certCandidates.map(async (file) => {
+          try {
+            return { file, error: await validateCertificateFileOnClient(file) };
+          } catch (error) {
+            return { file, error: failureMessageFromUnknown(error).message };
           }
-        } else {
-          setUploadError(null);
-        }
-      }
-
-      setMainCv(null);
-      setCerts([]);
-      setCertReloadKey((value) => value + 1);
-      if (cvFile && !cvFailed) {
-        setCvUpdatedParts(["CV upload"]);
-      } else if (!cvFile) {
-        setCvUpdatedParts(["Certificate files"]);
-      }
-      await loadDocuments();
-      await loadChatHistory({ silent: true });
-    } catch {
-      setUploadError("Upload request failed.");
-      if (fileOverride) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            from: "agent",
-            text: "Upload request failed. Please try attaching the files again.",
-          },
-        ]);
-      }
-    } finally {
+        }),
+      ),
+    ]);
+    const start = beginWorkspaceUpload({
+      hasCv: Boolean(cvFile),
+      cvError: cvClientError,
+      cvName: cvFile?.name ?? null,
+      certificates: certReports.map((item) => ({ name: item.file.name, error: item.error })),
+    });
+    if (start.blocked) {
       setUploading(false);
       setUploadPhase(null);
+      setUploadError(start.error);
+      setUploadNotice(null);
+      setCvUpdatedParts([]);
+      setPanelOpen(true);
+      if (start.error) appendAgentMessage(start.error);
+      return;
+    }
+
+    const acceptedCv = cvFile && !cvClientError ? cvFile : null;
+    const acceptedCerts = certReports.filter((item) => !item.error).map((item) => item.file);
+    const preflightFailures = start.rejected.map((item) => `${item.name}: ${item.message}`);
+
+    try {
+      const { settlement } = await runWorkspaceUploadSession({
+        start,
+        onBusy: () => {
+          setUploading(true);
+          setUploadPhase("certs");
+          setUploadError(null);
+          setUploadNotice(null);
+          setSuggestPublish(false);
+        },
+        onIdle: () => {
+          setUploading(false);
+          setUploadPhase(null);
+        },
+        onSettled: (settlement) => {
+          setUploadError(settlement.error);
+          if (settlement.agentError) appendAgentMessage(settlement.agentError);
+        },
+        reload: async (settlement) => {
+          await loadDocuments();
+          if (!settlement.agentError || settlement.cvUpdatedLabel === "CV upload") {
+            await loadChatHistory({ silent: true });
+          }
+        },
+        work: async (): Promise<WorkspaceUploadWorkResult> => {
+          let cvFailed = false;
+          let cvStored = false;
+          let cvProcessed = false;
+          let cvName: string | null = null;
+          const failures = [...preflightFailures];
+          let requestError: string | null = null;
+          let noticeError: string | null = null;
+          let timedOut = false;
+
+          if (acceptedCv) {
+            const stagedCerts: Array<{ path: string; fileName: string; contentType: string }> = [];
+            const stagedFiles: File[] = [];
+            for (const cert of acceptedCerts) {
+              try {
+                stagedCerts.push(await stageCertificateFileDirect(cert));
+                stagedFiles.push(cert);
+              } catch (error) {
+                const failure = failureMessageFromUnknown(error);
+                failures.push(`${cert.name}: ${failure.message}`);
+                if (failure.timedOut) timedOut = true;
+              }
+            }
+
+            let mainCvStored: { path: string; fileName: string } | null = null;
+            try {
+              mainCvStored = await uploadMainCvDirect(acceptedCv);
+              cvStored = true;
+              cvName = mainCvStored.fileName;
+            } catch (error) {
+              cvFailed = true;
+              const failure = failureMessageFromUnknown(error);
+              requestError = failure.message;
+              if (failure.timedOut) timedOut = true;
+            }
+
+            if (mainCvStored) {
+              const announce = processRequestText({
+                cvName: mainCvStored.fileName,
+                certNames: stagedFiles.map((file) => file.name),
+              });
+              if (announce) {
+                setMessages((prev) => [
+                  ...prev,
+                  { id: crypto.randomUUID(), from: "user", text: announce },
+                ]);
+              }
+              setUploadPhase("cv");
+              try {
+                const { response, data } = await postProcessCv({
+                  mainCv: {
+                    path: mainCvStored.path,
+                    name: mainCvStored.fileName,
+                    fileSize: acceptedCv.size,
+                  },
+                  certificates: stagedCerts.map((item, index) => ({
+                    path: item.path,
+                    name: item.fileName,
+                    contentType: item.contentType,
+                    fileSize: stagedFiles[index]?.size ?? 0,
+                  })),
+                });
+                const parsed = data as {
+                  ok?: boolean;
+                  error?: string;
+                  detail?: string;
+                  warnings?: string[];
+                  unreadablePdf?: boolean;
+                  suggestPublish?: boolean;
+                  profileStatus?: "draft" | "published";
+                  needsPhoto?: boolean;
+                  timedOut?: boolean;
+                  publishBlockedMessage?: string;
+                };
+                if (parsed.timedOut) {
+                  cvFailed = true;
+                  timedOut = true;
+                  requestError = parsed.error ?? requestError;
+                } else if (parsed.unreadablePdf || parsed.ok === false) {
+                  cvFailed = true;
+                  requestError =
+                    parsed.error ??
+                    parsed.warnings?.[0] ??
+                    "Could not read text from that PDF. File saved — paste CV text in chat or upload a text-based PDF.";
+                } else if (!response.ok) {
+                  cvFailed = true;
+                  const raw = `${parsed.error ?? ""} ${parsed.detail ?? ""}`;
+                  requestError = /AI_RetryError|Too Many Requests|429|rate limit/i.test(raw)
+                    ? "The CV reader is busy right now. Wait a moment and press Process files again."
+                    : (parsed.error ?? "Could not process the CV. Try again in a moment.");
+                } else {
+                  cvProcessed = true;
+                  if (parsed.profileStatus) setProfileStatus(parsed.profileStatus);
+                  if (parsed.profileStatus === "published") {
+                    setSuggestPublish(false);
+                    setSuggestPhoto(Boolean(parsed.needsPhoto));
+                    setPanelOpen(true);
+                    setUploadNotice(
+                      parsed.needsPhoto
+                        ? "CV processed — your page is live. Add a face photo on Preview so the card looks finished."
+                        : "CV processed — your page is live. Unpublish in the workspace if you want it offline.",
+                    );
+                  } else if (parsed.suggestPublish || parsed.profileStatus === "draft") {
+                    setSuggestPublish(true);
+                    setPanelOpen(true);
+                    setUploadNotice(
+                      parsed.publishBlockedMessage ??
+                        "CV processed. Still a draft — fix any gaps below, then tap Publish page.",
+                    );
+                    if (parsed.publishBlockedMessage) {
+                      noticeError = parsed.publishBlockedMessage;
+                    }
+                  }
+                  if (parsed.warnings?.length) {
+                    setUploadNotice((prev) => [prev, ...parsed.warnings!].filter(Boolean).join(" "));
+                  }
+                }
+              } catch (error) {
+                cvFailed = true;
+                const failure = failureMessageFromUnknown(error);
+                requestError = failure.message;
+                if (failure.timedOut) timedOut = true;
+              }
+            }
+          }
+
+          let storedCertCount = 0;
+          const certsToStore = acceptedCv && !cvFailed ? [] : acceptedCerts;
+          if (certsToStore.length > 0) {
+            setUploadPhase("certs");
+            const { uploaded, errors } = await uploadCertificateFilesSequentially(
+              certsToStore,
+              (current, total, fileName) => {
+                setUploadError(`Uploading ${current} of ${total}: ${fileName}`);
+              },
+              {
+                onProcessCv: () => setUploadPhase("cv"),
+              },
+            );
+            storedCertCount = uploaded.length;
+            failures.push(...errors);
+          }
+
+          setMainCv(null);
+          setCerts([]);
+          setCertReloadKey((value) => value + 1);
+          if (cvProcessed) setCvUpdatedParts(["CV upload"]);
+          else if (storedCertCount > 0) setCvUpdatedParts(["Certificate files"]);
+          else setCvUpdatedParts([]);
+
+          return {
+            cvStored,
+            cvProcessed,
+            cvName,
+            storedCertCount,
+            failures,
+            timedOut,
+            requestFailed: Boolean(requestError) && !cvProcessed,
+            requestError,
+            noticeError,
+          };
+        },
+      });
+
+      if (settlement.error) setUploadError(settlement.error);
+      if (settlement.agentError) appendAgentMessage(settlement.agentError);
+    } catch (error) {
+      const failure = failureMessageFromUnknown(error);
+      setUploading(false);
+      setUploadPhase(null);
+      setUploadError(failure.message);
+      setCvUpdatedParts([]);
+      appendAgentMessage(failure.message);
     }
   }
 
@@ -1122,7 +1241,9 @@ export function AgentWorkspace({
               {sending || uploading ? (
                 <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-border/55 bg-card px-3.5 py-2.5 text-sm text-muted-foreground">
                   <p className="mb-1 text-[11px] font-medium text-primary/80">Hermes</p>
-                  <p className="animate-pulse-soft">{uploading ? "Processing your CV…" : "Thinking…"}</p>
+                  <p className="animate-pulse-soft">
+                    {uploading ? (uploadPhase === "cv" ? "Processing your CV…" : "Uploading…") : "Thinking…"}
+                  </p>
                 </div>
               ) : null}
 

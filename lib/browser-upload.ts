@@ -8,6 +8,18 @@ import {
   isOversizeCv,
   oversizeMessage,
 } from "@/lib/diver-upload-constants";
+import {
+  CV_PROCESS_TIMEOUT_MESSAGE,
+  UPLOAD_TIMEOUT_MESSAGE,
+  isUploadTimeoutError,
+} from "@/lib/upload-deadline";
+
+const SIGNED_URL_TIMEOUT_MS = 30_000;
+const STORAGE_PUT_TIMEOUT_MS = 180_000;
+const FINALIZE_TIMEOUT_MS = 90_000;
+const BATCH_COMPLETE_TIMEOUT_MS = 30_000;
+/** Slightly above the process-cv route budget so a 504 JSON body can arrive before we abort. */
+export const PROCESS_CV_TIMEOUT_MS = 135_000;
 
 export type CertificateUploadAction = "added" | "renewed" | "duplicate";
 
@@ -128,13 +140,34 @@ function apiErrorMessage(data: ApiJson, response: Response, fileName: string, ma
   return err ?? `Upload failed (${response.status})`;
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+) {
+  try {
+    return await fetch(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    if (isUploadTimeoutError(error)) {
+      throw new Error(timeoutMessage);
+    }
+    throw error;
+  }
+}
+
 async function logClientUploadFailure(file: File, error: string) {
   try {
-    await fetch("/api/diver/documents/upload-failure", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileName: file.name, fileSize: file.size, error }),
-    });
+    await fetchWithTimeout(
+      "/api/diver/documents/upload-failure",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, fileSize: file.size, error }),
+      },
+      10_000,
+      UPLOAD_TIMEOUT_MESSAGE,
+    );
   } catch {
     // server-side finalize route logs failures too
   }
@@ -172,16 +205,21 @@ async function requestSignedUploadUrl(input: {
   kind: "certificate" | "cv";
   file: File;
 }) {
-  const response = await fetch("/api/diver/documents/upload-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      kind: input.kind,
-      fileName: input.file.name,
-      fileSize: input.file.size,
-      contentType: input.file.type || "",
-    }),
-  });
+  const response = await fetchWithTimeout(
+    "/api/diver/documents/upload-url",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: input.kind,
+        fileName: input.file.name,
+        fileSize: input.file.size,
+        contentType: input.file.type || "",
+      }),
+    },
+    SIGNED_URL_TIMEOUT_MS,
+    UPLOAD_TIMEOUT_MESSAGE,
+  );
   const data = await readApiJson(response);
   if (!response.ok) {
     const maxMb = input.kind === "cv" ? 12 : 10;
@@ -198,11 +236,16 @@ async function requestSignedUploadUrl(input: {
 }
 
 async function putFileToSignedUrl(file: File, signedUrl: string, contentType: string) {
-  const response = await fetch(signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: file,
-  });
+  const response = await fetchWithTimeout(
+    signedUrl,
+    {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: file,
+    },
+    STORAGE_PUT_TIMEOUT_MS,
+    UPLOAD_TIMEOUT_MESSAGE,
+  );
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
@@ -261,16 +304,21 @@ async function finalizeCertificateUpload(
   staged: StagedCertificateUpload,
   original: File,
 ): Promise<FinalizeCertificateResult> {
-  const response = await fetch("/api/diver/documents/finalize", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      path: staged.path,
-      fileName: staged.fileName,
-      contentType: staged.contentType,
-      fileSize: original.size,
-    }),
-  });
+  const response = await fetchWithTimeout(
+    "/api/diver/documents/finalize",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        path: staged.path,
+        fileName: staged.fileName,
+        contentType: staged.contentType,
+        fileSize: original.size,
+      }),
+    },
+    FINALIZE_TIMEOUT_MS,
+    UPLOAD_TIMEOUT_MESSAGE,
+  );
   const data = await readApiJson(response);
   if (!response.ok) {
     if (isFinalizeGatewayTimeout(response.status)) {
@@ -302,9 +350,31 @@ async function finalizeCertificateUpload(
   };
 }
 
+export async function postProcessCv(body: unknown): Promise<{ response: Response; data: ApiJson }> {
+  const response = await fetchWithTimeout(
+    "/api/diver/profile/process-cv",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    PROCESS_CV_TIMEOUT_MS,
+    CV_PROCESS_TIMEOUT_MESSAGE,
+  );
+  const data = await readApiJson(response);
+  if (isFinalizeGatewayTimeout(response.status)) {
+    data.timedOut = true;
+    if (typeof data.error !== "string" || /^Upload failed \(50/.test(data.error)) {
+      data.error = CV_PROCESS_TIMEOUT_MESSAGE;
+    }
+  }
+  return { response, data };
+}
+
 export async function uploadCertificateFilesSequentially(
   files: File[],
   onProgress?: (current: number, total: number, fileName: string) => void,
+  options?: { onProcessCv?: () => void },
 ) {
   const uploaded: CertificateUploadItem[] = [];
   const errors: string[] = [];
@@ -335,19 +405,15 @@ export async function uploadCertificateFilesSequentially(
 
   if (reroutedMainCv) {
     try {
-      const response = await fetch("/api/diver/profile/process-cv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mainCv: {
-            path: reroutedMainCv.path,
-            name: reroutedMainCv.name,
-            fileSize: reroutedMainCv.fileSize,
-          },
-        }),
+      options?.onProcessCv?.();
+      const { response, data } = await postProcessCv({
+        mainCv: {
+          path: reroutedMainCv.path,
+          name: reroutedMainCv.name,
+          fileSize: reroutedMainCv.fileSize,
+        },
       });
-      if (!response.ok) {
-        const data = await readApiJson(response);
+      if (!response.ok || data.ok === false || data.timedOut === true) {
         const message =
           typeof data.error === "string" ? data.error : "Could not process CV routed from certificate upload.";
         errors.push(`${reroutedMainCv.name}: ${message}`);
@@ -359,11 +425,16 @@ export async function uploadCertificateFilesSequentially(
   }
 
   if (uploaded.length > 0) {
-    const response = await fetch("/api/diver/documents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ complete: true, files: uploaded }),
-    });
+    const response = await fetchWithTimeout(
+      "/api/diver/documents",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ complete: true, files: uploaded }),
+      },
+      BATCH_COMPLETE_TIMEOUT_MS,
+      UPLOAD_TIMEOUT_MESSAGE,
+    );
     if (!response.ok) {
       const data = await readApiJson(response);
       const message = typeof data.error === "string" ? data.error : "Could not complete upload batch.";

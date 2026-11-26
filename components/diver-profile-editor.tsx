@@ -5,10 +5,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import {
-  readApiJson,
+  postProcessCv,
   uploadCertificateFilesSequentially,
   uploadMainCvDirect,
 } from "@/lib/browser-upload";
+import { failureMessageFromUnknown } from "@/lib/workspace-upload-session";
 import { CERT_ACCEPT, CV_ACCEPT } from "@/lib/diver-upload-constants";
 import { certificateNeedsExpiryDate, isLifetimeCertificate } from "@/lib/cert-lifetime";
 import { cn } from "@/lib/utils";
@@ -389,11 +390,15 @@ export function DiverProfileEditor({
     }, 1000);
   }
 
-  function finishProcessingProgress() {
+  function stopProcessingProgress() {
     if (processingIntervalRef.current) {
       clearInterval(processingIntervalRef.current);
       processingIntervalRef.current = null;
     }
+  }
+
+  function finishProcessingProgress() {
+    stopProcessingProgress();
     setProcessingProgress(100);
     setProcessingStage("Done");
   }
@@ -483,28 +488,24 @@ export function DiverProfileEditor({
     setMessage(null);
 
     let data: AiProcessResponse | null = null;
+    let failed = false;
     try {
       if (mainCv) {
         const mainCvStored = await uploadMainCvDirect(mainCv);
-        const response = await fetch("/api/diver/profile/process-cv", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mainCv: {
-              path: mainCvStored.path,
-              name: mainCvStored.fileName,
-              fileSize: mainCv.size,
-            },
-          }),
+        const { response, data: parsed } = await postProcessCv({
+          mainCv: {
+            path: mainCvStored.path,
+            name: mainCvStored.fileName,
+            fileSize: mainCv.size,
+          },
         });
-        const parsed = (await readApiJson(response)) as AiProcessResponse & { error?: string };
-        if (!response.ok) {
-          setMessage(parsed.error ?? "Failed to process CV.");
-          setProcessing(false);
-          finishProcessingProgress();
+        const body = parsed as AiProcessResponse & { error?: string; timedOut?: boolean };
+        if (!response.ok || body.ok === false || body.timedOut) {
+          setMessage(body.error ?? "Failed to process CV.");
+          failed = true;
           return;
         }
-        data = parsed;
+        data = body;
       }
 
       if (certFiles.length > 0) {
@@ -513,19 +514,19 @@ export function DiverProfileEditor({
         });
         if (errors.length > 0) {
           setMessage(`Stored ${uploaded.length} file(s). Failed: ${errors.join(" ")}`);
-          setProcessing(false);
-          finishProcessingProgress();
+          failed = true;
           return;
         }
       }
-    } catch {
-      setMessage("Upload request failed.");
-      setProcessing(false);
-      finishProcessingProgress();
+    } catch (error) {
+      setMessage(failureMessageFromUnknown(error).message);
+      failed = true;
       return;
+    } finally {
+      setProcessing(false);
+      if (failed) stopProcessingProgress();
     }
 
-    setProcessing(false);
     finishProcessingProgress();
     if (!data?.output) {
       setMainCv(null);
