@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyCertificateFile } from "@/lib/certificate-pack";
+import {
+  extensionIsMissing,
+  mimeForCertificateKind,
+  normalizedCertificateName,
+  resolveMissingExtensionCertificate,
+  unsupportedCertificateTypeMessage,
+} from "@/lib/certificate-file-type";
 import { isAcceptedMainCvFile } from "@/lib/cv-upload";
 import {
   classifyDocumentFile,
   mainCvStorageBasename,
   mimeForDocumentKind,
-  SUPPORTED_CERTIFICATE_FORMATS_MESSAGE,
   SUPPORTED_CV_FORMATS_MESSAGE,
   unsupportedDocumentMessage,
   validateDocumentBytes,
@@ -41,14 +47,30 @@ export function validateCertificateUploadMeta(input: {
   if (isOversizeCertificate(input.size)) {
     return { ok: false as const, error: oversizeMessage(input.name, 10) };
   }
-  const kind = classifyCertificateFile(input.name, input.contentType);
-  if (!kind || kind === "webp") {
+  if (extensionIsMissing(input.name)) {
+    const resolved = resolveMissingExtensionCertificate({
+      name: input.name,
+      contentType: input.contentType,
+    });
+    if (!resolved.ok) return resolved;
     return {
-      ok: false as const,
-      error: `Unsupported certificate format for ${input.name}. ${SUPPORTED_CERTIFICATE_FORMATS_MESSAGE}`,
+      ok: true as const,
+      kind: resolved.kind,
+      fileName: resolved.fileName,
+      contentType: resolved.contentType,
     };
   }
-  return { ok: true as const, kind };
+  const name = normalizedCertificateName(input.name);
+  const classified = classifyCertificateFile(name, input.contentType);
+  if (!classified || classified === "webp") {
+    return { ok: false as const, error: unsupportedCertificateTypeMessage(input.name) };
+  }
+  return {
+    ok: true as const,
+    kind: classified,
+    fileName: name,
+    contentType: mimeForCertificateKind(classified),
+  };
 }
 
 export function validateCvUploadMeta(input: { name: string; size: number; contentType?: string }) {
@@ -77,18 +99,46 @@ export function validateCvUploadMeta(input: { name: string; size: number; conten
 }
 
 export function validateCertificateBytes(bytes: Buffer, input: { name: string; contentType?: string }) {
+  if (bytes.length === 0) {
+    return { ok: false as const, error: `${input.name} is empty.` };
+  }
+  if (extensionIsMissing(input.name)) {
+    if (isOversizeCertificate(bytes.length)) {
+      return { ok: false as const, error: oversizeMessage(input.name, 10) };
+    }
+    const resolved = resolveMissingExtensionCertificate({
+      name: input.name,
+      contentType: input.contentType,
+      bytes,
+    });
+    if (!resolved.ok) return resolved;
+    if (resolved.kind === "pdf" || resolved.kind === "doc" || resolved.kind === "docx") {
+      const docCheck = validateDocumentBytes(bytes, resolved.fileName, resolved.contentType, "certificate");
+      if (!docCheck.ok) return docCheck;
+    }
+    return {
+      ok: true as const,
+      kind: resolved.kind,
+      fileName: resolved.fileName,
+      contentType: resolved.contentType,
+    };
+  }
   const meta = validateCertificateUploadMeta({
     name: input.name,
     size: bytes.length,
     contentType: input.contentType,
   });
   if (!meta.ok) return meta;
-  const kind = classifyCertificateFile(input.name, input.contentType);
-  if (kind === "pdf" || kind === "doc" || kind === "docx") {
-    const docCheck = validateDocumentBytes(bytes, input.name, input.contentType, "certificate");
+  if (meta.kind === "pdf" || meta.kind === "doc" || meta.kind === "docx") {
+    const docCheck = validateDocumentBytes(bytes, meta.fileName, meta.contentType, "certificate");
     if (!docCheck.ok) return docCheck;
   }
-  return { ok: true as const, kind: meta.kind };
+  return {
+    ok: true as const,
+    kind: meta.kind,
+    fileName: meta.fileName,
+    contentType: meta.contentType,
+  };
 }
 
 export function validateCvBytes(bytes: Buffer, input: { name: string; contentType?: string }) {

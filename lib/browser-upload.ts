@@ -1,5 +1,5 @@
 import {
-  validateCertificateFileOnClient,
+  prepareCertificateFileForUpload,
   validateCvFileOnClient,
 } from "@/lib/browser-file-validation";
 import {
@@ -233,20 +233,21 @@ export type StagedCertificateUpload = {
 };
 
 export async function stageCertificateFileDirect(file: File): Promise<StagedCertificateUpload> {
-  const clientError = await validateCertificateFileOnClient(file);
-  if (clientError) {
-    throw new Error(clientError);
+  const prepared = await prepareCertificateFileForUpload(file);
+  if ("error" in prepared) {
+    throw new Error(prepared.error);
   }
-  if (isOversizeCertificate(file.size)) {
-    throw new Error(oversizeMessage(file.name, 10));
+  const uploadFile = prepared.file;
+  if (isOversizeCertificate(uploadFile.size)) {
+    throw new Error(oversizeMessage(uploadFile.name, 10));
   }
-  const prepared = await compressImageIfNeeded(file);
+  const compressed = await compressImageIfNeeded(uploadFile);
   const { signedUrl, path, contentType } = await requestSignedUploadUrl({
     kind: "certificate",
-    file: prepared,
+    file: compressed,
   });
-  await putFileToSignedUrl(prepared, signedUrl, contentType);
-  return { path, fileName: prepared.name, contentType };
+  await putFileToSignedUrl(compressed, signedUrl, contentType);
+  return { path, fileName: compressed.name, contentType };
 }
 
 type FinalizeCertificateResult =
