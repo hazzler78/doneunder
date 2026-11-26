@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  certificateExtension,
+  mimeForCertificateKind,
+  unsupportedCertificateTypeMessage,
+} from "@/lib/certificate-file-type";
 import { buildCertificatePackPdf, classifyCertificateFile } from "@/lib/certificate-pack";
 import { certificateSlug, isGenericCertificateSlug, isStoredMainCvFilename } from "@/lib/document-names";
 import type { EmailAttachment } from "@/lib/email";
@@ -126,10 +131,10 @@ export async function upsertDiverCertificateFile(
 ): Promise<CertificateUploadResult> {
   const kind = classifyCertificateFile(file.name, file.contentType);
   if (!kind || kind === "webp") {
-    throw new Error(`Unsupported certificate format for ${file.name}. Use PDF, JPG, or PNG.`);
+    throw new Error(unsupportedCertificateTypeMessage(file.name));
   }
-  const extension = kind === "pdf" ? "pdf" : kind === "png" ? "png" : "jpg";
-  const mime = kind === "pdf" ? "application/pdf" : kind === "png" ? "image/png" : "image/jpeg";
+  const extension = certificateExtension(kind);
+  const mime = mimeForCertificateKind(kind);
   const hash = fileFingerprint(file.bytes);
   const namedSlug = certificateSlug(file.name);
   const slug = isGenericCertificateSlug(namedSlug) ? `photo-${hash.slice(0, 12)}` : namedSlug;

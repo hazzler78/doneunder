@@ -149,9 +149,9 @@ export async function processCertificateFromStagingPath(
     throw new Error(byteCheck.error);
   }
   const processed = await processCertificateFromBytes(supabase, diverId, {
-    name: input.name,
+    name: byteCheck.fileName,
     bytes,
-    contentType: input.contentType ?? "",
+    contentType: byteCheck.contentType,
   }, undefined, options);
   await removeDiverDocumentPaths(supabase, [path]);
   return processed;

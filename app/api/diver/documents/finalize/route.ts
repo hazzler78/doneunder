@@ -61,14 +61,14 @@ async function storeCertificateFromStaging(
     supabase,
     diverId,
     {
-      name: input.name,
+      name: byteCheck.fileName,
       bytes,
-      contentType: input.contentType ?? "",
+      contentType: byteCheck.contentType,
     },
     existing,
   );
   await removeDiverDocumentPaths(supabase, [path]);
-  return { bytes, stored };
+  return { bytes, stored, fileName: byteCheck.fileName, contentType: byteCheck.contentType };
 }
 
 async function readCertificatePackInBackground(
@@ -174,7 +174,12 @@ export async function POST(req: Request) {
         });
       }
 
-      const { bytes, stored } = await storeCertificateFromStaging(supabase, diverId, {
+      const {
+        bytes,
+        stored,
+        fileName: storedName,
+        contentType: storedType,
+      } = await storeCertificateFromStaging(supabase, diverId, {
         storagePath,
         name: fileName,
         contentType,
@@ -193,7 +198,7 @@ export async function POST(req: Request) {
 
       const uploaded = cvMisroute
         ? {
-            name: fileName,
+            name: storedName,
             action: stored.action,
             ticketCount: 0,
             tickets: [] as Array<{ name?: string | null; expiry_date?: string | null }>,
@@ -207,15 +212,15 @@ export async function POST(req: Request) {
               complete: true,
             },
           }
-        : buildDeferredFinalizeUploadItem({ fileName, stored });
+        : buildDeferredFinalizeUploadItem({ fileName: storedName, stored });
 
       after(async () => {
         if (cvMisroute) return;
         try {
           await readCertificatePackInBackground(supabase, diverId, {
             bytes,
-            fileName,
-            contentType,
+            fileName: storedName,
+            contentType: storedType,
             storagePath: stored.path,
           });
         } catch (error) {

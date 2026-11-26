@@ -1,8 +1,15 @@
-import { classifyDocumentFile, detectKindFromBytes } from "@/lib/document-bytes";
 import { classifyCertificateFile } from "@/lib/certificate-pack";
+import {
+  extensionIsMissing,
+  mimeForCertificateKind,
+  normalizedCertificateName,
+  resolveMissingExtensionCertificate,
+  unsupportedCertificateTypeMessage,
+} from "@/lib/certificate-file-type";
 import { isAcceptedMainCvFile } from "@/lib/cv-upload";
 import {
-  SUPPORTED_CERTIFICATE_FORMATS_MESSAGE,
+  classifyDocumentFile,
+  detectKindFromBytes,
   unsupportedDocumentMessage,
 } from "@/lib/document-bytes";
 
@@ -26,17 +33,52 @@ export async function validateCvFileOnClient(file: File): Promise<string | null>
 }
 
 export async function validateCertificateFileOnClient(file: File): Promise<string | null> {
-  const kind = classifyCertificateFile(file.name, file.type);
+  const prepared = await prepareCertificateFileForUpload(file);
+  return "error" in prepared ? prepared.error : null;
+}
+
+/**
+ * Accept a certificate whose name lost its extension by sniffing the bytes
+ * (or a specific browser MIME) and renaming it to the matching extension.
+ */
+export async function prepareCertificateFileForUpload(
+  file: File,
+): Promise<{ file: File } | { error: string }> {
+  const head = await readFileHead(file);
+  if (extensionIsMissing(file.name)) {
+    const resolved = resolveMissingExtensionCertificate({
+      name: file.name,
+      contentType: file.type,
+      bytes: head,
+      sniffDocxFromZipHead: true,
+    });
+    if (!resolved.ok) return { error: resolved.error };
+    if (resolved.fileName === file.name) return { file };
+    return {
+      file: new File([file], resolved.fileName, {
+        type: resolved.contentType,
+        lastModified: file.lastModified,
+      }),
+    };
+  }
+
+  const name = normalizedCertificateName(file.name);
+  const kind = classifyCertificateFile(name, file.type);
   if (!kind || kind === "webp") {
-    return `Unsupported certificate format for ${file.name}. ${SUPPORTED_CERTIFICATE_FORMATS_MESSAGE}`;
+    return { error: unsupportedCertificateTypeMessage(file.name) };
   }
   if (kind === "pdf" || kind === "doc" || kind === "docx") {
-    const head = await readFileHead(file);
     const detected = detectKindFromBytes(head, { sniffDocxFromZipHead: true });
-    const declared = classifyDocumentFile(file.name, file.type);
+    const declared = classifyDocumentFile(name, file.type);
     if (!detected || (declared && declared !== detected)) {
-      return unsupportedDocumentMessage(file.name, "certificate");
+      return { error: unsupportedDocumentMessage(name, "certificate") };
     }
   }
-  return null;
+  if (name === file.name) return { file };
+  return {
+    file: new File([file], name, {
+      type: file.type || mimeForCertificateKind(kind),
+      lastModified: file.lastModified,
+    }),
+  };
 }

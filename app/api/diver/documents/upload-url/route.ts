@@ -5,7 +5,6 @@ import {
   certificateStagingPath,
   createDiverDocumentSignedUploadUrl,
   mainCvStoragePath,
-  mimeForCertificateUpload,
   mimeForCvUpload,
   newUploadId,
   validateCertificateUploadMeta,
@@ -44,8 +43,9 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: validation.error }, { status: 400 });
       }
       const uploadId = newUploadId();
-      const path = certificateStagingPath(diverId, uploadId, fileName);
-      const mime = mimeForCertificateUpload(fileName, contentType);
+      const uploadName = validation.fileName;
+      const path = certificateStagingPath(diverId, uploadId, uploadName);
+      const mime = validation.contentType;
       const signed = await createDiverDocumentSignedUploadUrl(supabase, path, mime);
       return NextResponse.json({
         ok: true,
