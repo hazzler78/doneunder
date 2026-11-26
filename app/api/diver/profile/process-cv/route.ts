@@ -47,6 +47,7 @@ import {
 import { formatAutoPublishSkippedMessage } from "@/lib/publish-blockers";
 import { nudgeMissingPhotoAfterPublish } from "@/lib/photo-nudge";
 import { SITE_URL } from "@/lib/site";
+import { CV_PROCESS_TIMEOUT_MESSAGE, isUploadTimeoutError, withDeadline } from "@/lib/upload-deadline";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -182,7 +183,32 @@ type StagedCertificateRef = { path: string; name: string; contentType?: string; 
 /** Stop reading certificate pages early enough to finish the request inside maxDuration. */
 const ROUTE_BUDGET_MS = 110_000;
 
+function processCvErrorResponse(error: unknown) {
+  console.error("process-cv failed", error);
+  const timedOut = isUploadTimeoutError(error);
+  const busy = isRateLimitError(error);
+  return NextResponse.json(
+    {
+      error: timedOut
+        ? CV_PROCESS_TIMEOUT_MESSAGE
+        : busy
+          ? "The CV reader is busy right now. Wait a moment and press Process files again."
+          : "Could not process the CV. Try again in a moment.",
+      ...(timedOut ? { timedOut: true } : {}),
+    },
+    { status: timedOut ? 504 : busy ? 429 : 500 },
+  );
+}
+
 export async function POST(req: Request) {
+  try {
+    return await withDeadline(processCvRequest(req), ROUTE_BUDGET_MS, CV_PROCESS_TIMEOUT_MESSAGE);
+  } catch (error) {
+    return processCvErrorResponse(error);
+  }
+}
+
+async function processCvRequest(req: Request) {
   const routeStartedAt = Date.now();
   const readBudgetMs = (reserveMs: number) =>
     Math.max(10_000, ROUTE_BUDGET_MS - (Date.now() - routeStartedAt) - reserveMs);
@@ -529,6 +555,12 @@ export async function POST(req: Request) {
         uploaded: { cv: cvPath, certificates: certUploadResults.map((item) => item.path) },
       });
     }
+    const assertRouteBudget = () => {
+      if (Date.now() - routeStartedAt > ROUTE_BUDGET_MS) {
+        throw new Error(CV_PROCESS_TIMEOUT_MESSAGE);
+      }
+    };
+
     const cvChunks = splitTextIntoChunks(cvText);
     const chunkSummaries: string[] = [];
     const chunkCertMentions: string[] = [];
@@ -536,6 +568,7 @@ export async function POST(req: Request) {
     const chunkContactMentions: string[] = [];
 
     for (const [index, chunk] of cvChunks.entries()) {
+      assertRouteBudget();
       const chunkResult = await generateCvObject(() => generateObject({
         model: aiModel,
         schema: cvChunkSchema,
@@ -561,6 +594,7 @@ export async function POST(req: Request) {
       "Generate polished English markdown CV + structured JSON + ambassador copy. Translate any non-English source into English. Do not omit valid experience entries found in source text.",
     ].join("\n\n");
 
+    assertRouteBudget();
     const aiResult = await generateCvObject(() => generateObject({
       model: aiModel,
       system: cvSystemPrompt,
@@ -729,15 +763,6 @@ export async function POST(req: Request) {
       output: parsed,
     });
   } catch (error) {
-    console.error("process-cv failed", error);
-    const busy = isRateLimitError(error);
-    return NextResponse.json(
-      {
-        error: busy
-          ? "The CV reader is busy right now. Wait a moment and press Process files again."
-          : "Could not process the CV. Try again in a moment.",
-      },
-      { status: busy ? 429 : 500 },
-    );
+    return processCvErrorResponse(error);
   }
 }
